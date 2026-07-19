@@ -103,7 +103,9 @@ app.get("/", async (req, res) => {
     </div>
     <div class="grid">
       <div class="card wide" id="card-briefing"><h2>☀️ Tages-Briefing <span class="muted small">von Alexandra</span></h2><div class="card-body" data-load="/api/briefing">Lade…</div></div>
-      <div class="card"><h2>📅 Heute im Kalender</h2><div class="card-body" data-load="/api/calendar">Lade…</div></div>
+      <div class="card"><h2>📅 Kalender
+        <span class="cal-nav"><button class="tiny nav" onclick="calShift(-1)">‹</button><span id="cal-label">Heute</span><button class="tiny nav" onclick="calShift(1)">›</button></span></h2>
+        <div class="card-body" id="cal-body">Lade…</div></div>
       <div class="card"><h2>📬 Mail-Triage <span class="muted small">vier Körbe</span></h2><div class="card-body" data-load="/api/mail">Lade…</div></div>
       <div class="card"><h2>✅ Was braucht mich?</h2><div class="card-body" data-load="/api/inbox">Lade…</div></div>
       <div class="card"><h2>🎯 Leads</h2><div class="card-body" data-load="/api/leads/stats">Lade…</div></div>
@@ -206,11 +208,12 @@ app.get("/api/calendar", (req, res) => {
       }
       return `${y}-${m}-${day}T00:00:00+02:00`;
     };
-    const today = new Date();
-    const tomorrow = new Date(today.getTime() + 86400000);
+    const offset = Math.max(-30, Math.min(60, parseInt(req.query.offset, 10) || 0));
+    const day = new Date(Date.now() + offset * 86400000);
+    const nextDay = new Date(day.getTime() + 86400000);
     execFile(
       "gws-cli",
-      ["calendar", "list", "--from", fmt(today), "--to", fmt(tomorrow), "--max", "50"],
+      ["calendar", "list", "--from", fmt(day), "--to", fmt(nextDay), "--max", "50"],
       { env: GWS_ENV, timeout: 25000 },
       (err, stdout, stderr) => {
         try {
@@ -225,15 +228,20 @@ app.get("/api/calendar", (req, res) => {
             for (const v of Object.values(data)) { if (Array.isArray(v)) { events = v; break; } }
           }
           if (!events) return res.json({ ok: false, hint: "Unbekanntes Kalender-Format — Rohdaten:", detail: String(stdout).slice(0, 350) });
-          res.json({
-            ok: true,
-            events: (events || []).map((e) => ({
-              titel: e.summary || e.title || "(ohne Titel)",
-              start: (e.start && (e.start.dateTime || e.start.date)) || e.start || "",
-              ende: (e.end && (e.end.dateTime || e.end.date)) || e.end || "",
-              ort: e.location || "",
-            })),
+          const mapped = (events || []).map((e) => {
+            const ev = e.event || e; // manche CLIs verschachteln
+            return {
+              titel: ev.summary || ev.title || ev.name || ev.subject || "(ohne Titel)",
+              start: (ev.start && (ev.start.dateTime || ev.start.date)) || ev.startTime || ev.start_time || ev.begin || (typeof ev.start === "string" ? ev.start : "") || ev.when || "",
+              ort: ev.location || "",
+            };
           });
+          const antwort = { ok: true, datum: fmt(day).slice(0, 10), events: mapped };
+          // Selbst-Diagnose: wenn kein einziger Titel erkannt wurde, Feldnamen mitliefern
+          if (mapped.length && mapped.every((m) => m.titel === "(ohne Titel)")) {
+            antwort.felder = Object.keys(events[0] || {}).join(", ");
+          }
+          res.json(antwort);
         } catch (e2) {
           res.json({ ok: false, hint: "Kalender-Antwort nicht lesbar.", detail: String(e2.message).slice(0, 300) });
         }
@@ -544,6 +552,31 @@ function layout(title, active, content) {
         el.innerHTML = renderCard(el.dataset.load, d);
       } catch (e) { el.innerHTML = "<p class='error'>Fehler beim Laden.</p>"; }
     });
+    // Kalender mit Tages-Navigation
+    let calOffset = 0;
+    const TAGE = ["So","Mo","Di","Mi","Do","Fr","Sa"];
+    async function loadCal() {
+      const body = document.getElementById("cal-body"); if (!body) return;
+      const label = document.getElementById("cal-label");
+      const d = new Date(Date.now() + calOffset * 86400000);
+      label.textContent = calOffset === 0 ? "Heute" : calOffset === 1 ? "Morgen" : calOffset === 2 ? "Übermorgen" : calOffset === -1 ? "Gestern" : TAGE[d.getDay()] + ", " + d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+      body.innerHTML = "Lade…";
+      try {
+        const r = await fetch("/api/calendar?offset=" + calOffset); const dd = await r.json();
+        if (!dd.ok) { body.innerHTML = "<p class='muted'>" + (dd.hint || "Nicht verfügbar.") + "</p>" + (dd.detail ? "<pre class='small'>" + String(dd.detail).replace(/[<>&]/g, "") + "</pre>" : ""); return; }
+        if (!dd.events.length) {
+          const tag = d.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
+          body.innerHTML = "<div class='cal-frei'><span class='cal-frei-icon'>🌤️</span><p><strong>" + tag + "</strong></p><p class='muted'>Keine Termine — freier Tag.</p></div>";
+          return;
+        }
+        body.innerHTML = dd.events.map(function (e) {
+          var t = e.start && String(e.start).includes("T") ? new Date(e.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "ganztägig";
+          return "<div class='row'><span><strong>" + t + "</strong> " + e.titel + "</span>" + (e.ort ? "<span class='muted small'>" + e.ort + "</span>" : "") + "</div>";
+        }).join("") + (dd.felder ? "<p class='muted small'>⚠️ Felder: " + dd.felder + "</p>" : "");
+      } catch { body.innerHTML = "<p class='error'>Fehler beim Laden.</p>"; }
+    }
+    function calShift(n) { calOffset += n; loadCal(); }
+    loadCal();
     document.querySelectorAll("[data-tile]").forEach(async (el) => {
       try {
         const r = await fetch(el.dataset.tile); const d = await r.json();

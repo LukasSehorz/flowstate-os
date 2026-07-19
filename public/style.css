@@ -81,6 +81,11 @@ form.inline { display: inline; }
 .tile-label { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 .card.wide { grid-column: 1 / -1; }
 .card.note { border-color: var(--accent); margin-top: 14px; }
+.cal-nav { float: right; display: inline-flex; align-items: center; gap: 8px; }
+.cal-nav .nav { background: var(--bg); color: var(--accent); border: 1px solid var(--line); font-weight: 700; }
+#cal-label { font-size: 13px; color: var(--text); min-width: 78px; text-align: center; }
+.cal-frei { text-align: center; padding: 14px 0; }
+.cal-frei-icon { font-size: 30px; display: block; margin-bottom: 6px; }
 
 /* Chat */
 .chat-wrap { display: flex; flex-direction: column; height: 72vh; margin-top: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
