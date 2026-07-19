@@ -70,6 +70,16 @@ form.inline { display: inline; }
 .md th, .md td { border: 1px solid var(--line); padding: 6px 10px; font-size: 13.5px; }
 .md blockquote { border-left: 3px solid var(--accent); padding-left: 12px; color: var(--muted); margin: 8px 0; }
 
+/* Chat */
+.chat-wrap { display: flex; flex-direction: column; height: 72vh; margin-top: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+.chat-wrap.disabled { opacity: .55; }
+.chat-log { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.msg { max-width: 72%; padding: 10px 14px; border-radius: 14px; font-size: 14.5px; white-space: pre-wrap; word-break: break-word; }
+.msg.user { align-self: flex-end; background: var(--accent2); color: #fff; border-bottom-right-radius: 4px; }
+.msg.agent { align-self: flex-start; background: var(--bg); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.chat-form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); }
+.chat-form input { flex: 1; }
+
 @media (max-width: 760px) {
   .shell { grid-template-columns: 1fr; }
   .sidebar { position: static; height: auto; flex-direction: row; overflow-x: auto; align-items: center; gap: 6px; }

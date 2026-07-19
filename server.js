@@ -63,6 +63,7 @@ app.use((req, res, next) => {
 // ---------- Module ----------
 const MODULES = [
   { id: "zentrale", label: "Zentrale", icon: "◈", href: "/" },
+  { id: "chat", label: "Alexandra", icon: "✦", href: "/chat" },
   { id: "leads", label: "Leads", icon: "◎", href: "/leads" },
   { id: "kunden", label: "Kunden (CRM)", icon: "▣", href: "/kunden" },
   { id: "angebote", label: "Angebote & Rechnungen", icon: "▤", href: "/angebote" },
@@ -124,6 +125,52 @@ app.get("/api/system", (req, res) => {
     vaultMounted: fs.existsSync(VAULT_PATH),
     zeit: new Date().toLocaleString("de-DE"),
   });
+});
+
+// ---------- Chat mit Alexandra ----------
+app.get("/chat", (req, res) => {
+  const configured = Boolean(process.env.HERMES_CHAT_URL);
+  res.send(layout("Alexandra", "chat", `
+    <h1>Alexandra <span class="muted small">— direkte Leitung zum Agenten</span></h1>
+    ${configured ? "" : `<div class="card placeholder"><h2>🔌 Verbindung wird eingerichtet</h2>
+      <p>Die Chat-Tür zu Alexandra (Hermes-Webhook) ist noch nicht konfiguriert. Bis dahin erreichst du sie über Telegram.</p></div>`}
+    <div class="chat-wrap${configured ? "" : " disabled"}">
+      <div id="chat-log" class="chat-log"><div class="msg agent">Hallo Lukas! Schreib mir hier wie in Telegram — ich habe denselben Kopf, dasselbe Gedächtnis und dieselben Regeln. ✦</div></div>
+      <form id="chat-form" class="chat-form">
+        <input id="chat-input" placeholder="Nachricht an Alexandra…" autocomplete="off" ${configured ? "" : "disabled"}>
+        <button type="submit" ${configured ? "" : "disabled"}>Senden</button>
+      </form>
+    </div>
+    <script>
+      const form = document.getElementById("chat-form"), input = document.getElementById("chat-input"), log = document.getElementById("chat-log");
+      form?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const text = input.value.trim(); if (!text) return;
+        add("user", text); input.value = ""; const pending = add("agent", "…");
+        try {
+          const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text }) });
+          const d = await r.json();
+          pending.textContent = d.ok ? d.reply : ("⚠️ " + (d.hint || "Fehler"));
+        } catch { pending.textContent = "⚠️ Verbindung fehlgeschlagen."; }
+        log.scrollTop = log.scrollHeight;
+      });
+      function add(who, text) { const el = document.createElement("div"); el.className = "msg " + who; el.textContent = text; log.appendChild(el); log.scrollTop = log.scrollHeight; return el; }
+    </script>`));
+});
+
+app.post("/api/chat", async (req, res) => {
+  const url = process.env.HERMES_CHAT_URL;
+  if (!url) return res.json({ ok: false, hint: "HERMES_CHAT_URL ist noch nicht konfiguriert." });
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (process.env.HERMES_CHAT_TOKEN) headers["Authorization"] = "Bearer " + process.env.HERMES_CHAT_TOKEN;
+    const r = await fetch(url, { method: "POST", headers, body: JSON.stringify({ message: String(req.body.message || "") }) });
+    const d = await r.json().catch(() => null);
+    const reply = d && (d.reply || d.response || d.text || d.message || d.content || (typeof d === "string" ? d : null));
+    res.json({ ok: true, reply: reply || JSON.stringify(d).slice(0, 1500) });
+  } catch (e) {
+    res.json({ ok: false, hint: "Hermes nicht erreichbar: " + String(e.message).slice(0, 200) });
+  }
 });
 
 // ---------- Wissen (Vault-Browser) ----------
