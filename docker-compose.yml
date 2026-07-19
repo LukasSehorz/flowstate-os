@@ -1,4 +1,5 @@
 # flowstate-dashboard — laeuft auf dem VPS neben Hermes, hinter Traefik (HTTPS)
+# Label-Muster identisch zum funktionierenden Hermes-Setup (Hostinger: websecure + letsencrypt)
 # Deploy: docker compose up -d --build
 services:
   dashboard:
@@ -11,25 +12,22 @@ services:
       - VAULT_PATH=/vault
       - DATA_PATH=/data
       - GWS_ENCRYPTION=none
-      # gws-cli soll das gemountete Token-Verzeichnis nutzen (HOME zeigt auf /gws-home)
+      # gws-cli nutzt das gemountete Token-Verzeichnis (HOME zeigt auf /gws-home)
       - HOME=/gws-home
     volumes:
       - /docker/hermes-agent-pocv/data/vault:/vault:ro
       - dashboard-data:/data
       # Google-Token von Hermes read-only mitnutzen (liegt unter .config/gws-cli)
       - /docker/hermes-agent-pocv/data/.config:/gws-home/.config:ro
+    ports:
+      # Nur lokal nuetzlich (Firewall blockt von aussen) — zum Debuggen: curl localhost:8090
+      - "8090:3000"
     labels:
       - traefik.enable=true
       - traefik.http.routers.flowstate.rule=Host(`flowstate.srv1044804.hstgr.cloud`)
       - traefik.http.routers.flowstate.entrypoints=websecure
-      - traefik.http.routers.flowstate.tls=true
+      - traefik.http.routers.flowstate.tls.certresolver=letsencrypt
       - traefik.http.services.flowstate.loadbalancer.server.port=3000
-    networks:
-      - traefik
 
 volumes:
   dashboard-data:
-
-networks:
-  traefik:
-    external: true
