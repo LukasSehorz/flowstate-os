@@ -216,7 +216,15 @@ app.get("/api/calendar", (req, res) => {
         try {
           if (err) return res.json({ ok: false, hint: "Kalender nicht abrufbar.", detail: String(stderr || err.message || err).slice(0, 400) });
           const data = safeJson(stdout);
-          const events = Array.isArray(data) ? data : (data && (data.events || data.items)) || [];
+          // Termine-Array in gaengigen Strukturen suchen (events, items, data, verschachtelt)
+          let events = null;
+          for (const c of [data, data?.events, data?.items, data?.data, data?.events?.items]) {
+            if (Array.isArray(c)) { events = c; break; }
+          }
+          if (!events && data && typeof data === "object") {
+            for (const v of Object.values(data)) { if (Array.isArray(v)) { events = v; break; } }
+          }
+          if (!events) return res.json({ ok: false, hint: "Unbekanntes Kalender-Format — Rohdaten:", detail: String(stdout).slice(0, 350) });
           res.json({
             ok: true,
             events: (events || []).map((e) => ({
