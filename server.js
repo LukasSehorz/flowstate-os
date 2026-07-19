@@ -19,12 +19,16 @@ if (!fs.existsSync(DATA_PATH)) fs.mkdirSync(DATA_PATH, { recursive: true });
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
+// Sitzungen auf Platte (ueberleben Container-Neustarts) statt im Arbeitsspeicher
+const FileStore = require("session-file-store")(session);
 app.use(
   session({
+    store: new FileStore({ path: path.join(DATA_PATH, "sessions"), retries: 1, ttl: 60 * 60 * 24 * 30, logFn: () => {} }),
     secret: process.env.SESSION_SECRET || "flowstate-dev-secret",
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 1000 * 60 * 60 * 24 * 14 },
+    rolling: true,
+    cookie: { maxAge: 1000 * 60 * 60 * 24 * 30 },
   })
 );
 
@@ -57,6 +61,8 @@ app.get("/logout", (req, res) => {
 app.use((req, res, next) => {
   if (!PASSWORD) return res.status(500).send("DASHBOARD_PASSWORD ist nicht gesetzt.");
   if (req.session.authed) return next();
+  // API-Aufrufe bekommen eine klare Meldung statt einer Weiterleitung ins Nichts
+  if (req.path.startsWith("/api/")) return res.status(401).json({ ok: false, hint: "Sitzung abgelaufen — bitte Seite neu laden und neu anmelden." });
   res.redirect("/login");
 });
 
