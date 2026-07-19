@@ -14,6 +14,13 @@ services:
       - GWS_ENCRYPTION=none
       # gws-cli nutzt das gemountete Token-Verzeichnis (HOME zeigt auf /gws-home)
       - HOME=/gws-home
+      # Hermes API-Server (OpenAI-kompatibel) — Chat mit Alexandra im Dashboard
+      - HERMES_CHAT_URL=${HERMES_CHAT_URL}
+      - HERMES_API_KEY=${HERMES_API_KEY}
+      - HERMES_MODEL=hermes-agent
+    extra_hosts:
+      # Hermes laeuft in einem anderen Compose-Projekt -> ueber den Docker-Host erreichen
+      - "host.docker.internal:host-gateway"
     volumes:
       - /docker/hermes-agent-pocv/data/vault:/vault:ro
       - dashboard-data:/data

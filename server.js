@@ -89,18 +89,33 @@ app.get("/", async (req, res) => {
 });
 
 app.get("/api/calendar", (req, res) => {
-  // Best effort: gws-cli ist im Container installiert und nutzt das gemountete Token.
-  execFile("gws-cli", ["calendar", "events", "--max", "8", "--json"], { env: GWS_ENV, timeout: 20000 }, (err, stdout) => {
-    if (err) {
-      // Fallback-Versuch mit anderem Unterbefehl
-      execFile("gws-cli", ["calendar", "list", "--json"], { env: GWS_ENV, timeout: 20000 }, (err2, stdout2) => {
-        if (err2) return res.json({ ok: false, hint: "Kalender-Anbindung wird beim Deploy kalibriert.", detail: String(err2.message || err2).slice(0, 300) });
-        res.json({ ok: true, raw: safeJson(stdout2) });
+  // Von Alexandra verifizierter Befehl: Zeitraum "heute" nach Europe/Berlin
+  const tz = "Europe/Berlin";
+  const fmt = (d) => {
+    const p = new Intl.DateTimeFormat("sv-SE", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+    return `${p}T00:00:00+02:00`;
+  };
+  const today = new Date();
+  const tomorrow = new Date(today.getTime() + 86400000);
+  execFile(
+    "gws-cli",
+    ["calendar", "list", "--from", fmt(today), "--to", fmt(tomorrow), "--max", "50"],
+    { env: GWS_ENV, timeout: 25000 },
+    (err, stdout, stderr) => {
+      if (err) return res.json({ ok: false, hint: "Kalender nicht abrufbar.", detail: String(stderr || err.message).slice(0, 300) });
+      const data = safeJson(stdout);
+      const events = (data && data.events) || [];
+      res.json({
+        ok: true,
+        events: events.map((e) => ({
+          titel: e.summary || e.title || "(ohne Titel)",
+          start: e.start?.dateTime || e.start?.date || e.start || "",
+          ende: e.end?.dateTime || e.end?.date || e.end || "",
+          ort: e.location || "",
+        })),
       });
-      return;
     }
-    res.json({ ok: true, raw: safeJson(stdout) });
-  });
+  );
 });
 
 app.get("/api/vault/stats", (req, res) => {
@@ -158,16 +173,28 @@ app.get("/chat", (req, res) => {
     </script>`));
 });
 
+// Hermes API-Server (OpenAI-kompatibel, Port 8642) — Verlauf wird pro Session mitgeschickt
 app.post("/api/chat", async (req, res) => {
   const url = process.env.HERMES_CHAT_URL;
   if (!url) return res.json({ ok: false, hint: "HERMES_CHAT_URL ist noch nicht konfiguriert." });
+  const history = (req.session.chat ||= []);
+  history.push({ role: "user", content: String(req.body.message || "") });
+  if (history.length > 24) history.splice(0, history.length - 24);
   try {
     const headers = { "Content-Type": "application/json" };
-    if (process.env.HERMES_CHAT_TOKEN) headers["Authorization"] = "Bearer " + process.env.HERMES_CHAT_TOKEN;
-    const r = await fetch(url, { method: "POST", headers, body: JSON.stringify({ message: String(req.body.message || "") }) });
+    if (process.env.HERMES_API_KEY) headers["Authorization"] = "Bearer " + process.env.HERMES_API_KEY;
+    const r = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ model: process.env.HERMES_MODEL || "hermes-agent", messages: history, stream: false }),
+      signal: AbortSignal.timeout(180000),
+    });
     const d = await r.json().catch(() => null);
-    const reply = d && (d.reply || d.response || d.text || d.message || d.content || (typeof d === "string" ? d : null));
-    res.json({ ok: true, reply: reply || JSON.stringify(d).slice(0, 1500) });
+    if (d?.error) return res.json({ ok: false, hint: d.error.message || "Hermes meldet einen Fehler." });
+    const reply = d?.choices?.[0]?.message?.content;
+    if (!reply) return res.json({ ok: false, hint: "Unerwartete Antwort: " + JSON.stringify(d).slice(0, 300) });
+    history.push({ role: "assistant", content: reply });
+    res.json({ ok: true, reply });
   } catch (e) {
     res.json({ ok: false, hint: "Hermes nicht erreichbar: " + String(e.message).slice(0, 200) });
   }
@@ -317,7 +344,13 @@ function layout(title, active, content) {
       if (!d.ok) return "<p class='muted'>" + (d.hint || "Noch nicht verbunden.") + "</p>";
       if (src.includes("vault")) return "<p><strong>" + d.mdCount + "</strong> Wissens-Dateien</p><p class='muted small'>Zuletzt geändert:</p>" + d.newest.map(n => "<div class='row'><span>" + n.file + "</span><span class='muted small'>" + n.changed + "</span></div>").join("");
       if (src.includes("system")) return "<div class='row'><span>App</span><span>" + d.app + "</span></div><div class='row'><span>Läuft seit</span><span>" + d.uptimeMin + " Min</span></div><div class='row'><span>Vault</span><span>" + (d.vaultMounted ? "✅ verbunden" : "❌ fehlt") + "</span></div>";
-      if (src.includes("calendar")) { if (typeof d.raw === "string") return "<pre class='small'>" + d.raw + "</pre>"; return "<pre class='small'>" + JSON.stringify(d.raw, null, 2).slice(0, 1500) + "</pre>"; }
+      if (src.includes("calendar")) {
+        if (!d.events || !d.events.length) return "<p class='muted'>Heute keine Termine. 🎉</p>";
+        return d.events.map(function (e) {
+          var t = e.start && e.start.includes("T") ? new Date(e.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "ganztägig";
+          return "<div class='row'><span><strong>" + t + "</strong> " + e.titel + "</span>" + (e.ort ? "<span class='muted small'>" + e.ort + "</span>" : "") + "</div>";
+        }).join("");
+      }
       return "<pre>" + JSON.stringify(d, null, 2) + "</pre>";
     }
   </script></body></html>`;
