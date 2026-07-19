@@ -236,9 +236,47 @@ function readLeads() {
 }
 function writeLeads(leads) { fs.writeFileSync(LEADS_FILE, JSON.stringify(leads, null, 2)); }
 
+// Läufe der Lead-Maschine: Alexandra schreibt Ergebnisse als JSON in den Vault
+function readLeadRuns() {
+  const dir = path.join(VAULT_PATH, "projekte", "leads");
+  try {
+    return fs.readdirSync(dir)
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => {
+        try { return { file: f, ...JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8")) }; }
+        catch { return null; }
+      })
+      .filter(Boolean)
+      .sort((a, b) => String(b.lauf?.datum || b.file).localeCompare(String(a.lauf?.datum || a.file)));
+  } catch { return []; }
+}
+
+function scoreBadge(s) {
+  const n = Number(s) || 0;
+  const cls = n >= 9 ? "b-gewonnen" : n >= 7 ? "b-kontaktiert" : "b-verloren";
+  return `<span class="badge ${cls}">${n}/10</span>`;
+}
+
 app.get("/leads", (req, res) => {
+  const runs = readLeadRuns();
+  const runBlocks = runs.map((r) => {
+    const rows = (r.leads || []).map((l) => `
+      <tr>
+        <td>${esc(l.name)}</td><td>${esc(l.telefon || "–")}</td>
+        <td>${l.website ? `<a href="${esc(l.website)}" target="_blank">Website ↗</a>` : "<span class='muted'>keine ✨</span>"}</td>
+        <td>${scoreBadge(l.score)}</td>
+        <td class="small">${(l.argumente || []).map(esc).join(" · ")}</td>
+      </tr>`).join("");
+    return `<div class="card">
+      <h2>📦 ${esc(r.lauf?.branche || "?")} · ${esc(r.lauf?.region || "?")} <span class="muted small">— ${esc(r.lauf?.datum || "")}, ${(r.leads || []).length} Leads</span></h2>
+      ${r.lauf?.sheet_url ? `<p><a href="${esc(r.lauf.sheet_url)}" target="_blank">📊 Google Sheet öffnen ↗</a></p>` : ""}
+      <table class="tbl"><thead><tr><th>Name</th><th>Telefon</th><th>Website</th><th>Score</th><th>Verkaufsargumente</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5" class="muted">Keine Leads im Lauf.</td></tr>'}</tbody></table>
+    </div>`;
+  }).join("");
+
   const leads = readLeads();
-  const rows = leads.map((l, i) => `
+  const manualRows = leads.map((l, i) => `
     <tr>
       <td>${esc(l.name)}</td><td>${esc(l.telefon || "–")}</td>
       <td>${l.website ? `<a href="${esc(l.website)}" target="_blank">${esc(l.website)}</a>` : "–"}</td>
@@ -246,19 +284,53 @@ app.get("/leads", (req, res) => {
       <td>${esc(l.notiz || "")}</td>
       <td><form method="post" action="/leads/delete" class="inline"><input type="hidden" name="i" value="${i}"><button class="tiny danger">✕</button></form></td>
     </tr>`).join("");
+
+  const started = req.query.started === "1";
   res.send(layout("Leads", "leads", `
-    <h1>Leads</h1>
-    <p class="muted">Grundgerüst — hier landet später die Lead-Maschine (Scraper → Screenshot-Bewertung → Google Sheet). Bis dahin: manuelle Liste.</p>
-    <div class="card"><h2>Neuer Lead</h2><form method="post" action="/leads/add" class="lead-form">
+    <h1>Leads <span class="muted small">— Lead-Maschine (wandert später ins CRM)</span></h1>
+    ${started ? `<div class="card" style="border-color:var(--accent)"><h2>🚀 Auftrag an Alexandra gesendet</h2><p>Der Lauf startet im Hintergrund (ca. 8–15 Min). Das Ergebnis erscheint hier und als Google Sheet, sobald es fertig ist — Seite später einfach neu laden.</p></div>` : ""}
+    <div class="card"><h2>🎯 Neuen Lauf starten</h2>
+      <form method="post" action="/leads/run" class="lead-form">
+        <input name="branche" placeholder="Branche (z. B. Physiotherapie)" required>
+        <input name="region" placeholder="Region (z. B. München)" required>
+        <input name="anzahl" type="number" value="20" min="5" max="100">
+        <button type="submit">Lauf starten</button>
+      </form>
+      <p class="muted small">Ablauf: Apify-Rohdaten → technischer Vorfilter → Screenshot-Bewertung durch parallele Subagenten (Score 1–10, ab 7 = Lead) → Google Sheet + Tabelle hier.</p>
+    </div>
+    ${runBlocks || '<div class="card"><p class="muted">Noch keine Läufe. Starte oben den ersten — oder warte, bis Alexandra den lead-gen-Skill fertig hat.</p></div>'}
+    <div class="card"><h2>✍️ Manuelle Leads</h2><form method="post" action="/leads/add" class="lead-form">
       <input name="name" placeholder="Name / Praxis" required>
       <input name="telefon" placeholder="Telefon">
       <input name="website" placeholder="Website (https://…)">
       <select name="status"><option>neu</option><option>kontaktiert</option><option>termin</option><option>gewonnen</option><option>verloren</option></select>
       <input name="notiz" placeholder="Notiz">
       <button type="submit">Hinzufügen</button>
-    </form></div>
+    </form>
     <table class="tbl"><thead><tr><th>Name</th><th>Telefon</th><th>Website</th><th>Status</th><th>Notiz</th><th></th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="6" class="muted">Noch keine Leads.</td></tr>'}</tbody></table>`));
+    <tbody>${manualRows || '<tr><td colspan="6" class="muted">Noch keine manuellen Leads.</td></tr>'}</tbody></table></div>`));
+});
+
+// Lauf starten -> Auftrag an Alexandra (Hermes-API); sie arbeitet im Hintergrund weiter
+app.post("/leads/run", async (req, res) => {
+  const { branche, region, anzahl } = req.body;
+  const url = process.env.HERMES_CHAT_URL;
+  if (!url) return res.redirect("/leads");
+  const auftrag = `Starte den lead-gen-Skill als Hintergrund-Lauf mit diesen Parametern: Branche „${branche}", Region „${region}", Anzahl ${Number(anzahl) || 20}. ` +
+    `Wichtig: (1) Bestätige mir SOFORT kurz den Start und arbeite dann im Hintergrund weiter (delegierte Subagenten). ` +
+    `(2) Schreibe das Endergebnis zusätzlich zum Google Sheet als JSON nach /opt/data/vault/projekte/leads/JJJJ-MM-TT-branche-region.json ` +
+    `im Format {"lauf":{"datum","branche","region","anzahl","sheet_url"},"leads":[{"name","telefon","website","adresse","score","argumente":[]}]} — das Dashboard liest diese Datei.`;
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (process.env.HERMES_API_KEY) headers["Authorization"] = "Bearer " + process.env.HERMES_API_KEY;
+    // Nur kurz auf die Startbestätigung warten — der eigentliche Lauf dauert Minuten
+    await fetch(url, {
+      method: "POST", headers,
+      body: JSON.stringify({ model: process.env.HERMES_MODEL || "hermes-agent", messages: [{ role: "user", content: auftrag }], stream: false }),
+      signal: AbortSignal.timeout(90000),
+    }).catch(() => {});
+  } catch {}
+  res.redirect("/leads?started=1");
 });
 
 app.post("/leads/add", (req, res) => {
