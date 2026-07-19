@@ -219,15 +219,22 @@ app.get("/api/calendar", (req, res) => {
         try {
           if (err) return res.json({ ok: false, hint: "Kalender nicht abrufbar.", detail: String(stderr || err.message || err).slice(0, 400) });
           const data = safeJson(stdout);
-          // Termine-Array in gaengigen Strukturen suchen (events, items, data, verschachtelt)
+          // gws-cli verpackt die Termine als JSON-String in einer Sicherheits-Huelle:
+          // { events: { warning: "EXTERNAL CONTENT...", data: "[{...}]", security_warnings: [...] } }
           let events = null;
-          for (const c of [data, data?.events, data?.items, data?.data, data?.events?.items]) {
-            if (Array.isArray(c)) { events = c; break; }
+          const huelle = data && data.events;
+          if (huelle && typeof huelle === "object" && typeof huelle.data === "string") {
+            const inner = safeJson(huelle.data);
+            if (Array.isArray(inner)) events = inner;
           }
-          if (!events && data && typeof data === "object") {
-            for (const v of Object.values(data)) { if (Array.isArray(v)) { events = v; break; } }
+          if (!events) {
+            for (const c of [data, data?.events, data?.items, data?.data]) {
+              if (Array.isArray(c) && !(c[0] && typeof c[0] === "object" && "matched_text" in c[0])) { events = c; break; }
+            }
           }
           if (!events) return res.json({ ok: false, hint: "Unbekanntes Kalender-Format — Rohdaten:", detail: String(stdout).slice(0, 350) });
+          // Abgesagte Termine ausblenden
+          events = events.filter((e) => (e.status || "confirmed") !== "cancelled");
           const mapped = (events || []).map((e) => {
             const ev = e.event || e; // manche CLIs verschachteln
             return {
