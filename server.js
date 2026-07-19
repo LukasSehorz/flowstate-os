@@ -83,15 +83,111 @@ const MODULES = [
 
 // ---------- Zentrale ----------
 app.get("/", async (req, res) => {
+  const heute = new Date().toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   res.send(layout("Zentrale", "zentrale", `
-    <h1>Zentrale</h1>
-    <p class="muted">${new Date().toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
+    <div class="head-row">
+      <div><h1>Zentrale</h1><p class="muted">${heute}</p></div>
+      <div class="qa">
+        <form method="post" action="/briefing/neu" class="inline"><button>☀️ Briefing erstellen</button></form>
+        <form method="post" action="/skill/mail-triage" class="inline"><button>📬 Mail-Triage starten</button></form>
+        <a class="btn-link" href="/leads">🎯 Lead-Lauf</a>
+        <a class="btn-link" href="/chat">✦ Alexandra fragen</a>
+      </div>
+    </div>
+    ${req.query.gestartet ? `<div class="card note"><p>🚀 <strong>${esc(req.query.gestartet)}</strong> läuft — Alexandra arbeitet im Hintergrund. Ergebnis erscheint hier, Seite in ein paar Minuten neu laden.</p></div>` : ""}
+    <div class="tiles">
+      <div class="tile" data-tile="/api/calendar"><span class="tile-num">–</span><span class="tile-label">Termine heute</span></div>
+      <div class="tile" data-tile="/api/mail"><span class="tile-num">–</span><span class="tile-label">Wichtige Mails</span></div>
+      <div class="tile" data-tile="/api/inbox"><span class="tile-num">–</span><span class="tile-label">Brauchen dich</span></div>
+      <div class="tile" data-tile="/api/leads/stats"><span class="tile-num">–</span><span class="tile-label">Leads gesamt</span></div>
+    </div>
     <div class="grid">
-      <div class="card" id="card-calendar"><h2>📅 Heute im Kalender</h2><div class="card-body" data-load="/api/calendar">Lade…</div></div>
-      <div class="card" id="card-vault"><h2>❖ Wissens-Vault</h2><div class="card-body" data-load="/api/vault/stats">Lade…</div></div>
-      <div class="card"><h2>📬 Mail-Triage</h2><div class="card-body"><p class="muted">Kommt als Nächstes: Die vier Körbe aus Alexandras Mail-Triage direkt hier.</p><p>Bis dahin: Frag sie in Telegram — <em>„Führe den mail-triage-Skill aus"</em>.</p></div></div>
+      <div class="card wide" id="card-briefing"><h2>☀️ Tages-Briefing <span class="muted small">von Alexandra</span></h2><div class="card-body" data-load="/api/briefing">Lade…</div></div>
+      <div class="card"><h2>📅 Heute im Kalender</h2><div class="card-body" data-load="/api/calendar">Lade…</div></div>
+      <div class="card"><h2>📬 Mail-Triage <span class="muted small">vier Körbe</span></h2><div class="card-body" data-load="/api/mail">Lade…</div></div>
+      <div class="card"><h2>✅ Was braucht mich?</h2><div class="card-body" data-load="/api/inbox">Lade…</div></div>
+      <div class="card"><h2>🎯 Leads</h2><div class="card-body" data-load="/api/leads/stats">Lade…</div></div>
+      <div class="card"><h2>❖ Wissens-Vault</h2><div class="card-body" data-load="/api/vault/stats">Lade…</div></div>
       <div class="card"><h2>⬡ System</h2><div class="card-body" data-load="/api/system">Lade…</div></div>
     </div>`));
+});
+
+// --- Briefing: Alexandra legt es als Markdown im Vault ab, Dashboard zeigt es an ---
+const BRIEFING_FILE = () => path.join(VAULT_PATH, "projekte", "briefing-heute.md");
+
+app.get("/api/briefing", (req, res) => {
+  try {
+    const f = BRIEFING_FILE();
+    if (!fs.existsSync(f)) return res.json({ ok: true, leer: true });
+    const stat = fs.statSync(f);
+    const alterMin = Math.round((Date.now() - stat.mtime.getTime()) / 60000);
+    res.json({ ok: true, html: marked.parse(fs.readFileSync(f, "utf-8")), alterMin, stand: stat.mtime.toLocaleString("de-DE") });
+  } catch (e) {
+    res.json({ ok: false, hint: "Briefing nicht lesbar." });
+  }
+});
+
+app.post("/briefing/neu", async (req, res) => {
+  const url = process.env.HERMES_CHAT_URL;
+  if (url) {
+    const auftrag = `Erstelle mein Tages-Briefing und schreibe es als Markdown nach /opt/data/vault/projekte/briefing-heute.md (überschreibe die Datei). ` +
+      `Inhalt: (1) Meine heutigen Termine aus dem Google-Kalender. (2) Die wichtigsten ungelesenen Mails, kurz zusammengefasst — nutze deinen mail-triage-Skill. ` +
+      `(3) Was aus deiner Sicht heute Priorität hat, mit kurzer Begründung. (4) Falls dir etwas auffällt, das ich übersehen könnte: ein Hinweis. ` +
+      `Halte es kompakt, deutsch, in Markdown mit Überschriften. Bestätige mir kurz, wenn die Datei geschrieben ist.`;
+    const headers = { "Content-Type": "application/json" };
+    if (process.env.HERMES_API_KEY) headers["Authorization"] = "Bearer " + process.env.HERMES_API_KEY;
+    fetch(url, { method: "POST", headers, body: JSON.stringify({ model: process.env.HERMES_MODEL || "hermes-agent", messages: [{ role: "user", content: auftrag }], stream: false }), signal: AbortSignal.timeout(170000) }).catch(() => {});
+  }
+  res.redirect("/?gestartet=Briefing");
+});
+
+// Mail-Triage-Skill per Knopf ausführen — Ergebnis landet als JSON im Vault
+app.post("/skill/mail-triage", async (req, res) => {
+  const url = process.env.HERMES_CHAT_URL;
+  if (url) {
+    const auftrag = `Führe den mail-triage-Skill aus. Schreibe zusätzlich zur Chat-Übersicht das Ergebnis als JSON nach ` +
+      `/opt/data/vault/projekte/mail-triage-heute.json (überschreiben) im Format: ` +
+      `{"koerbe":{"dringend":[{"von":"","betreff":"","zusammenfassung":""}],"wichtig":[...],"warten":<anzahl>,"werbung":<anzahl>}} ` +
+      `— das Dashboard liest diese Datei. Entwürfe für Korb 1 wie gewohnt nur im Chat vorschlagen, nichts senden.`;
+    const headers = { "Content-Type": "application/json" };
+    if (process.env.HERMES_API_KEY) headers["Authorization"] = "Bearer " + process.env.HERMES_API_KEY;
+    fetch(url, { method: "POST", headers, body: JSON.stringify({ model: process.env.HERMES_MODEL || "hermes-agent", messages: [{ role: "user", content: auftrag }], stream: false }), signal: AbortSignal.timeout(170000) }).catch(() => {});
+  }
+  res.redirect("/?gestartet=Mail-Triage");
+});
+
+// --- Mail-Triage: liest die von Alexandra abgelegte Übersicht ---
+app.get("/api/mail", (req, res) => {
+  try {
+    const f = path.join(VAULT_PATH, "projekte", "mail-triage-heute.json");
+    if (!fs.existsSync(f)) return res.json({ ok: true, leer: true });
+    const d = JSON.parse(fs.readFileSync(f, "utf-8"));
+    const stat = fs.statSync(f);
+    res.json({ ok: true, koerbe: d.koerbe || d, stand: stat.mtime.toLocaleString("de-DE") });
+  } catch { res.json({ ok: true, leer: true }); }
+});
+
+// --- Inbox "Was braucht mich?" (J3): offene Freigaben/Entscheidungen ---
+const INBOX_FILE = path.join(DATA_PATH, "inbox.json");
+function readInbox() { try { return JSON.parse(fs.readFileSync(INBOX_FILE, "utf-8")); } catch { return []; } }
+function writeInbox(x) { fs.writeFileSync(INBOX_FILE, JSON.stringify(x, null, 2)); }
+
+app.get("/api/inbox", (req, res) => {
+  // Aus dem Vault (Alexandra) + lokal (manuell) zusammenführen
+  let ausVault = [];
+  try {
+    const f = path.join(VAULT_PATH, "projekte", "inbox.json");
+    if (fs.existsSync(f)) ausVault = JSON.parse(fs.readFileSync(f, "utf-8"));
+  } catch {}
+  const alle = [...(Array.isArray(ausVault) ? ausVault : []), ...readInbox()].filter((x) => !x.erledigt);
+  res.json({ ok: true, punkte: alle.slice(0, 8), gesamt: alle.length });
+});
+
+app.get("/api/leads/stats", (req, res) => {
+  const runs = readLeadRuns();
+  const gesamt = runs.reduce((n, r) => n + (r.leads || []).length, 0);
+  const top = runs.flatMap((r) => r.leads || []).filter((l) => Number(l.score) >= 9).length;
+  res.json({ ok: true, laeufe: runs.length, gesamt, top, letzter: runs[0]?.lauf?.datum || null, manuell: readLeads().length });
 });
 
 app.get("/api/calendar", (req, res) => {
@@ -138,12 +234,18 @@ app.get("/api/vault/stats", (req, res) => {
   }
 });
 
-app.get("/api/system", (req, res) => {
+app.get("/api/system", async (req, res) => {
+  let hermes = false;
+  try {
+    const base = (process.env.HERMES_CHAT_URL || "").replace(/\/v1\/.*$/, "");
+    if (base) { const r = await fetch(base + "/health", { signal: AbortSignal.timeout(3000) }); hermes = r.ok; }
+  } catch {}
   res.json({
     ok: true,
-    app: "flowstate-dashboard v0.1.0",
+    app: "flowstate-dashboard v0.2.0",
     uptimeMin: Math.round(process.uptime() / 60),
     vaultMounted: fs.existsSync(VAULT_PATH),
+    hermes,
     zeit: new Date().toLocaleString("de-DE"),
   });
 });
@@ -415,13 +517,51 @@ function layout(title, active, content) {
     document.querySelectorAll("[data-load]").forEach(async (el) => {
       try {
         const r = await fetch(el.dataset.load); const d = await r.json();
-        el.innerHTML = window.renderCard ? renderCard(el.dataset.load, d) : "<pre>" + JSON.stringify(d, null, 2) + "</pre>";
+        el.innerHTML = renderCard(el.dataset.load, d);
       } catch (e) { el.innerHTML = "<p class='error'>Fehler beim Laden.</p>"; }
     });
+    document.querySelectorAll("[data-tile]").forEach(async (el) => {
+      try {
+        const r = await fetch(el.dataset.tile); const d = await r.json();
+        el.querySelector(".tile-num").textContent = tileNum(el.dataset.tile, d);
+      } catch { el.querySelector(".tile-num").textContent = "?"; }
+    });
+    function tileNum(src, d) {
+      if (!d.ok) return "–";
+      if (src.includes("calendar")) return (d.events || []).length;
+      if (src.includes("mail")) { if (d.leer) return "–"; var k = d.koerbe || {}; return ((k.dringend || []).length + (k.wichtig || []).length); }
+      if (src.includes("inbox")) return d.gesamt ?? 0;
+      if (src.includes("leads")) return d.gesamt ?? 0;
+      return "–";
+    }
     function renderCard(src, d) {
       if (!d.ok) return "<p class='muted'>" + (d.hint || "Noch nicht verbunden.") + "</p>";
-      if (src.includes("vault")) return "<p><strong>" + d.mdCount + "</strong> Wissens-Dateien</p><p class='muted small'>Zuletzt geändert:</p>" + d.newest.map(n => "<div class='row'><span>" + n.file + "</span><span class='muted small'>" + n.changed + "</span></div>").join("");
-      if (src.includes("system")) return "<div class='row'><span>App</span><span>" + d.app + "</span></div><div class='row'><span>Läuft seit</span><span>" + d.uptimeMin + " Min</span></div><div class='row'><span>Vault</span><span>" + (d.vaultMounted ? "✅ verbunden" : "❌ fehlt") + "</span></div>";
+      if (src.includes("briefing")) {
+        if (d.leer) return "<p class='muted'>Noch kein Briefing heute. Klick oben auf <strong>☀️ Briefing erstellen</strong> — Alexandra stellt Termine, Mails und Prioritäten zusammen (dauert 1–3 Min).</p>";
+        return "<div class='md'>" + d.html + "</div><p class='muted small'>Stand: " + d.stand + (d.alterMin > 240 ? " ⚠️ schon " + Math.round(d.alterMin/60) + " Std alt" : "") + "</p>";
+      }
+      if (src.includes("mail")) {
+        if (d.leer) return "<p class='muted'>Noch keine Triage heute. Klick oben auf <strong>📬 Mail-Triage starten</strong>.</p>";
+        var k = d.koerbe || {};
+        var out = "";
+        if ((k.dringend || []).length) out += "<p><strong>🔴 Wichtig & dringend (" + k.dringend.length + ")</strong></p>" + k.dringend.map(m => "<div class='row'><span>" + m.von + " — " + m.betreff + "</span></div>").join("");
+        if ((k.wichtig || []).length) out += "<p><strong>🟡 Wichtig (" + k.wichtig.length + ")</strong></p>" + k.wichtig.slice(0,5).map(m => "<div class='row'><span>" + m.von + " — " + m.betreff + "</span></div>").join("");
+        out += "<p class='muted small'>Kann warten: " + (k.warten ?? "–") + " · Werbung: " + (k.werbung ?? "–") + " · Stand: " + (d.stand || "") + "</p>";
+        return out || "<p class='muted'>Postfach leer. 🎉</p>";
+      }
+      if (src.includes("inbox")) {
+        if (!d.punkte || !d.punkte.length) return "<p class='muted'>Nichts offen — alles entschieden. ✅</p>";
+        return d.punkte.map(p => "<div class='row'><span>" + (p.titel || p.text || JSON.stringify(p)) + "</span><span class='muted small'>" + (p.von || "") + "</span></div>").join("");
+      }
+      if (src.includes("leads/stats")) {
+        return "<div class='row'><span>Läufe</span><span>" + d.laeufe + "</span></div>" +
+               "<div class='row'><span>Leads gesamt</span><span><strong>" + d.gesamt + "</strong></span></div>" +
+               "<div class='row'><span>Top-Leads (Score ≥ 9)</span><span>" + d.top + "</span></div>" +
+               "<div class='row'><span>Manuell erfasst</span><span>" + d.manuell + "</span></div>" +
+               (d.letzter ? "<p class='muted small'>Letzter Lauf: " + d.letzter + "</p>" : "");
+      }
+      if (src.includes("vault")) return "<p><strong>" + d.mdCount + "</strong> Wissens-Dateien</p><p class='muted small'>Zuletzt geändert:</p>" + d.newest.slice(0,4).map(n => "<div class='row'><span>" + n.file + "</span><span class='muted small'>" + n.changed + "</span></div>").join("");
+      if (src.includes("system")) return "<div class='row'><span>App</span><span>" + d.app + "</span></div><div class='row'><span>Läuft seit</span><span>" + d.uptimeMin + " Min</span></div><div class='row'><span>Vault</span><span>" + (d.vaultMounted ? "✅ verbunden" : "❌ fehlt") + "</span></div><div class='row'><span>Alexandra</span><span>" + (d.hermes ? "🟢 online" : "⚪ nicht erreichbar") + "</span></div>";
       if (src.includes("calendar")) {
         if (!d.events || !d.events.length) return "<p class='muted'>Heute keine Termine. 🎉</p>";
         return d.events.map(function (e) {
