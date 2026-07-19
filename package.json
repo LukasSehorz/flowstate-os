@@ -1,0 +1,14 @@
+{
+  "name": "flowstate-dashboard",
+  "version": "0.1.0",
+  "description": "Flowstate OS Dashboard - die Zentrale der Sehorz & vom Hofe GbR",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "express-session": "^1.18.0",
+    "marked": "^15.0.0"
+  }
+}
