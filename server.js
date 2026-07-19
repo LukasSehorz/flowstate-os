@@ -191,33 +191,49 @@ app.get("/api/leads/stats", (req, res) => {
 });
 
 app.get("/api/calendar", (req, res) => {
-  // Von Alexandra verifizierter Befehl: Zeitraum "heute" nach Europe/Berlin
-  const tz = "Europe/Berlin";
-  const fmt = (d) => {
-    const p = new Intl.DateTimeFormat("sv-SE", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
-    return `${p}T00:00:00+02:00`;
-  };
-  const today = new Date();
-  const tomorrow = new Date(today.getTime() + 86400000);
-  execFile(
-    "gws-cli",
-    ["calendar", "list", "--from", fmt(today), "--to", fmt(tomorrow), "--max", "50"],
-    { env: GWS_ENV, timeout: 25000 },
-    (err, stdout, stderr) => {
-      if (err) return res.json({ ok: false, hint: "Kalender nicht abrufbar.", detail: String(stderr || err.message).slice(0, 300) });
-      const data = safeJson(stdout);
-      const events = (data && data.events) || [];
-      res.json({
-        ok: true,
-        events: events.map((e) => ({
-          titel: e.summary || e.title || "(ohne Titel)",
-          start: e.start?.dateTime || e.start?.date || e.start || "",
-          ende: e.end?.dateTime || e.end?.date || e.end || "",
-          ort: e.location || "",
-        })),
-      });
-    }
-  );
+  // Von Alexandra verifizierter Befehl: Zeitraum "heute" nach Europe/Berlin.
+  // Robust gebaut: nichts hier darf den Prozess werfen — jeder Fehler wird als Hinweis gemeldet.
+  try {
+    const pad = (n) => String(n).padStart(2, "0");
+    const fmt = (d) => {
+      // Datum in Europe/Berlin ermitteln (unabhängig von Container-Zeitzone), Offset Juli = +02:00
+      let y, m, day;
+      try {
+        const p = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(d).split("-");
+        [y, m, day] = p;
+      } catch {
+        y = d.getUTCFullYear(); m = pad(d.getUTCMonth() + 1); day = pad(d.getUTCDate());
+      }
+      return `${y}-${m}-${day}T00:00:00+02:00`;
+    };
+    const today = new Date();
+    const tomorrow = new Date(today.getTime() + 86400000);
+    execFile(
+      "gws-cli",
+      ["calendar", "list", "--from", fmt(today), "--to", fmt(tomorrow), "--max", "50"],
+      { env: GWS_ENV, timeout: 25000 },
+      (err, stdout, stderr) => {
+        try {
+          if (err) return res.json({ ok: false, hint: "Kalender nicht abrufbar.", detail: String(stderr || err.message || err).slice(0, 400) });
+          const data = safeJson(stdout);
+          const events = Array.isArray(data) ? data : (data && (data.events || data.items)) || [];
+          res.json({
+            ok: true,
+            events: (events || []).map((e) => ({
+              titel: e.summary || e.title || "(ohne Titel)",
+              start: (e.start && (e.start.dateTime || e.start.date)) || e.start || "",
+              ende: (e.end && (e.end.dateTime || e.end.date)) || e.end || "",
+              ort: e.location || "",
+            })),
+          });
+        } catch (e2) {
+          res.json({ ok: false, hint: "Kalender-Antwort nicht lesbar.", detail: String(e2.message).slice(0, 300) });
+        }
+      }
+    );
+  } catch (e) {
+    res.json({ ok: false, hint: "Kalender-Aufruf fehlgeschlagen.", detail: String(e.message).slice(0, 300) });
+  }
 });
 
 app.get("/api/vault/stats", (req, res) => {
@@ -535,7 +551,7 @@ function layout(title, active, content) {
       return "–";
     }
     function renderCard(src, d) {
-      if (!d.ok) return "<p class='muted'>" + (d.hint || "Noch nicht verbunden.") + "</p>";
+      if (!d.ok) return "<p class='muted'>" + (d.hint || "Noch nicht verbunden.") + "</p>" + (d.detail ? "<pre class='small'>" + String(d.detail).replace(/[<>&]/g, "") + "</pre>" : "");
       if (src.includes("briefing")) {
         if (d.leer) return "<p class='muted'>Noch kein Briefing heute. Klick oben auf <strong>☀️ Briefing erstellen</strong> — Alexandra stellt Termine, Mails und Prioritäten zusammen (dauert 1–3 Min).</p>";
         return "<div class='md'>" + d.html + "</div><p class='muted small'>Stand: " + d.stand + (d.alterMin > 240 ? " ⚠️ schon " + Math.round(d.alterMin/60) + " Std alt" : "") + "</p>";
