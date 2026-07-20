@@ -18,6 +18,11 @@ services:
       - HERMES_CHAT_URL=${HERMES_CHAT_URL}
       - HERMES_API_KEY=${HERMES_API_KEY}
       - HERMES_MODEL=hermes-agent
+      # ElevenLabs — Stimme fuer /sprache. Der Schluessel steht in .env und
+      # muss hier durchgereicht werden: Compose gibt nur weiter, was gelistet ist.
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}
+      - ELEVENLABS_MODEL=${ELEVENLABS_MODEL:-eleven_flash_v2_5}
       # CRM-Datenbank (Supabase, Region Frankfurt) — RLS greift in der Datenbank
       - DATABASE_URL=${DATABASE_URL}
     networks:
