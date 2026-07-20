@@ -50,6 +50,7 @@ const SEITEN = [
   }
 
   // Eine Detailseite
+  await page.goto(`http://localhost:${PORT}/crm/leads`, { waitUntil: "networkidle0" });
   const link = await page.$eval("table.tabelle tbody tr", (tr) => tr.getAttribute("onclick")).catch(() => null);
   if (link) {
     const url = link.match(/'([^']+)'/)?.[1];
