@@ -15,6 +15,9 @@ const CHROME = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const SEITEN = [
   ["01-anmelden", "/crm/anmelden", false],
   ["02-uebersicht", "/crm", true],
+  ["02b-tab-pipeline", "/crm?tab=pipeline", true],
+  ["02c-tab-team", "/crm?tab=team", true],
+  ["02d-zeitraum-12", "/crm?tab=uebersicht&zr=12", true],
   ["03-leads", "/crm/leads", true],
   ["04-pipeline", "/crm/pipeline", true],
   ["05-kunden", "/crm/kunden", true],
@@ -48,6 +51,13 @@ const SEITEN = [
     await page.screenshot({ path: path.join(ORDNER, `${name}.png`), fullPage: true });
     console.log(`📸 ${name}`);
   }
+
+  // Seitenleiste im Hover-Zustand (ausgefahren)
+  await page.goto(`http://localhost:${PORT}/crm`, { waitUntil: "networkidle0" });
+  await page.hover(".rail");
+  await new Promise((r) => setTimeout(r, 700));
+  await page.screenshot({ path: path.join(ORDNER, "08-rail-hover.png") });
+  console.log("📸 08-rail-hover");
 
   // Eine Detailseite
   await page.goto(`http://localhost:${PORT}/crm/leads`, { waitUntil: "networkidle0" });
