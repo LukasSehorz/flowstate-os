@@ -19,7 +19,10 @@
 
   let konfig = { elevenlabs: false, hermes: false, wakeWord: "alexandra", begruessung: "" };
   let zustand = "ruhe";
-  let wakeAn = localStorage.getItem(WAKE_SPEICHER) === "an";
+  // Standardmaessig AN: "Hey Alexandra" soll ohne Vorbereitung funktionieren,
+  // auf jeder Seite. Nur wer es ausdruecklich abschaltet, bekommt Ruhe —
+  // deshalb Vergleich auf "aus" statt auf "an".
+  let wakeAn = localStorage.getItem(WAKE_SPEICHER) !== "aus";
   let erkennung = null, wakeErkennung = null, wakeLaeuft = false;
   let audio = null, audioCtx = null, analyser = null, mikroStrom = null;
   let begruessungUrl = null;      // einmal erzeugt, danach wiederverwendet
@@ -157,7 +160,17 @@
     // Chrome beendet Dauererkennung nach ~60 s von selbst. Der Waechter
     // startet sie wieder — hier nur den Merker zuruecksetzen.
     w.onend = () => { wakeLaeuft = false; wakePunktSetzen(); };
-    w.onerror = () => { wakeLaeuft = false; wakePunktSetzen(); };
+    w.onerror = (ev) => {
+      wakeLaeuft = false;
+      // Ohne Mikrofonfreigabe wuerde der Waechter im Sekundentakt weiter
+      // versuchen. Also abschalten und sagen, woran es liegt.
+      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
+        wakeAn = false;
+        if (el.hinweis) el.hinweis.textContent =
+          "Mikrofon nicht freigegeben — im Schloss-Symbol der Adresszeile erlauben, dann Seite neu laden.";
+      }
+      wakePunktSetzen();
+    };
 
     try { w.start(); } catch { wakeLaeuft = false; }
   }
