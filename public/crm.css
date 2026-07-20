@@ -203,8 +203,12 @@ table.tabelle { width:100%; border-collapse:collapse; }
 .such-feld input { padding-left:33px; }
 
 /* ---------- Kanban ---------- */
-.kanban { display:flex; gap:14px; overflow-x:auto; padding:2px 2px 16px; align-items:flex-start; }
-.spalte { flex:0 0 292px; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-lg); padding:12px; }
+.kanban { display:flex; gap:12px; overflow-x:auto; padding:2px 2px 16px; align-items:flex-start;
+  scrollbar-width:thin; scroll-snap-type:x proximity; }
+.kanban .spalte { scroll-snap-align:start; }
+.kanban::-webkit-scrollbar { height:8px; }
+.kanban::-webkit-scrollbar-thumb { background:var(--border-stark); border-radius:99px; }
+.spalte { flex:0 0 268px; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-lg); padding:12px; }
 .spalte-kopf { display:flex; align-items:center; gap:8px; margin-bottom:12px; padding:0 4px; }
 .spalte-punkt { width:8px; height:8px; border-radius:50%; background:var(--stufe,var(--stage-1)); }
 .spalte-titel { font-size:12.5px; font-weight:600; color:var(--text-secondary); flex:1; }
@@ -275,3 +279,8 @@ dialog h2 { font-size:17px; margin-bottom:18px; }
   .seitenleiste nav { display:flex; } .nav-gruppe, .leisten-fuss { display:none; } .marke-block { padding:0 12px 0 0; }
   main { padding:20px 16px 48px; } .feld-paar { grid-template-columns:1fr; }
 }
+
+/* Leere Kanban-Spalte: dezenter Platzhalter statt Loch */
+.spalte-leer { border:1.5px dashed var(--border-stark); border-radius:var(--r-md); padding:14px 10px;
+  text-align:center; font-size:12px; color:var(--text-muted); background:rgba(255,255,255,.5); }
+.kopf-aktionen .reiter { margin-top:2px; }
