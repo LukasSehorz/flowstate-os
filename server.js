@@ -7,6 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const { marked } = require("marked");
 const { schale } = require("./lib/schale.js");
+const verlauf = require("./lib/verlauf.js");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -90,6 +91,29 @@ app.use((req, res, next) => {
 });
 
 // Die Navigation steht jetzt zentral in lib/schale.js (MODULE).
+
+// ---------- Sprache (Alexandra zum Zuhoeren) ----------
+// Steht bewusst hinter dem Auth-Gate: Die Routen reichen Kalender, Kennzahlen
+// und die Leitung zu Hermes durch — nichts davon gehoert nach aussen offen.
+try { require("./lib/sprache-routes.js")(app, { layout }); console.log("Sprach-Modul geladen"); }
+catch (e) { console.error("Sprach-Modul konnte nicht geladen werden:", e.message); }
+
+// Kalender im Hintergrund frisch halten, damit eine Sprachfrage nicht warten muss.
+// Kostet keine Token — das ist ein gws-cli-Aufruf, kein Modell.
+//
+// Nur der Kalender: Der haengt am Firmenkonto und braucht keine Identitaet.
+// Die CRM-Zahlen dagegen laufen ueber Row-Level-Security, also mit den Rechten
+// der fragenden Person — die kennt ein Hintergrund-Timer nicht. Die werden
+// deshalb beim Fragen aufgefrischt, mit der Sitzung des Fragenden.
+{
+  const zustand = require("./lib/zustand.js");
+  const takt = Number(process.env.ZUSTAND_TAKT_MS || zustand.FRISCHE.kalender);
+  const auffrischen = () =>
+    zustand.bauen(null, ["kalender"]).catch((e) => console.error("Zustand (Kalender):", e.message));
+  auffrischen();
+  setInterval(auffrischen, takt).unref();
+  console.log(`Zustand: Kalender alle ${Math.round(takt / 60000)} Min.`);
+}
 
 // ---------- Zentrale ----------
 app.get("/", async (req, res) => {
@@ -320,11 +344,41 @@ app.get("/api/system", async (req, res) => {
 // ---------- Chat mit Alexandra ----------
 app.get("/chat", (req, res) => {
   const configured = Boolean(process.env.HERMES_CHAT_URL);
+  const bisher = verlauf.lesen(DATA_PATH, req.session.crm || null);
+
+  // Verlauf mit Tagestrennern, damit "die Unterhaltung von vor drei Tagen" auffindbar ist.
+  const tag = (iso) => {
+    const d = new Date(iso), heute = new Date();
+    const gestern = new Date(heute); gestern.setDate(heute.getDate() - 1);
+    const gleich = (a, b) => a.toDateString() === b.toDateString();
+    if (gleich(d, heute)) return "Heute";
+    if (gleich(d, gestern)) return "Gestern";
+    return d.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year:
+      d.getFullYear() === heute.getFullYear() ? undefined : "numeric" });
+  };
+  const uhr = (iso) => new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+
+  let letzterTag = "";
+  const verlaufHtml = bisher.map((n) => {
+    const t = tag(n.zeit);
+    const trenner = t === letzterTag ? "" : `<div class="chat-tag"><span>${esc(t)}</span></div>`;
+    letzterTag = t;
+    return trenner + `<div class="msg ${n.rolle === "user" ? "user" : "agent"}" title="${esc(uhr(n.zeit))}">${esc(n.text)}</div>`;
+  }).join("");
+
   res.send(layout("Alexandra — direkte Leitung zum Agenten", "chat", `
     ${configured ? "" : `<div class="card placeholder"><h2>🔌 Verbindung wird eingerichtet</h2>
       <p>Die Chat-Tür zu Alexandra (Hermes-Webhook) ist noch nicht konfiguriert. Bis dahin erreichst du sie über Telegram.</p></div>`}
+    <div class="chat-kopf">
+      <span class="caption">${bisher.length ? bisher.length + " Nachrichten im Verlauf · dauerhaft gespeichert"
+        : "Noch kein Verlauf — der erste Austausch wird gespeichert."}</span>
+      ${bisher.length ? `<form method="post" action="/chat/leeren" class="inline"
+        onsubmit="return confirm('Den ganzen Chatverlauf mit Alexandra löschen? Das lässt sich nicht rückgängig machen.')">
+        <button class="danger tiny" type="submit">Verlauf löschen</button></form>` : ""}
+    </div>
     <div class="chat-wrap${configured ? "" : " disabled"}">
-      <div id="chat-log" class="chat-log"><div class="msg agent">Hallo Lukas! Schreib mir hier wie in Telegram — ich habe denselben Kopf, dasselbe Gedächtnis und dieselben Regeln. ✦</div></div>
+      <div id="chat-log" class="chat-log">${verlaufHtml
+        || `<div class="msg agent">Hallo${req.session.crm ? " " + esc(req.session.crm.name.split(" ")[0]) : ""}! Schreib mir hier wie in Telegram — ich habe denselben Kopf, dasselbe Gedächtnis und dieselben Regeln. ✦</div>`}</div>
       <form id="chat-form" class="chat-form">
         <input id="chat-input" placeholder="Nachricht an Alexandra…" autocomplete="off" ${configured ? "" : "disabled"}>
         <button type="submit" ${configured ? "" : "disabled"}>Senden</button>
@@ -344,16 +398,23 @@ app.get("/chat", (req, res) => {
         log.scrollTop = log.scrollHeight;
       });
       function add(who, text) { const el = document.createElement("div"); el.className = "msg " + who; el.textContent = text; log.appendChild(el); log.scrollTop = log.scrollHeight; return el; }
+      // Beim Oeffnen ans Ende springen — der neueste Austausch soll sichtbar sein.
+      if (log) log.scrollTop = log.scrollHeight;
     </script>`, req));
 });
 
 // Hermes API-Server (OpenAI-kompatibel, Port 8642) — Verlauf wird pro Session mitgeschickt
+app.post("/chat/leeren", (req, res) => {
+  verlauf.leeren(DATA_PATH, req.session.crm || null);
+  res.redirect("/chat");
+});
+
 app.post("/api/chat", async (req, res) => {
   const url = process.env.HERMES_CHAT_URL;
   if (!url) return res.json({ ok: false, hint: "HERMES_CHAT_URL ist noch nicht konfiguriert." });
-  const history = (req.session.chat ||= []);
-  history.push({ role: "user", content: String(req.body.message || "") });
-  if (history.length > 24) history.splice(0, history.length - 24);
+  const wer = req.session.crm || null;
+  verlauf.anhaengen(DATA_PATH, wer, "user", String(req.body.message || ""));
+  const history = verlauf.kontext(DATA_PATH, wer);
   try {
     const headers = { "Content-Type": "application/json" };
     if (process.env.HERMES_API_KEY) headers["Authorization"] = "Bearer " + process.env.HERMES_API_KEY;
@@ -367,7 +428,7 @@ app.post("/api/chat", async (req, res) => {
     if (d?.error) return res.json({ ok: false, hint: d.error.message || "Hermes meldet einen Fehler." });
     const reply = d?.choices?.[0]?.message?.content;
     if (!reply) return res.json({ ok: false, hint: "Unerwartete Antwort: " + JSON.stringify(d).slice(0, 300) });
-    history.push({ role: "assistant", content: reply });
+    verlauf.anhaengen(DATA_PATH, wer, "assistant", reply);
     res.json({ ok: true, reply });
   } catch (e) {
     res.json({ ok: false, hint: "Hermes nicht erreichbar: " + String(e.message).slice(0, 200) });

@@ -109,3 +109,10 @@ button.danger{background:transparent;color:var(--danger);border:1px solid var(--
 button.danger:hover{background:var(--danger-flaeche);box-shadow:none}
 
 @media(max-width:760px){.split{grid-template-columns:1fr}}
+
+/* Chat: Kopfzeile mit Verlaufs-Hinweis und Tagestrenner */
+.chat-kopf{display:flex;justify-content:space-between;align-items:center;gap:16px;
+  margin-top:4px;flex-wrap:wrap}
+.chat-tag{display:flex;align-items:center;gap:12px;margin:14px 0 4px;color:var(--text-muted);font-size:12px}
+.chat-tag::before,.chat-tag::after{content:"";flex:1;height:1px;background:var(--border)}
+.chat-tag span{white-space:nowrap}
