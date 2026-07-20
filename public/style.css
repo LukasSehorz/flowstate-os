@@ -103,3 +103,8 @@ form.inline { display: inline; }
   .sidebar nav { display: flex; } .brand { padding: 6px 10px; } .sidebar-foot { display: none; }
   main { padding: 18px; } .split { grid-template-columns: 1fr; }
 }
+
+/* Verweis in einer Karten-Ueberschrift (z. B. "CRM oeffnen ->") */
+.card-link { float: right; font-size: 13px; font-weight: 400; text-decoration: none; color: var(--accent); }
+.card-link:hover { text-decoration: underline; }
+.login-box .small { font-size: 12.5px; line-height: 1.5; margin-top: 14px; }

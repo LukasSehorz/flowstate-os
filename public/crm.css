@@ -386,3 +386,7 @@ dialog h2{margin-bottom:4px}dialog .sub{margin-bottom:20px}
 .hinweis{margin-top:14px;background:var(--surface-2);border-left:3px solid var(--blau-500);
   border-radius:0 9px 9px 0;padding:11px 14px;font-size:12.8px;color:var(--text-secondary);line-height:1.5}
 .hinweis b{color:var(--foreground)}
+
+/* Rueckweg ins Operating System — sitzt ueber dem Nutzerblock */
+.rail-zurueck{border-top:1px solid var(--border);border-radius:0;margin-bottom:2px;color:var(--text-muted)}
+.rail-zurueck:hover{background:var(--primary-soft);color:var(--primary)}

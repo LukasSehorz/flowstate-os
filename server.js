@@ -45,15 +45,30 @@ app.get("/login", (req, res) => {
       <h1>flowstate<span class="accent">OS</span></h1>
       <p class="muted">Die Zentrale der Sehorz &amp; vom Hofe GbR</p>
       <form method="post" action="/login">
-        <input type="password" name="password" placeholder="Passwort" autofocus required>
+        <input type="email" name="email" placeholder="E-Mail" autocomplete="username" autofocus>
+        <input type="password" name="password" placeholder="Passwort" autocomplete="current-password" required>
         <button type="submit">Anmelden</button>
       </form>
-      ${req.query.err ? '<p class="error">Falsches Passwort.</p>' : ""}
+      <p class="muted small">Mit dem persönlichen Konto anmelden — damit ist auch das CRM offen.
+        Ohne E-Mail gilt das gemeinsame Passwort (dann ohne CRM-Zugriff).</p>
+      ${req.query.err ? '<p class="error">E-Mail oder Passwort stimmt nicht.</p>' : ""}
     </div>`));
 });
 
-app.post("/login", (req, res) => {
-  if (PASSWORD && req.body.password === PASSWORD) {
+// Eine Anmeldung fuer alles: das persoenliche Konto oeffnet OS und CRM zugleich.
+// Das gemeinsame Passwort bleibt als Rueckfallebene, gibt aber keinen CRM-Zugriff —
+// das CRM braucht eine persoenliche Identitaet, weil die Datenbank daran die
+// Zeilenrechte (RLS) haengt. Ein geteiltes Passwort kann Lukas nicht von Louis unterscheiden.
+app.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+  if (email && process.env.DATABASE_URL) {
+    try {
+      const u = await require("./lib/crm.js").anmelden(email.trim(), password);
+      if (u) { req.session.crm = u; req.session.authed = true; return res.redirect("/"); }
+    } catch (e) { console.error("Anmeldung fehlgeschlagen:", e.message); }
+    return res.redirect("/login?err=1");
+  }
+  if (PASSWORD && password === PASSWORD) {
     req.session.authed = true;
     return res.redirect("/");
   }
@@ -66,7 +81,8 @@ app.get("/logout", (req, res) => {
 
 app.use((req, res, next) => {
   if (!PASSWORD) return res.status(500).send("DASHBOARD_PASSWORD ist nicht gesetzt.");
-  if (req.session.authed) return next();
+  // Wer im CRM angemeldet ist, ist auch im OS angemeldet — eine Identitaet fuer beides.
+  if (req.session.authed || req.session.crm) return next();
   // API-Aufrufe bekommen eine klare Meldung statt einer Weiterleitung ins Nichts
   if (req.path.startsWith("/api/")) return res.status(401).json({ ok: false, hint: "Sitzung abgelaufen — bitte Seite neu laden und neu anmelden." });
   res.redirect("/login");
@@ -106,6 +122,7 @@ app.get("/", async (req, res) => {
       <div class="tile" data-tile="/api/mail"><span class="tile-num">–</span><span class="tile-label">Wichtige Mails</span></div>
       <div class="tile" data-tile="/api/inbox"><span class="tile-num">–</span><span class="tile-label">Brauchen dich</span></div>
       <div class="tile" data-tile="/api/leads/stats"><span class="tile-num">–</span><span class="tile-label">Leads gesamt</span></div>
+      <div class="tile" data-tile="/api/crm/stats"><span class="tile-num">–</span><span class="tile-label">Offene Deals</span></div>
     </div>
     <div class="grid">
       <div class="card wide" id="card-briefing"><h2>☀️ Tages-Briefing <span class="muted small">von Alexandra</span></h2><div class="card-body" data-load="/api/briefing">Lade…</div></div>
@@ -115,6 +132,8 @@ app.get("/", async (req, res) => {
       <div class="card"><h2>📬 Mail-Triage <span class="muted small">vier Körbe</span></h2><div class="card-body" data-load="/api/mail">Lade…</div></div>
       <div class="card"><h2>✅ Was braucht mich?</h2><div class="card-body" data-load="/api/inbox">Lade…</div></div>
       <div class="card"><h2>🎯 Leads</h2><div class="card-body" data-load="/api/leads/stats">Lade…</div></div>
+      <div class="card"><h2>▣ Kunden &amp; Pipeline <a class="card-link" href="/crm">CRM öffnen →</a></h2>
+        <div class="card-body" data-load="/api/crm/stats">Lade…</div></div>
       <div class="card"><h2>❖ Wissens-Vault</h2><div class="card-body" data-load="/api/vault/stats">Lade…</div></div>
       <div class="card"><h2>⬡ System</h2><div class="card-body" data-load="/api/system">Lade…</div></div>
     </div>`));
@@ -196,6 +215,21 @@ app.get("/api/leads/stats", (req, res) => {
   const gesamt = runs.reduce((n, r) => n + (r.leads || []).length, 0);
   const top = runs.flatMap((r) => r.leads || []).filter((l) => Number(l.score) >= 9).length;
   res.json({ ok: true, laeufe: runs.length, gesamt, top, letzter: runs[0]?.lauf?.datum || null, manuell: readLeads().length });
+});
+
+// CRM-Kennzahlen fuer die Zentrale. Braucht eine persoenliche Anmeldung, weil die
+// Datenbank die Zeilenrechte daran haengt — wer nur das gemeinsame Passwort genutzt
+// hat, bekommt hier einen Hinweis statt fremder Kundendaten.
+app.get("/api/crm/stats", async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.json({ ok: false, hint: "CRM ist nicht eingerichtet." });
+  if (!req.session.crm) return res.json({ ok: false, anmeldung: true, hint: "Mit persönlichem Konto anmelden, um das CRM zu sehen." });
+  try {
+    const z = await require("./lib/crm.js").kennzahlen(req.session.crm);
+    res.json({ ok: true, ...z, name: req.session.crm.name });
+  } catch (e) {
+    console.error("CRM-Kennzahlen:", e.message);
+    res.json({ ok: false, hint: "CRM-Datenbank nicht erreichbar." });
+  }
 });
 
 app.get("/api/calendar", (req, res) => {
@@ -699,11 +733,22 @@ function layout(title, active, content) {
       if (src.includes("calendar")) return (d.events || []).length;
       if (src.includes("mail")) { if (d.leer) return "–"; var k = d.koerbe || {}; return ((k.dringend || []).length + (k.wichtig || []).length); }
       if (src.includes("inbox")) return d.gesamt ?? 0;
+      if (src.includes("crm")) return d.offene_deals ?? 0;
       if (src.includes("leads")) return d.gesamt ?? 0;
       return "–";
     }
     function renderCard(src, d) {
+      if (!d.ok && d.anmeldung) return "<p class='muted'>" + d.hint + "</p><p><a class='btn-link' href='/login'>Persönlich anmelden</a></p>";
       if (!d.ok) return "<p class='muted'>" + (d.hint || "Noch nicht verbunden.") + "</p>" + (d.detail ? "<pre class='small'>" + String(d.detail).replace(/[<>&]/g, "") + "</pre>" : "");
+      if (src.includes("crm")) {
+        var eur = function (n) { return (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: 0 }) + " €"; };
+        return "<div class='row'><span>Offene Deals</span><span><strong>" + d.offene_deals + "</strong></span></div>" +
+               "<div class='row'><span>Pipeline-Wert</span><span><strong>" + eur(d.pipeline_wert) + "</strong></span></div>" +
+               "<div class='row'><span>Umsatz diesen Monat</span><span>" + eur(d.umsatz_monat) + "</span></div>" +
+               "<div class='row'><span>Leads · Kunden</span><span>" + d.leads + " · " + d.kunden + "</span></div>" +
+               (d.wiedervorlagen ? "<div class='row'><span>⏰ Fällige Wiedervorlagen</span><span><strong>" + d.wiedervorlagen + "</strong></span></div>" : "") +
+               "<p class='muted small'>Angemeldet als " + d.name + "</p>";
+      }
       if (src.includes("briefing")) {
         if (d.leer) return "<p class='muted'>Noch kein Briefing heute. Klick oben auf <strong>☀️ Briefing erstellen</strong> — Alexandra stellt Termine, Mails und Prioritäten zusammen (dauert 1–3 Min).</p>";
         return "<div class='md'>" + d.html + "</div><p class='muted small'>Stand: " + d.stand + (d.alterMin > 240 ? " ⚠️ schon " + Math.round(d.alterMin/60) + " Std alt" : "") + "</p>";
