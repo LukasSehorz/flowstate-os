@@ -230,8 +230,8 @@ table.tabelle { width:100%; border-collapse:collapse; }
 
 /* ---------- Trichter (Pipeline-Visualisierung) ---------- */
 .trichter { display:grid; gap:7px; }
-.trichter-zeile { display:grid; grid-template-columns:150px 1fr 62px; align-items:center; gap:12px; font-size:13px; }
-.trichter-balken { height:26px; background:var(--surface-2); border-radius:6px; overflow:hidden; }
+.trichter-zeile { display:grid; grid-template-columns:104px 1fr 26px; align-items:center; gap:12px; font-size:13px; }
+.trichter-balken { height:22px; background:var(--surface-2); border-radius:6px; overflow:hidden; }
 .trichter-balken > span { display:block; height:100%; border-radius:6px;
   background:linear-gradient(90deg,var(--stufe,var(--blau-500)),color-mix(in srgb,var(--stufe,var(--blau-500)) 72%, white));
   transition:width .8s cubic-bezier(.4,0,.2,1); min-width:3px; }
