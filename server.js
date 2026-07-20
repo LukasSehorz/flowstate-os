@@ -490,13 +490,111 @@ app.post("/leads/delete", (req, res) => {
 });
 
 // ---------- Platzhalter-Module ----------
+// ---------- Agenten & Skills: Fenster in den Maschinenraum ----------
+app.get("/agenten", (req, res) => {
+  res.send(layout("Agenten & Skills", "agenten", `
+    <div class="head-row">
+      <div><h1>Agenten & Skills</h1><p class="muted">Was Alexandra kann und gerade tut — Zuschauen stört sie nicht.</p></div>
+      <div class="qa"><button onclick="location.reload()">🔄 Aktualisieren</button></div>
+    </div>
+    <div class="tiles">
+      <div class="tile" data-tile2="skills"><span class="tile-num">–</span><span class="tile-label">Skills gesamt</span></div>
+      <div class="tile" data-tile2="eigene"><span class="tile-num">–</span><span class="tile-label">Eigene Skills</span></div>
+      <div class="tile" data-tile2="status"><span class="tile-num">–</span><span class="tile-label">Status</span></div>
+      <div class="tile" data-tile2="cron"><span class="tile-num">–</span><span class="tile-label">Routinen</span></div>
+    </div>
+    <div class="grid">
+      <div class="card"><h2>⚙️ Alexandras Zustand</h2><div class="card-body" data-load="/api/agent/status">Lade…</div></div>
+      <div class="card"><h2>⏰ Routinen (Cron)</h2><div class="card-body" data-load="/api/agent/cron">Lade…</div></div>
+      <div class="card wide"><h2>🧩 Eigene Skills <span class="muted small">im Vault — von uns und ihr selbst gebaut</span></h2><div class="card-body" data-load="/api/agent/skills">Lade…</div></div>
+      <div class="card wide"><h2>📋 Entscheidungs-Log <span class="muted small">was wann warum entschieden wurde</span></h2><div class="card-body" data-load="/api/agent/entscheidungen">Lade…</div></div>
+    </div>
+    <script>
+      (async () => {
+        try {
+          const [s, c] = await Promise.all([fetch("/api/agent/status").then(r=>r.json()), fetch("/api/agent/cron").then(r=>r.json())]);
+          const sk = await fetch("/api/agent/skills").then(r=>r.json());
+          setTile("skills", s.skillsGesamt ?? "?"); setTile("eigene", sk.skills ? sk.skills.length : "?");
+          setTile("status", s.beschaeftigt ? "🟠" : (s.online ? "🟢" : "⚪"));
+          setTile("cron", c.jobs ? c.jobs.length : "–");
+        } catch {}
+        function setTile(k, v) { const el = document.querySelector('[data-tile2="' + k + '"] .tile-num'); if (el) el.textContent = v; }
+      })();
+    </script>`));
+});
+
+app.get("/api/agent/status", async (req, res) => {
+  const out = { ok: true, online: false, beschaeftigt: false };
+  try {
+    const base = (process.env.HERMES_CHAT_URL || "").replace(/\/v1\/.*$/, "");
+    if (base) {
+      const r = await fetch(base + "/health", { signal: AbortSignal.timeout(4000) });
+      out.online = r.ok;
+      try { const h = await r.json(); out.details = h; } catch {}
+    }
+  } catch {}
+  // Modell + Skill-Zahl aus der Hermes-Konfiguration lesen (nur lesend)
+  try {
+    const cfg = fs.readFileSync("/hermes-data/config.yaml", "utf-8");
+    const m = cfg.match(/default:\s*(\S+)/); if (m) out.modell = m[1];
+    const r = cfg.match(/reasoning_effort:\s*(\S+)/); if (r) out.denkstaerke = r[1];
+  } catch {}
+  try { out.skillsGesamt = fs.readdirSync("/hermes-data/skills").filter((f) => !f.startsWith(".")).length; } catch {}
+  res.json(out);
+});
+
+app.get("/api/agent/cron", (req, res) => {
+  try {
+    const p = "/hermes-data/cron.json";
+    if (!fs.existsSync(p)) return res.json({ ok: true, jobs: [], hint: "Noch keine Routinen eingerichtet." });
+    const d = JSON.parse(fs.readFileSync(p, "utf-8"));
+    const jobs = Array.isArray(d) ? d : d.jobs || [];
+    res.json({ ok: true, jobs });
+  } catch (e) { res.json({ ok: true, jobs: [], hint: "Routinen nicht lesbar." }); }
+});
+
+app.get("/api/agent/skills", (req, res) => {
+  try {
+    const dir = path.join(VAULT_PATH, "skills");
+    const skills = fs.readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => {
+        const f = path.join(dir, e.name, "SKILL.md");
+        let beschreibung = "", geaendert = "";
+        try {
+          const txt = fs.readFileSync(f, "utf-8");
+          const m = txt.match(/description:\s*(.+)/); if (m) beschreibung = m[1].trim().slice(0, 160);
+          geaendert = fs.statSync(f).mtime.toLocaleString("de-DE");
+        } catch {}
+        return { name: e.name, beschreibung, geaendert };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    res.json({ ok: true, skills });
+  } catch (e) { res.json({ ok: false, hint: "Skill-Ordner nicht lesbar." }); }
+});
+
+app.get("/api/agent/entscheidungen", (req, res) => {
+  try {
+    const dir = path.join(VAULT_PATH, "entscheidungen");
+    const eintraege = fs.readdirSync(dir).filter((f) => f.endsWith(".md")).sort().reverse().slice(0, 8)
+      .map((f) => {
+        let titel = f.replace(/\.md$/, "");
+        try {
+          const erste = fs.readFileSync(path.join(dir, f), "utf-8").split("\n").find((l) => l.startsWith("#"));
+          if (erste) titel = erste.replace(/^#+\s*/, "");
+        } catch {}
+        return { datei: f, titel };
+      });
+    res.json({ ok: true, eintraege });
+  } catch { res.json({ ok: true, eintraege: [] }); }
+});
+
 const PLACEHOLDERS = {
   kunden: ["Kunden (CRM)", "Der Eigenbau nach Bereich E: eigene Datenbank, Row-Level-Security, 5 Logins, Pipeline, Call-Listen. Größter Pain Point — kommt als eigenes Bauprojekt."],
   angebote: ["Angebote & Rechnungen", "Templates mit euren Preisen (1-€-Webseite, PM-Pakete, KI-Projekte), einheitliches Format, Status offen/bezahlt. Ablauf: Erstgespräch → Zuruf an Alexandra → Entwurf → Freigabe → raus."],
   buchhaltung: ["Buchhaltung", "Einnahmen & Ausgaben auf einen Blick, Lexware-Anbindung, Beleg-Eingang. Pain Point Nr. 2 aus dem Onboarding."],
   marketing: ["Marketing & Content", "Redaktionsplan, Social-Posts (Masse schlägt Qualität), Kampagnen-Zahlen, Funnel-Übersicht (Zahnärzte, Physios)."],
   projekte: ["Projekte", "Laufende Kundenprojekte mit Status, nächsten Schritten und Verantwortlichen. Entsteht automatisch bei Deal = gewonnen."],
-  agenten: ["Agenten & Skills", "Was Alexandra kann: alle Skills, letzte Läufe, Cron-Jobs, Freigaben. Fenster in den Maschinenraum."],
   einstellungen: ["Einstellungen", "Benutzer, Zugänge, Instanzen (Alexandra/Jarvis), Modell-Routing, Kostenübersicht."],
 };
 
@@ -623,6 +721,26 @@ function layout(title, active, content) {
                "<div class='row'><span>Top-Leads (Score ≥ 9)</span><span>" + d.top + "</span></div>" +
                "<div class='row'><span>Manuell erfasst</span><span>" + d.manuell + "</span></div>" +
                (d.letzter ? "<p class='muted small'>Letzter Lauf: " + d.letzter + "</p>" : "");
+      }
+      if (src.includes("agent/status")) {
+        return "<div class='row'><span>Erreichbar</span><span>" + (d.online ? "🟢 online" : "⚪ offline") + "</span></div>" +
+               (d.modell ? "<div class='row'><span>Modell</span><span>" + d.modell + "</span></div>" : "") +
+               (d.denkstaerke ? "<div class='row'><span>Denkstärke</span><span>" + d.denkstaerke + "</span></div>" : "") +
+               (d.skillsGesamt ? "<div class='row'><span>Skills installiert</span><span>" + d.skillsGesamt + "</span></div>" : "") +
+               "<p class='muted small'>Zuschauen stört nicht — nur Nachrichten unterbrechen sie.</p>";
+      }
+      if (src.includes("agent/cron")) {
+        if (!d.jobs || !d.jobs.length) return "<p class='muted'>" + (d.hint || "Noch keine Routinen.") + "</p><p class='muted small'>Später hier: Morgen-Briefing 7:30, Wochenreport Mo 9:00 …</p>";
+        return d.jobs.map(j => "<div class='row'><span>" + String(j.name || j.prompt || "Routine").slice(0,60) + "</span><span class='muted small'>" + (j.schedule || j.cron || "") + "</span></div>").join("");
+      }
+      if (src.includes("agent/skills")) {
+        if (!d.skills || !d.skills.length) return "<p class='muted'>Keine eigenen Skills gefunden.</p>";
+        return "<table class='tbl'><thead><tr><th>Skill</th><th>Beschreibung</th><th>Geändert</th></tr></thead><tbody>" +
+          d.skills.map(s => "<tr><td><strong>" + s.name + "</strong></td><td class='small'>" + (s.beschreibung || "—") + "</td><td class='muted small'>" + (s.geaendert || "") + "</td></tr>").join("") + "</tbody></table>";
+      }
+      if (src.includes("agent/entscheidungen")) {
+        if (!d.eintraege || !d.eintraege.length) return "<p class='muted'>Noch keine Einträge.</p>";
+        return d.eintraege.map(e => "<div class='row'><span><a href='/wissen?f=" + encodeURIComponent("entscheidungen/" + e.datei) + "'>" + e.titel + "</a></span></div>").join("");
       }
       if (src.includes("vault")) return "<p><strong>" + d.mdCount + "</strong> Wissens-Dateien</p><p class='muted small'>Zuletzt geändert:</p>" + d.newest.slice(0,4).map(n => "<div class='row'><span>" + n.file + "</span><span class='muted small'>" + n.changed + "</span></div>").join("");
       if (src.includes("system")) return "<div class='row'><span>App</span><span>" + d.app + "</span></div><div class='row'><span>Läuft seit</span><span>" + d.uptimeMin + " Min</span></div><div class='row'><span>Vault</span><span>" + (d.vaultMounted ? "✅ verbunden" : "❌ fehlt") + "</span></div><div class='row'><span>Alexandra</span><span>" + (d.hermes ? "🟢 online" : "⚪ nicht erreichbar") + "</span></div>";

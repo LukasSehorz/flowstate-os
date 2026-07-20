@@ -28,6 +28,11 @@ services:
       - dashboard-data:/data
       # Google-Token von Hermes read-only mitnutzen (liegt unter .config/gws-cli)
       - /docker/hermes-agent-pocv/data/.config:/gws-home/.config:ro
+      # Hermes-Konfiguration NUR LESEND fuer das Modul "Agenten & Skills"
+      # (Modell, Denkstaerke, Skill-Anzahl, Routinen). Secrets liegen in .env und
+      # werden vom Dashboard nie gelesen.
+      - /docker/hermes-agent-pocv/data/config.yaml:/hermes-data/config.yaml:ro
+      - /docker/hermes-agent-pocv/data/skills:/hermes-data/skills:ro
     ports:
       # Nur lokal nuetzlich (Firewall blockt von aussen) — zum Debuggen: curl localhost:8090
       - "8090:3000"
