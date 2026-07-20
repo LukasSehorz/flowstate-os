@@ -23,6 +23,10 @@ services:
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
       - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}
       - ELEVENLABS_MODEL=${ELEVENLABS_MODEL:-eleven_flash_v2_5}
+      # Was Alexandra sagt, wenn sie geweckt wird. Wird einmal erzeugt und dann
+      # im Browser wiederverwendet — kurz halten, man hoert es bei jedem Wecken.
+      - BEGRUESSUNG=${BEGRUESSUNG:-}
+      - WAKE_WORD=${WAKE_WORD:-alexandra}
       # CRM-Datenbank (Supabase, Region Frankfurt) — RLS greift in der Datenbank
       - DATABASE_URL=${DATABASE_URL}
     networks:
