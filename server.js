@@ -6,6 +6,7 @@ const { execFile } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { marked } = require("marked");
+const { schale } = require("./lib/schale.js");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -88,27 +89,14 @@ app.use((req, res, next) => {
   res.redirect("/login");
 });
 
-// ---------- Module ----------
-const MODULES = [
-  { id: "zentrale", label: "Zentrale", icon: "◈", href: "/" },
-  { id: "chat", label: "Alexandra", icon: "✦", href: "/chat" },
-  { id: "leads", label: "Leads", icon: "◎", href: "/leads" },
-  { id: "kunden", label: "Kunden (CRM)", icon: "▣", href: "/crm" },
-  { id: "angebote", label: "Angebote & Rechnungen", icon: "▤", href: "/angebote" },
-  { id: "buchhaltung", label: "Buchhaltung", icon: "€", href: "/buchhaltung" },
-  { id: "marketing", label: "Marketing & Content", icon: "◪", href: "/marketing" },
-  { id: "projekte", label: "Projekte", icon: "◫", href: "/projekte" },
-  { id: "wissen", label: "Wissen", icon: "❖", href: "/wissen" },
-  { id: "agenten", label: "Agenten & Skills", icon: "⬡", href: "/agenten" },
-  { id: "einstellungen", label: "Einstellungen", icon: "⚙", href: "/einstellungen" },
-];
+// Die Navigation steht jetzt zentral in lib/schale.js (MODULE).
 
 // ---------- Zentrale ----------
 app.get("/", async (req, res) => {
   const heute = new Date().toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   res.send(layout("Zentrale", "zentrale", `
     <div class="head-row">
-      <div><h1>Zentrale</h1><p class="muted">${heute}</p></div>
+      <div><p class="muted">${heute}</p></div>
       <div class="qa">
         <form method="post" action="/briefing/neu" class="inline"><button>☀️ Briefing erstellen</button></form>
         <form method="post" action="/skill/mail-triage" class="inline"><button>📬 Mail-Triage starten</button></form>
@@ -136,7 +124,7 @@ app.get("/", async (req, res) => {
         <div class="card-body" data-load="/api/crm/stats">Lade…</div></div>
       <div class="card"><h2>❖ Wissens-Vault</h2><div class="card-body" data-load="/api/vault/stats">Lade…</div></div>
       <div class="card"><h2>⬡ System</h2><div class="card-body" data-load="/api/system">Lade…</div></div>
-    </div>`));
+    </div>`, req));
 });
 
 // --- Briefing: Alexandra legt es als Markdown im Vault ab, Dashboard zeigt es an ---
@@ -332,8 +320,7 @@ app.get("/api/system", async (req, res) => {
 // ---------- Chat mit Alexandra ----------
 app.get("/chat", (req, res) => {
   const configured = Boolean(process.env.HERMES_CHAT_URL);
-  res.send(layout("Alexandra", "chat", `
-    <h1>Alexandra <span class="muted small">— direkte Leitung zum Agenten</span></h1>
+  res.send(layout("Alexandra — direkte Leitung zum Agenten", "chat", `
     ${configured ? "" : `<div class="card placeholder"><h2>🔌 Verbindung wird eingerichtet</h2>
       <p>Die Chat-Tür zu Alexandra (Hermes-Webhook) ist noch nicht konfiguriert. Bis dahin erreichst du sie über Telegram.</p></div>`}
     <div class="chat-wrap${configured ? "" : " disabled"}">
@@ -357,7 +344,7 @@ app.get("/chat", (req, res) => {
         log.scrollTop = log.scrollHeight;
       });
       function add(who, text) { const el = document.createElement("div"); el.className = "msg " + who; el.textContent = text; log.appendChild(el); log.scrollTop = log.scrollHeight; return el; }
-    </script>`));
+    </script>`, req));
 });
 
 // Hermes API-Server (OpenAI-kompatibel, Port 8642) — Verlauf wird pro Session mitgeschickt
@@ -405,9 +392,8 @@ app.get("/wissen", (req, res) => {
       content = `<p class="error">Datei nicht gefunden.</p>`;
     }
   }
-  res.send(layout("Wissen", "wissen", `
-    <h1>Wissen <span class="muted small">— der Vault, live</span></h1>
-    <div class="split"><nav class="tree">${tree}</nav><article class="reader">${content}</article></div>`));
+  res.send(layout("Wissen — der Vault, live", "wissen", `
+    <div class="split"><nav class="tree">${tree}</nav><article class="reader">${content}</article></div>`, req));
 });
 
 // ---------- Leads (Grundgerüst mit lokalem Speicher) ----------
@@ -467,8 +453,7 @@ app.get("/leads", (req, res) => {
     </tr>`).join("");
 
   const started = req.query.started === "1";
-  res.send(layout("Leads", "leads", `
-    <h1>Leads <span class="muted small">— Lead-Maschine (wandert später ins CRM)</span></h1>
+  res.send(layout("Lead-Maschine", "leads", `
     ${started ? `<div class="card" style="border-color:var(--accent)"><h2>🚀 Auftrag an Alexandra gesendet</h2><p>Der Lauf startet im Hintergrund (ca. 8–15 Min). Das Ergebnis erscheint hier und als Google Sheet, sobald es fertig ist — Seite später einfach neu laden.</p></div>` : ""}
     <div class="card"><h2>🎯 Neuen Lauf starten</h2>
       <form method="post" action="/leads/run" class="lead-form">
@@ -489,7 +474,7 @@ app.get("/leads", (req, res) => {
       <button type="submit">Hinzufügen</button>
     </form>
     <table class="tbl"><thead><tr><th>Name</th><th>Telefon</th><th>Website</th><th>Status</th><th>Notiz</th><th></th></tr></thead>
-    <tbody>${manualRows || '<tr><td colspan="6" class="muted">Noch keine manuellen Leads.</td></tr>'}</tbody></table></div>`));
+    <tbody>${manualRows || '<tr><td colspan="6" class="muted">Noch keine manuellen Leads.</td></tr>'}</tbody></table></div>`, req));
 });
 
 // Lauf starten -> Auftrag an Alexandra (Hermes-API); sie arbeitet im Hintergrund weiter
@@ -534,7 +519,7 @@ app.post("/leads/delete", (req, res) => {
 app.get("/agenten", (req, res) => {
   res.send(layout("Agenten & Skills", "agenten", `
     <div class="head-row">
-      <div><h1>Agenten & Skills</h1><p class="muted">Was Alexandra kann und gerade tut — Zuschauen stört sie nicht.</p></div>
+      <div><p class="muted">Was Alexandra kann und gerade tut — Zuschauen stört sie nicht.</p></div>
       <div class="qa"><button onclick="location.reload()">🔄 Aktualisieren</button></div>
     </div>
     <div class="tiles">
@@ -560,7 +545,7 @@ app.get("/agenten", (req, res) => {
         } catch {}
         function setTile(k, v) { const el = document.querySelector('[data-tile2="' + k + '"] .tile-num'); if (el) el.textContent = v; }
       })();
-    </script>`));
+    </script>`, req));
 });
 
 app.get("/api/agent/status", async (req, res) => {
@@ -641,9 +626,8 @@ const PLACEHOLDERS = {
 for (const [id, [title, desc]] of Object.entries(PLACEHOLDERS)) {
   app.get("/" + id, (req, res) => {
     res.send(layout(title, id, `
-      <h1>${title}</h1>
       <div class="card placeholder"><h2>🔜 Modul in Vorbereitung</h2><p>${desc}</p>
-      <p class="muted">Das Gerüst steht — dieses Modul wird als nächster Ausbauschritt mit echten Daten und Funktionen gefüllt.</p></div>`));
+      <p class="muted">Das Gerüst steht — dieses Modul wird als nächster Ausbauschritt mit echten Daten und Funktionen gefüllt.</p></div>`, req));
   });
 }
 
@@ -678,18 +662,20 @@ function renderTree(root) {
 
 function layoutBare(title, content) {
   return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${esc(title)} · flowstateOS</title><link rel="stylesheet" href="/style.css"></head>
+  <title>${esc(title)} · flowstateOS</title>
+  <link rel="stylesheet" href="/crm.css"><link rel="stylesheet" href="/style.css">
+  <script>(function(){var t=localStorage.getItem("flowstate-thema")||"light";
+   document.documentElement.setAttribute("data-theme",t);})();</script></head>
   <body class="bare">${content}</body></html>`;
 }
 
-function layout(title, active, content) {
-  const nav = MODULES.map((m) => `<a class="${m.id === active ? "active" : ""}" href="${m.href}"><span class="icon">${m.icon}</span>${m.label}</a>`).join("");
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${esc(title)} · flowstateOS</title><link rel="stylesheet" href="/style.css"></head>
-  <body><div class="shell">
-    <aside class="sidebar"><div class="brand">flowstate<span class="accent">OS</span></div><nav>${nav}</nav>
-    <div class="sidebar-foot"><a href="/logout">Abmelden</a></div></aside>
-    <main>${content}</main></div>
+// Alle OS-Seiten laufen durch die gemeinsame Huelle (lib/schale.js) —
+// dieselbe Rail, dieselbe Topbar, dasselbe Designsystem wie im CRM.
+function layout(title, active, content, req) {
+  return schale({
+    titel: title, aktiv: active, inhalt: content,
+    nutzer: req && req.session ? req.session.crm || null : null,
+  }) + `
   <script>
     document.querySelectorAll("[data-load]").forEach(async (el) => {
       try {

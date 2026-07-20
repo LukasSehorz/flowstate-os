@@ -10,7 +10,7 @@
   --border:#E6E9F0;--border-stark:#D3DAE6;
   --foreground:#0F1B2D;--text-secondary:#4A5568;--text-muted:#7A8699;
   --primary:var(--blau-600);--primary-hover:var(--blau-700);--primary-soft:var(--blau-50);
-  --akzent:#D63384;--akzent-flaeche:#FDEEF5;
+  --akzent:#D63384;--akzent-flaeche:#FDEEF5;--akzent-rand:#F7D6E6;
   --success:#157A48;--success-flaeche:#E7F5EE;
   --warning:#AE7413;--warning-flaeche:#FDF4E3;
   --danger:#C2374F;--danger-flaeche:#FCECEF;
@@ -20,6 +20,25 @@
   --r-sm:8px;--r-md:10px;--r-lg:14px;
   --s1:0 1px 2px rgba(15,27,45,.05);--s2:0 2px 8px rgba(15,27,45,.07);--s3:0 14px 40px rgba(15,27,45,.16);
   --tempo:170ms cubic-bezier(.4,0,.2,1);
+}
+/* Dunkle Fassung — nur die Farbmarken werden getauscht, kein Bauteil kennt sie einzeln.
+   Umschalter sitzt in der Topbar, Auswahl liegt in localStorage. */
+:root[data-theme="dark"]{
+  --blau-900:#0A1626;--blau-800:#0F2540;--blau-700:#16345B;--blau-600:#4B8DF8;
+  --blau-500:#5E9BFA;--blau-400:#7FB0FC;--blau-300:#9DC3FD;--blau-200:#1E3A5F;
+  --blau-100:#16304F;--blau-50:#132840;
+  --background:#0C1420;--surface:#121C2B;--surface-2:#1A2637;--surface-3:#243247;
+  --border:#223044;--border-stark:#2E3F57;
+  --foreground:#E8EEF6;--text-secondary:#A8B8CC;--text-muted:#7C8DA3;
+  --primary:#4B8DF8;--primary-hover:#6BA1FA;--primary-soft:#16304F;
+  --akzent:#F06CAB;--akzent-flaeche:#33192A;--akzent-rand:#4A2438;
+  --success:#3DBB80;--success-flaeche:#12301F;
+  --warning:#E0A33C;--warning-flaeche:#332612;
+  --danger:#EC6A80;--danger-flaeche:#331A20;
+  --info:#5AA9E6;--info-flaeche:#122536;
+  --stage-1:#1E3A5F;--stage-2:#27507F;--stage-3:#31659F;--stage-4:#3B7ABF;
+  --stage-5:#4B8DF8;--stage-6:#7FB0FC;--stage-7:#9DC3FD;--stage-8:#3DBB80;
+  --s1:0 1px 2px rgba(0,0,0,.4);--s2:0 2px 8px rgba(0,0,0,.45);--s3:0 14px 40px rgba(0,0,0,.6);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--background);color:var(--foreground);
@@ -267,7 +286,7 @@ table.tabelle{width:100%;border-collapse:collapse}
 /* ---------- Handlungsliste ---------- */
 .signal{display:flex;align-items:center;gap:13px;background:var(--akzent-flaeche);border-radius:var(--r-md);
   padding:14px 16px;margin-bottom:16px}
-.signal-icon{width:38px;height:38px;border-radius:11px;background:#fff;color:var(--akzent);
+.signal-icon{width:38px;height:38px;border-radius:11px;background:var(--surface);color:var(--akzent);
   display:grid;place-items:center;flex-shrink:0}
 .signal-icon svg{width:18px;height:18px}
 .signal-text{flex:1}
@@ -303,8 +322,8 @@ dl.def dd{text-align:right;font-weight:500}
 /* ---------- Hinweis / Leer / Dialog ---------- */
 .hinweis{border-radius:var(--r-md);padding:13px 16px;font-size:13px;display:flex;gap:11px;align-items:flex-start}
 .hinweis svg{width:17px;height:17px;margin-top:1px}
-.hinweis.info{background:var(--info-flaeche);color:#1A5D96}
-.hinweis.warn{background:var(--warning-flaeche);color:#7A5210}
+.hinweis.info{background:var(--info-flaeche);color:var(--info)}
+.hinweis.warn{background:var(--warning-flaeche);color:var(--warning)}
 .leer{text-align:center;padding:52px 24px}
 .leer-icon{width:52px;height:52px;margin:0 auto 14px;border-radius:14px;background:var(--surface-2);
   display:grid;place-items:center;color:var(--text-muted)}
@@ -341,11 +360,11 @@ dialog h2{margin-bottom:4px}dialog .sub{margin-bottom:20px}
 .chart-fuss{font-size:12.5px;color:var(--text-secondary);margin-top:10px}
 
 /* Forecast-Box */
-.forecast{background:linear-gradient(135deg,var(--akzent-flaeche),#fff);border:1px solid #F7D6E6;
+.forecast{background:linear-gradient(135deg,var(--akzent-flaeche),var(--surface));border:1px solid var(--akzent-rand);
   border-radius:var(--r-md);padding:16px 18px;margin-bottom:16px}
 .forecast-label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--akzent);margin-bottom:6px}
 .forecast-label svg{width:16px;height:16px}
-.forecast-zahl{font-size:29px;font-weight:700;letter-spacing:-.03em;color:var(--blau-800)}
+.forecast-zahl{font-size:29px;font-weight:700;letter-spacing:-.03em;color:var(--foreground)}
 .forecast-sub{font-size:12px;color:var(--text-muted);margin-top:3px}
 .kennliste{display:grid;gap:2px}
 .kennzeile{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13.5px}
@@ -390,3 +409,23 @@ dialog h2{margin-bottom:4px}dialog .sub{margin-bottom:20px}
 /* Rueckweg ins Operating System — sitzt ueber dem Nutzerblock */
 .rail-zurueck{border-top:1px solid var(--border);border-radius:0;margin-bottom:2px;color:var(--text-muted)}
 .rail-zurueck:hover{background:var(--primary-soft);color:var(--primary)}
+
+/* ---------- Verschachtelte Navigation: Unterbereiche des aktiven Moduls ---------- */
+.rail a.offen{color:var(--foreground)}
+.rail-gruppe-unter{display:grid;gap:2px;margin:2px 0 6px;padding-left:10px;
+  border-left:1px solid var(--border);margin-left:20px}
+.rail a.rail-unter{height:34px;padding:0 9px;gap:12px;font-size:13px}
+.rail a.rail-unter svg{width:15px;height:15px}
+.rail a.rail-unter .rail-wort{font-size:12.8px}
+.rail a.rail-unter.aktiv::before{left:-25px;top:9px;bottom:9px}
+.rail-marke{text-decoration:none;color:inherit}
+.rail-marke:hover{text-decoration:none}
+
+/* ---------- Hell/Dunkel-Schalter ---------- */
+.thema-schalter{padding:8px;border-radius:9px;background:transparent;box-shadow:none;
+  color:var(--text-muted);display:grid;place-items:center;width:36px;height:36px}
+.thema-schalter:hover{background:var(--surface-2);color:var(--foreground);box-shadow:none}
+.thema-schalter svg{width:17px;height:17px;grid-area:1/1}
+.thema-schalter svg:last-child{display:none}
+:root[data-theme="dark"] .thema-schalter svg:first-child{display:none}
+:root[data-theme="dark"] .thema-schalter svg:last-child{display:block}
