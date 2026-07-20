@@ -18,6 +18,8 @@ services:
       - HERMES_CHAT_URL=${HERMES_CHAT_URL}
       - HERMES_API_KEY=${HERMES_API_KEY}
       - HERMES_MODEL=hermes-agent
+      # CRM-Datenbank (Supabase, Region Frankfurt) — RLS greift in der Datenbank
+      - DATABASE_URL=${DATABASE_URL}
     networks:
       # Ins Hermes-Netz haengen -> direkte Container-zu-Container-Verbindung,
       # Hermes ist dann als "hermes-agent-pocv-hermes-agent-1" erreichbar

@@ -32,6 +32,12 @@ app.use(
   })
 );
 
+// ---------- CRM (eigener Login mit persoenlichen Konten, RLS in der Datenbank) ----------
+if (process.env.DATABASE_URL) {
+  try { require("./lib/crm-routes.js")(app); console.log("CRM-Modul geladen"); }
+  catch (e) { console.error("CRM-Modul konnte nicht geladen werden:", e.message); }
+}
+
 // ---------- Auth ----------
 app.get("/login", (req, res) => {
   res.send(layoutBare("Login", `
@@ -71,7 +77,7 @@ const MODULES = [
   { id: "zentrale", label: "Zentrale", icon: "◈", href: "/" },
   { id: "chat", label: "Alexandra", icon: "✦", href: "/chat" },
   { id: "leads", label: "Leads", icon: "◎", href: "/leads" },
-  { id: "kunden", label: "Kunden (CRM)", icon: "▣", href: "/kunden" },
+  { id: "kunden", label: "Kunden (CRM)", icon: "▣", href: "/crm" },
   { id: "angebote", label: "Angebote & Rechnungen", icon: "▤", href: "/angebote" },
   { id: "buchhaltung", label: "Buchhaltung", icon: "€", href: "/buchhaltung" },
   { id: "marketing", label: "Marketing & Content", icon: "◪", href: "/marketing" },
