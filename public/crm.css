@@ -284,3 +284,11 @@ dialog h2 { font-size:17px; margin-bottom:18px; }
 .spalte-leer { border:1.5px dashed var(--border-stark); border-radius:var(--r-md); padding:14px 10px;
   text-align:center; font-size:12px; color:var(--text-muted); background:rgba(255,255,255,.5); }
 .kopf-aktionen .reiter { margin-top:2px; }
+
+/* Anmeldung: Marke mit Logo-Kachel */
+.login-marke { display:flex; align-items:center; gap:13px; }
+.login-logo { width:44px; height:44px; border-radius:12px; background:var(--primary); color:#fff;
+  display:grid; place-items:center; box-shadow:0 4px 12px rgba(37,99,235,.28); }
+.login-logo svg { width:22px; height:22px; }
+.login-karte .marke { font-size:19px; }
+.login-karte form { margin-top:22px; }
