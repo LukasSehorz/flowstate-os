@@ -36,5 +36,13 @@ const crm = require("../lib/crm.js");
 
   console.log("Kennzahlen:", JSON.stringify(await crm.kennzahlen(lukas)));
   console.log("Team:", (await crm.teamZahlen(lukas)).map((t) => `${t.name}:${t.leads}L/${t.gewonnen}G`).join(" · "));
+
+  // Aufraeumen — sonst bleiben die Testfirmen als echte Kunden in der Datenbank stehen
+  // und verfaelschen Umsatz, Kundenzahl und die Quellen-Auswertung im Dashboard.
+  // Reihenfolge beachten: projekte.deal_id hat kein "on delete cascade".
+  const testFirmen = "name like 'Testpraxis%'";
+  await crm.system(`delete from projekte where firma_id in (select id from firmen where ${testFirmen})`);
+  const weg = await crm.system(`delete from firmen where ${testFirmen}`);
+  console.log(`Aufgeraeumt: ${weg.rowCount} Testfirmen entfernt (samt Deals, Projekten, Historie)`);
   await crm.pool.end();
 })().catch((e) => { console.error("FEHLER:", e.message); process.exit(1); });

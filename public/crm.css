@@ -108,8 +108,8 @@ body.login-seite{display:grid;place-items:center;min-height:100vh;
   border-bottom:2px solid transparent;transition:color var(--tempo),border-color var(--tempo)}
 .reiter a:hover{color:var(--foreground);text-decoration:none}
 .reiter a.aktiv{color:var(--akzent);border-bottom-color:var(--akzent);font-weight:600}
-.segmente{margin-left:auto;display:inline-flex;gap:2px;background:var(--surface-2);padding:3px;
-  border-radius:9px;margin:8px 0}
+.segmente{display:inline-flex;gap:2px;background:var(--surface-2);padding:3px;
+  border-radius:9px;margin:8px 0 8px auto}
 .segmente a{padding:6px 14px;border-radius:7px;font-size:13px;font-weight:500;color:var(--text-secondary)}
 .segmente a:hover{color:var(--foreground);text-decoration:none}
 .segmente a.aktiv{background:var(--surface);color:var(--foreground);box-shadow:var(--s1);font-weight:600}
