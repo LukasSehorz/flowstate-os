@@ -44,8 +44,12 @@ services:
     volumes:
       - /docker/hermes-agent-pocv/data/vault:/vault:ro
       - dashboard-data:/data
-      # Google-Token von Hermes read-only mitnutzen (liegt unter .config/gws-cli)
-      - /docker/hermes-agent-pocv/data/.config:/gws-home/.config:ro
+      # Google-Token von Hermes mitnutzen (liegt unter .config/gws-cli).
+      # rw statt ro: OAuth-Token laufen ab und muessen erneuert (zurueck-
+      # geschrieben) werden. Read-only liess jeden Mailversand scheitern,
+      # sobald der Token abgelaufen war ("Read-only file system: token.json").
+      # Dieselbe Datei nutzt Hermes ebenfalls rw — der Token ist geteilt.
+      - /docker/hermes-agent-pocv/data/.config:/gws-home/.config:rw
       # Hermes-Konfiguration NUR LESEND fuer das Modul "Agenten & Skills"
       # (Modell, Denkstaerke, Skill-Anzahl, Routinen). Secrets liegen in .env und
       # werden vom Dashboard nie gelesen.
