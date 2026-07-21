@@ -327,6 +327,7 @@
   async function auftragVerfolgen(id) {
     const warte = zeile("sie", "…arbeitet noch", true);
     setzeZustand("denken");
+    let fuellerGesagt = false;
     for (let i = 0; i < 200; i++) {
       await new Promise((r) => setTimeout(r, 900));
       const d = await fetch("/api/sprache/auftrag/" + id).then((r) => r.json()).catch(() => null);
@@ -338,7 +339,15 @@
         await sprich(text);
         return;
       }
-      if (warte) warte.textContent = "…arbeitet noch (" + Math.round(i * 0.9 + 1) + " s)";
+      const sek = Math.round(i * 0.9 + 1);
+      // Fuellsatz nach ~5 s, damit keine Stille entsteht (Wunsch Lukas 21.07.):
+      // gesprochen, nicht nur im Verlauf. Nur einmal — kein Dauergeplapper.
+      if (!fuellerGesagt && sek >= 5) {
+        fuellerGesagt = true;
+        zeile("sie", "Ich schau kurz — gleich fertig, ich melde mich.");
+        sprich("Ich schau kurz — gleich fertig, ich melde mich.").catch(() => {});
+      }
+      if (warte) warte.textContent = "…arbeitet noch (" + sek + " s)";
     }
     if (warte) warte.textContent = "Das dauert länger — schau später im Chat nach.";
   }
