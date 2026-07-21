@@ -18,6 +18,13 @@ services:
       - HERMES_CHAT_URL=${HERMES_CHAT_URL}
       - HERMES_API_KEY=${HERMES_API_KEY}
       - HERMES_MODEL=hermes-agent
+      # Schnellspur (Ebene 1/2) — direktes Modell ohne Agent-Schleife.
+      # E1-Entscheidung 21.07.2026: Anthropic Haiku 4.5. Ohne Schluessel
+      # faellt alles auf Hermes zurueck (langsamer, aber nie kaputt).
+      - SCHNELL_PROVIDER=${SCHNELL_PROVIDER:-}
+      - SCHNELL_API_KEY=${SCHNELL_API_KEY:-}
+      - SCHNELL_MODEL=${SCHNELL_MODEL:-claude-haiku-4-5}
+      - SCHNELL_CHAT_URL=${SCHNELL_CHAT_URL:-}
       # ElevenLabs — Stimme fuer /sprache. Der Schluessel steht in .env und
       # muss hier durchgereicht werden: Compose gibt nur weiter, was gelistet ist.
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
