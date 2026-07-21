@@ -4,14 +4,17 @@
 // blendet es eine kleine Kugel unten rechts ein. Das Wake-Word gilt in beiden
 // Faellen, damit "Hey Alexandra" auch aus dem CRM heraus funktioniert.
 //
-// Die erste Fassung hatte einen Konstruktionsfehler: An sechs Stellen wurde der
-// Zustand auf "ruhe" gesetzt, aber nur an einer das Wake-Word neu gestartet.
-// Jeder andere Weg — Fehler, nichts verstanden, Abbruch — liess den Lauscher
-// tot zurueck, und man musste den Knopf neu druecken.
+// GESPRAECHSMODELL (Wunsch Lukas 22.07.): Ein Gespraech laeuft am Stueck. Man
+// sagt EINMAL "Hey Alexandra", danach bleibt das Mikro nach jeder Antwort offen
+// — auf eine Rueckfrage antwortet man einfach, ohne erneut zu wecken. Das
+// Gespraech endet erst, wenn man nichts mehr sagt (Stille) oder wenn Alexandra
+// einen langen Auftrag abgeschickt hat und im Hintergrund arbeitet. Begruesst
+// wird nur beim ERSTEN Mal voll ("Grosser Herrscher..."), danach nur kurz und
+// rotierend, damit es nicht nervt.
 //
-// Deshalb jetzt ein WAECHTER statt verteilter Aufrufe: Er prueft im Sekundentakt,
-// ob gelauscht werden soll, und startet neu, falls nicht. Damit ist es egal,
-// ueber welchen Weg ein Gespraech endet — der Lauscher kommt von selbst zurueck.
+// Der WAECHTER (setInterval) sorgt dafuer, dass das Wake-Word laeuft, wann immer
+// wir in Ruhe sind — egal wie ein Gespraech geendet ist, der Lauscher kommt von
+// selbst zurueck.
 
 (() => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -27,6 +30,8 @@
   let audio = null, audioCtx = null, analyser = null, mikroStrom = null;
   let begruessungUrl = null;      // einmal erzeugt, danach wiederverwendet
   let letzteFrageAt = 0;
+  let imGespraech = false;        // laeuft gerade ein zusammenhaengendes Gespraech?
+  let redetGerade = false;        // genau EIN Sprech-Kanal, nie ueberlappend
 
   // ---------------------------------------------------------------- Oberflaeche
 
@@ -132,7 +137,8 @@
   // ---------------------------------------------------------------- Waechter
   //
   // Sorgt dafuer, dass der Wake-Lauscher laeuft, wann immer er laufen soll.
-  // Egal wie ein Gespraech geendet ist — hier kommt er zurueck.
+  // Egal wie ein Gespraech geendet ist — hier kommt er zurueck. Nur in Ruhe:
+  // waehrend eines Gespraechs (lauschen/denken/sprechen) bleibt er still.
   setInterval(() => {
     if (!SR || !wakeAn) return;
     if (zustand !== "ruhe") return;
@@ -198,29 +204,74 @@
       : "Wake-Word aus";
   }
 
-  // Auf das Wake-Word: kurz gruessen, dann zuhoeren.
-  async function geweckt() {
-    setzeZustand("sprechen", "meldet sich");
-    await begruessen();
+  // ---------------------------------------------------------------- Gespraech
+
+  // Auf das Wake-Word: Gespraech mit Begruessung starten.
+  function geweckt() { gespraechStarten(true); }
+
+  async function gespraechStarten(mitGruss) {
+    imGespraech = true;
+    if (mitGruss) await begruessung();
     hoeren();
   }
 
-  // Die Begruessung wird EINMAL erzeugt und danach wiederverwendet —
+  // Gespraech ist zu Ende — zurueck in Ruhe, der Waechter horcht wieder aufs
+  // Wake-Word. Erst hier darf wieder "Hey Alexandra" noetig sein.
+  function gespraechBeenden() {
+    imGespraech = false;
+    setzeZustand("ruhe");
+  }
+
+  // Nach einer Antwort weiterhoeren, solange das Gespraech laeuft. Kurze Pause,
+  // damit die eigene Stimme nicht als Nutzereingabe ins Mikro nachhallt.
+  function weiter() {
+    if (!imGespraech) { setzeZustand("ruhe"); return; }
+    setTimeout(() => {
+      if (imGespraech && zustand !== "lauschen" && zustand !== "denken") hoeren();
+    }, 350);
+  }
+
+  // Begruessung: beim ERSTEN Mal die volle Ansage ("Grosser Herrscher..."),
+  // danach nur eine kurze, rotierende Ansprache — jedes Mal eine andere, damit
+  // es nicht nervt. Der Merker liegt in sessionStorage: einmal pro Tab-Sitzung
+  // voll, ueber Seitenwechsel und Neuladen hinweg.
+  const REENTRY = [
+    "Ja, was gibt's?",
+    "Bin da — was brauchst du?",
+    "Leg los, ich hör zu.",
+    "Was kann ich für dich tun?",
+    "Ja? Schieß los.",
+    "Hier bin ich. Was liegt an?",
+  ];
+
+  async function begruessung() {
+    setzeZustand("sprechen", "meldet sich");
+    if (!sessionStorage.getItem("flowstate-begruesst")) {
+      sessionStorage.setItem("flowstate-begruesst", "1");
+      if (konfig.begruessung) { zeile("sie", konfig.begruessung); return begruessungCache(); }
+    }
+    const i = (Number(sessionStorage.getItem("flowstate-reentry")) || 0) % REENTRY.length;
+    sessionStorage.setItem("flowstate-reentry", String((i + 1) % REENTRY.length));
+    zeile("sie", REENTRY[i]);
+    return sprich(REENTRY[i]);
+  }
+
+  // Die volle Begruessung wird EINMAL als Audio erzeugt und wiederverwendet —
   // spart bei jedem Wecken Wartezeit und ElevenLabs-Guthaben.
-  async function begruessen() {
+  async function begruessungCache() {
     const text = konfig.begruessung;
     if (!text) return;
-    if (begruessungUrl) return abspielen(begruessungUrl, false);
-    if (!konfig.elevenlabs) return browserStimme(text);
+    if (begruessungUrl) return sagen(begruessungUrl, true);
+    if (!konfig.elevenlabs) return sprich(text);
     try {
       const r = await fetch("/api/sprache/stimme", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
-      if (!r.ok) return browserStimme(text);
+      if (!r.ok) return sprich(text);
       begruessungUrl = URL.createObjectURL(await r.blob());
-      return abspielen(begruessungUrl, false);
-    } catch { return browserStimme(text); }
+      return sagen(begruessungUrl, true);
+    } catch { return sprich(text); }
   }
 
   // ---------------------------------------------------------------- Zuhoeren
@@ -241,14 +292,16 @@
       letzter = Array.from(ev.results).map((x) => x[0].transcript).join("");
       if (el.hinweis) el.hinweis.textContent = letzter || "…";
     };
-    r.onerror = () => setzeZustand("ruhe", "nichts gehört");
+    r.onerror = () => gespraechBeenden();
     r.onend = () => {
       if (el.hinweis) el.hinweis.textContent = "Klick auf die Kugel oder sag „Hey Alexandra“";
       const text = letzter.trim();
-      if (text) fragen(text);
-      else setzeZustand("ruhe");   // Waechter uebernimmt wieder
+      // Text -> beantworten und im Gespraech bleiben. Stille -> Gespraech
+      // sanft beenden (der Waechter horcht wieder aufs Wake-Word).
+      if (text) verarbeiten(text);
+      else gespraechBeenden();
     };
-    try { r.start(); } catch { setzeZustand("ruhe"); }
+    try { r.start(); } catch { gespraechBeenden(); }
   }
 
   // ---------------------------------------------------------------- Pegel
@@ -257,7 +310,11 @@
     if (analyser) return;
     try {
       audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
-      mikroStrom ||= await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Echo-/Rauschunterdbrueckung: sonst hoert das Mikro Alexandras eigene
+      // Stimme ueber die Lautsprecher und "antwortet sich selbst".
+      mikroStrom ||= await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
       const q = audioCtx.createMediaStreamSource(mikroStrom);
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 128;
@@ -286,91 +343,151 @@
     tick();
   }
 
-  // ---------------------------------------------------------------- Fragen
+  // ---------------------------------------------------------------- Verarbeiten
 
-  async function fragen(text) {
+  async function verarbeiten(text) {
     const begonnen = performance.now();
     letzteFrageAt = Date.now();
     zeile("ich", text);
     setzeZustand("denken");
     if (el.karten) el.karten.innerHTML = "";
+
+    let d;
     try {
-      const r = await fetch("/api/sprache/frage", {
+      d = await fetch("/api/sprache/frage", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
-      });
-      const d = await r.json();
-      if (!d.ok) { zeile("sie", "⚠️ " + (d.hint || "Fehler")); return; }
-
-      (d.karten || []).forEach(karteZeigen);
-      if (d.sprich) {
-        const zel = zeile("sie", d.sprich);
-        if (zel && el.verlauf) {
-          const marke = document.createElement("span");
-          marke.className = "sv-quelle";
-          marke.textContent = (d.quelle === "hermes" ? "Hermes" : "Zustand") +
-            " · " + ((performance.now() - begonnen) / 1000).toFixed(1) + " s";
-          zel.appendChild(marke);
-        }
-        await sprich(d.sprich);
-      }
-      if (d.auftragId) await auftragVerfolgen(d.auftragId);
+      }).then((r) => r.json());
     } catch {
       zeile("sie", "⚠️ Verbindung fehlgeschlagen.");
-    } finally {
-      // EIN Ausgang fuer alle Wege. Der Waechter startet das Wake-Word neu,
-      // egal ob es gut ging, fehlschlug oder abgebrochen wurde.
-      setzeZustand("ruhe");
+      await sprich("Verbindung hakt gerade — sag's gleich nochmal.").catch(() => {});
+      return weiter();
     }
+    if (!d || !d.ok) { zeile("sie", "⚠️ " + (d?.hint || "Fehler")); return weiter(); }
+
+    (d.karten || []).forEach(karteZeigen);
+
+    if (d.sprich) {
+      const zel = zeile("sie", d.sprich);
+      if (zel && el.verlauf) {
+        const marke = document.createElement("span");
+        marke.className = "sv-quelle";
+        const wie = d.quelle === "hermes" ? "Hermes" : d.quelle === "sonnet" ? "Recherche" : "Zustand";
+        marke.textContent = wie + " · " + ((performance.now() - begonnen) / 1000).toFixed(1) + " s";
+        zel.appendChild(marke);
+      }
+      await sprich(d.sprich);
+    }
+
+    // Mehrere Aktionen laufen parallel (Multi-Action). Jede ist entweder "kurz"
+    // (Wetter, Mail, Recherche — im Gespraech, spricht sobald fertig) oder "lang"
+    // (Hermes — Hintergrund, meldet sich spaeter). Faellt eine alte Antwort mit
+    // nur auftragId rein, bauen wir sie in dieselbe Form um.
+    const auftraege = Array.isArray(d.auftraege) && d.auftraege.length
+      ? d.auftraege
+      : (d.auftragId ? [{ id: d.auftragId, art: d.quelle === "hermes" ? "lang" : "kurz" }] : []);
+    const lang = auftraege.filter((a) => a.art === "lang");
+    const kurz = auftraege.filter((a) => a.art !== "lang");
+
+    lang.forEach((a) => hintergrundAuftrag(a.id));   // laufen im Hintergrund weiter
+
+    if (kurz.length) {
+      // Alle kurzen Aktionen parallel verfolgen; jede spricht ihr Ergebnis,
+      // sobald es da ist (das Sprechen selbst ist serialisiert). Bei mehreren
+      // keine gesprochenen Zwischenansagen — sonst reden sie durcheinander.
+      await Promise.all(kurz.map((a) => auftragKurz(a.id, kurz.length > 1)));
+      return weiter();                               // Gespraech bleibt offen
+    }
+
+    if (lang.length) {
+      // Nur lange Arbeit: sie hat "ich meld mich" gesagt (oder wir sagen es),
+      // dann pausiert das Gespraech — Lukas ist frei.
+      if (!d.sprich) await sprich("Alles klar — das dauert ein paar Minuten, ich meld mich, sobald es fertig ist.");
+      return gespraechBeenden();
+    }
+
+    weiter();
   }
 
-  async function auftragVerfolgen(id) {
-    const warte = zeile("sie", "…arbeitet noch", true);
+  // Kurzer Auftrag (Wetter/Mail/Recherche) — im Gespraech, mit einer
+  // Zwischenansage, falls er laenger braucht. leise = keine gesprochene
+  // Ansage (wenn mehrere parallel laufen). Nimmt Lukas mit, statt Stille.
+  async function auftragKurz(id, leise = false) {
+    const warte = zeile("sie", "…einen Moment", true);
     setzeZustand("denken");
-    let fuellerGesagt = false;
-    for (let i = 0; i < 200; i++) {
-      await new Promise((r) => setTimeout(r, 900));
+    let fueller = false;
+    for (let i = 0; i < 45; i++) {
+      await new Promise((r) => setTimeout(r, 1200));
       const d = await fetch("/api/sprache/auftrag/" + id).then((r) => r.json()).catch(() => null);
       if (!d || !d.ok) break;
       if (d.fertig) {
         warte?.remove?.();
-        const text = d.reply || ("⚠️ " + (d.hint || "kein Ergebnis"));
+        const text = d.reply || ("Das hat gerade nicht geklappt — " + (d.hint || "frag mich gleich nochmal") + ".");
         zeile("sie", text);
         await sprich(text);
         return;
       }
-      const sek = Math.round(i * 0.9 + 1);
-      // Fuellsatz nach ~5 s, damit keine Stille entsteht (Wunsch Lukas 21.07.):
-      // gesprochen, nicht nur im Verlauf. Nur einmal — kein Dauergeplapper.
-      if (!fuellerGesagt && sek >= 5) {
-        fuellerGesagt = true;
-        zeile("sie", "Ich schau kurz — gleich fertig, ich melde mich.");
-        sprich("Ich schau kurz — gleich fertig, ich melde mich.").catch(() => {});
+      const sek = Math.round(i * 1.2 + 1);
+      // Nach ~6 s eine ehrliche Zwischenansage, einmal — kein Dauergeplapper,
+      // und nur wenn diese Aktion allein laeuft (sonst reden mehrere durcheinander).
+      if (!fueller && !leise && sek >= 6) {
+        fueller = true;
+        const f = "Bin gleich so weit, ich schau noch kurz.";
+        zeile("sie", f); sprich(f).catch(() => {});
       }
-      if (warte) warte.textContent = "…arbeitet noch (" + sek + " s)";
+      if (warte) warte.textContent = "…einen Moment (" + sek + " s)";
     }
-    if (warte) warte.textContent = "Das dauert länger — schau später im Chat nach.";
+    if (warte) warte.textContent = "Hat länger gedauert — frag gleich nochmal.";
+  }
+
+  // Langer Auftrag (Hermes) — laeuft im Hintergrund weiter, auch nachdem das
+  // Gespraech pausiert ist. Meldet das Ergebnis, sobald es da ist: aus der Ruhe
+  // heraus, ohne dass Lukas erneut fragen muss.
+  async function hintergrundAuftrag(id) {
+    for (let i = 0; i < 400; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const d = await fetch("/api/sprache/auftrag/" + id).then((r) => r.json()).catch(() => null);
+      if (!d) continue;              // Netzhusten: weiter versuchen
+      if (!d.ok) return;
+      if (d.fertig) {
+        const text = d.reply ||
+          ("Ich hab's versucht, aber es hat nicht ganz geklappt" + (d.hint ? " — " + d.hint : "") + ".");
+        zeile("sie", text);
+        await sprich(text);         // stoppt Wake/Lauschen, spricht, seriell
+        if (!imGespraech) setzeZustand("ruhe");
+        return;
+      }
+    }
   }
 
   // ---------------------------------------------------------------- Sprechen
+  //
+  // Alles Sprechen laeuft ueber EINEN Kanal (redetGerade), damit sich
+  // Vordergrund-Antwort und Hintergrund-Ergebnis nie ueberlagern. Vor dem
+  // Sprechen werden beide Erkenner gestoppt — sonst hoert Alexandra sich selbst.
 
-  async function sprich(text) {
+  async function sagen(quelle, istUrl) {
+    while (redetGerade) await new Promise((r) => setTimeout(r, 150));
+    redetGerade = true;
+    try { wakeErkennung?.stop(); } catch {}
+    try { erkennung?.stop(); } catch {}
     setzeZustand("sprechen");
-    if (konfig.elevenlabs) {
-      try {
-        const r = await fetch("/api/sprache/stimme", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
-        });
-        if (r.ok) {
-          const url = URL.createObjectURL(await r.blob());
-          await abspielen(url, true);
-          return;
-        }
-      } catch { /* faellt auf die Browser-Stimme zurueck */ }
-    }
-    await browserStimme(text);
+    try {
+      if (istUrl) { await abspielen(quelle, false); return; }
+      if (konfig.elevenlabs) {
+        try {
+          const r = await fetch("/api/sprache/stimme", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: quelle }),
+          });
+          if (r.ok) { await abspielen(URL.createObjectURL(await r.blob()), true); return; }
+        } catch { /* faellt auf die Browser-Stimme zurueck */ }
+      }
+      await browserStimme(quelle);
+    } finally { redetGerade = false; }
   }
+
+  function sprich(text) { return sagen(text, false); }
 
   function abspielen(url, freigeben) {
     return new Promise((fertig) => {
@@ -397,6 +514,8 @@
   }
 
   function stoppen() {
+    imGespraech = false;
+    redetGerade = false;
     try { audio?.pause(); } catch {}
     window.speechSynthesis?.cancel();
     try { erkennung?.abort(); } catch {}
@@ -442,7 +561,9 @@
 
   // ---------------------------------------------------------------- Start
 
-  el.kugel.addEventListener("click", () => (zustand === "ruhe" ? hoeren() : stoppen()));
+  // Klick auf die Kugel: in Ruhe startet es ein Gespraech (ohne Begruessung —
+  // man hat ja aktiv geklickt); waehrend eines Gespraechs bricht es ab.
+  el.kugel.addEventListener("click", () => (zustand === "ruhe" ? gespraechStarten(false) : stoppen()));
   el.kugel.addEventListener("keydown", (e) => {
     if (e.key === " " || e.key === "Enter") { e.preventDefault(); el.kugel.click(); }
   });
