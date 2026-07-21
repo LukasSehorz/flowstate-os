@@ -25,6 +25,11 @@ services:
       - SCHNELL_API_KEY=${SCHNELL_API_KEY:-}
       - SCHNELL_MODEL=${SCHNELL_MODEL:-claude-haiku-4-5}
       - SCHNELL_CHAT_URL=${SCHNELL_CHAT_URL:-}
+      # Denk-Spur (Ebene 2b) — Sonnet mit Websuche fuer kurze Recherche/
+      # Auswertung (Wetter, Zahlen), unabhaengig von Hermes. STANDORT_ORT dient
+      # als Wetter-Vorgabe, wenn keine Stadt genannt wird.
+      - SCHNELL_DENKER_MODEL=${SCHNELL_DENKER_MODEL:-claude-sonnet-5}
+      - STANDORT_ORT=${STANDORT_ORT:-Dorfen, Bayern}
       # ElevenLabs — Stimme fuer /sprache. Der Schluessel steht in .env und
       # muss hier durchgereicht werden: Compose gibt nur weiter, was gelistet ist.
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
