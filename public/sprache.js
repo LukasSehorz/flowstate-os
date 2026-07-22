@@ -33,9 +33,16 @@
   let imGespraech = false;        // laeuft gerade ein zusammenhaengendes Gespraech?
   let redetGerade = false;        // genau EIN Sprech-Kanal, nie ueberlappend
   let bargeSR = null;             // lauscht WAEHREND des Sprechens auf Unterbrechung
+  let bargeStartZeit = 0;         // Gnadenfrist am Redeanfang gegen Selbstabbruch
   let redeText = "";              // was Alexandra gerade sagt (Echo-Abgleich)
   let aktuellerStop = null;       // stoppt die laufende Sprachausgabe sofort
   let gespraechsId = 0;           // Runden-Token: eine unterbrochene Antwort bricht ab
+  let stilleTimer = null;         // wartet nach dem Reden auf echte Stille
+  let letzteAktivitaet = 0;       // wann zuletzt gesprochen/geantwortet wurde
+  let lausche = false;            // laeuft gerade eine Zuhoer-Erkennung? (verhindert Doppelstart)
+  // Tempo-Wuensche Lukas 22.07.: ausreden lassen, Gespraech lange offen halten.
+  const ENDE_STILLE_MS = 1400;    // so lange Pause NACH Sprache = fertig geredet
+  const GEDULD_MS = 25000;        // so lange Gesamt-Stille, bevor das Gespraech schliesst
 
   // ---------------------------------------------------------------- Oberflaeche
 
@@ -215,6 +222,7 @@
 
   async function gespraechStarten(mitGruss) {
     imGespraech = true;
+    letzteAktivitaet = Date.now();
     if (mitGruss) await begruessung();
     hoeren();
   }
@@ -223,6 +231,8 @@
   // Wake-Word. Erst hier darf wieder "Hey Alexandra" noetig sein.
   function gespraechBeenden() {
     imGespraech = false;
+    lausche = false;
+    clearTimeout(stilleTimer);
     setzeZustand("ruhe");
   }
 
@@ -230,9 +240,16 @@
   // damit die eigene Stimme nicht als Nutzereingabe ins Mikro nachhallt.
   function weiter() {
     if (!imGespraech) { setzeZustand("ruhe"); return; }
-    setTimeout(() => {
-      if (imGespraech && zustand !== "lauschen" && zustand !== "denken") hoeren();
-    }, 350);
+    letzteAktivitaet = Date.now();   // frische Geduld nach jeder Antwort
+    setTimeout(() => { if (imGespraech) hoeren(); }, 350);
+  }
+
+  // Stille Runde: Gespraech offen halten, solange die Geduld reicht — nicht
+  // gleich schliessen (sonst muesste Lukas staendig neu wecken).
+  function geduld() {
+    if (!imGespraech) { setzeZustand("ruhe"); return; }
+    if (Date.now() - letzteAktivitaet > GEDULD_MS) { gespraechBeenden(); return; }
+    setTimeout(() => { if (imGespraech) hoeren(); }, 250);
   }
 
   // Begruessung: beim ERSTEN Mal die volle Ansage ("Grosser Herrscher..."),
@@ -281,31 +298,49 @@
   // ---------------------------------------------------------------- Zuhoeren
 
   function hoeren() {
-    if (!SR || zustand === "lauschen") return;
+    if (!SR || lausche) return;     // laeuft schon eine Erkennung -> nicht doppeln
     try { wakeErkennung?.stop(); } catch {}
     let r;
     try { r = new SR(); } catch { return; }
     erkennung = r;
+    lausche = true;
     r.lang = "de-DE";
     r.interimResults = true;
-    r.continuous = false;
+    r.continuous = true;            // bleibt an; wir entscheiden SELBST ueber das Ende
     let letzter = "";
+    let abgeschickt = false;
+
+    // Erst nach echter Pause absenden — Lukas ausreden lassen, nicht reinplatzen.
+    const absenden = () => {
+      if (abgeschickt) return;
+      const text = letzter.trim();
+      if (!text) return;
+      abgeschickt = true;
+      clearTimeout(stilleTimer);
+      try { r.stop(); } catch {}
+      verarbeiten(text);
+    };
 
     r.onstart = () => { setzeZustand("lauschen"); pegelStarten(); };
     r.onresult = (ev) => {
       letzter = Array.from(ev.results).map((x) => x[0].transcript).join("");
+      letzteAktivitaet = Date.now();
       if (el.hinweis) el.hinweis.textContent = letzter || "…";
+      clearTimeout(stilleTimer);
+      stilleTimer = setTimeout(absenden, ENDE_STILLE_MS);   // 1,4 s Stille = fertig
     };
-    r.onerror = () => gespraechBeenden();
+    // 'no-speech'/'aborted' beenden das Gespraech NICHT sofort — Geduld.
+    r.onerror = () => { lausche = false; clearTimeout(stilleTimer); if (!abgeschickt) geduld(); };
     r.onend = () => {
-      if (el.hinweis) el.hinweis.textContent = "Klick auf die Kugel oder sag „Hey Alexandra“";
+      lausche = false;
+      clearTimeout(stilleTimer);
+      if (abgeschickt) return;       // haben wir schon verarbeitet
       const text = letzter.trim();
-      // Text -> beantworten und im Gespraech bleiben. Stille -> Gespraech
-      // sanft beenden (der Waechter horcht wieder aufs Wake-Word).
-      if (text) verarbeiten(text);
-      else gespraechBeenden();
+      if (el.hinweis) el.hinweis.textContent = "Klick auf die Kugel oder sag „Hey Alexandra“";
+      if (text) verarbeiten(text);   // Rest, den der Timer nicht mehr erwischt hat
+      else geduld();                 // Stille -> offen halten, nicht beenden
     };
-    try { r.start(); } catch { gespraechBeenden(); }
+    try { r.start(); } catch { lausche = false; geduld(); }
   }
 
   // ---------------------------------------------------------------- Pegel
@@ -510,10 +545,16 @@
     let b;
     try { b = new SR(); } catch { return; }
     bargeSR = b;
+    bargeStartZeit = Date.now();
     b.lang = "de-DE"; b.interimResults = true; b.continuous = true;
     b.onresult = (ev) => {
+      // Gnadenfrist: in den ersten 1,2 s NICHT unterbrechen — sonst schneidet ihr
+      // eigenes Echo den Satzanfang ab (genau der "nur zur Haelfte"-Fehler).
+      if (Date.now() - bargeStartZeit < 1200) return;
       const t = norm(Array.from(ev.results).map((r) => r[0].transcript).join(""));
-      if (!t || t.length < 2) return;
+      // Nur bei einer KLAREN Aeusserung unterbrechen (>= 2 Woerter, >= 6 Zeichen),
+      // nicht bei einem Rausch-Wort.
+      if (!t || t.length < 6 || t.split(" ").length < 2) return;
       if (redeText && redeText.includes(t)) return; // das ist ihre eigene Stimme
       unterbrechen();
     };
@@ -532,6 +573,7 @@
     if (stop) stop();               // stoppt Audio/TTS sofort
     redetGerade = false;
     imGespraech = true;
+    letzteAktivitaet = Date.now();
     hoeren();                       // frisch zuhoeren, was Lukas jetzt sagt
   }
 
@@ -564,7 +606,9 @@
   function stoppen() {
     imGespraech = false;
     redetGerade = false;
+    lausche = false;
     gespraechsId++;
+    clearTimeout(stilleTimer);
     bargeStop();
     aktuellerStop = null;
     try { audio?.pause(); } catch {}
