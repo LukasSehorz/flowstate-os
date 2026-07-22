@@ -32,6 +32,10 @@
   let letzteFrageAt = 0;
   let imGespraech = false;        // laeuft gerade ein zusammenhaengendes Gespraech?
   let redetGerade = false;        // genau EIN Sprech-Kanal, nie ueberlappend
+  let bargeSR = null;             // lauscht WAEHREND des Sprechens auf Unterbrechung
+  let redeText = "";              // was Alexandra gerade sagt (Echo-Abgleich)
+  let aktuellerStop = null;       // stoppt die laufende Sprachausgabe sofort
+  let gespraechsId = 0;           // Runden-Token: eine unterbrochene Antwort bricht ab
 
   // ---------------------------------------------------------------- Oberflaeche
 
@@ -261,7 +265,7 @@
   async function begruessungCache() {
     const text = konfig.begruessung;
     if (!text) return;
-    if (begruessungUrl) return sagen(begruessungUrl, true);
+    if (begruessungUrl) return sagen(begruessungUrl, true, text);
     if (!konfig.elevenlabs) return sprich(text);
     try {
       const r = await fetch("/api/sprache/stimme", {
@@ -270,7 +274,7 @@
       });
       if (!r.ok) return sprich(text);
       begruessungUrl = URL.createObjectURL(await r.blob());
-      return sagen(begruessungUrl, true);
+      return sagen(begruessungUrl, true, text);
     } catch { return sprich(text); }
   }
 
@@ -346,6 +350,7 @@
   // ---------------------------------------------------------------- Verarbeiten
 
   async function verarbeiten(text) {
+    const meine = ++gespraechsId;   // diese Runde; wird sie unterbrochen, bricht sie ab
     const begonnen = performance.now();
     letzteFrageAt = Date.now();
     zeile("ich", text);
@@ -378,6 +383,7 @@
       }
       await sprich(d.sprich);
     }
+    if (meine !== gespraechsId) return;   // waehrend des Sprechens unterbrochen -> abbrechen
 
     // Mehrere Aktionen laufen parallel (Multi-Action). Jede ist entweder "kurz"
     // (Wetter, Mail, Recherche — im Gespraech, spricht sobald fertig) oder "lang"
@@ -396,6 +402,7 @@
       // sobald es da ist (das Sprechen selbst ist serialisiert). Bei mehreren
       // keine gesprochenen Zwischenansagen — sonst reden sie durcheinander.
       await Promise.all(kurz.map((a) => auftragKurz(a.id, kurz.length > 1)));
+      if (meine !== gespraechsId) return;            // unterbrochen -> nicht weiterhoeren
       return weiter();                               // Gespraech bleibt offen
     }
 
@@ -466,12 +473,14 @@
   // Vordergrund-Antwort und Hintergrund-Ergebnis nie ueberlagern. Vor dem
   // Sprechen werden beide Erkenner gestoppt — sonst hoert Alexandra sich selbst.
 
-  async function sagen(quelle, istUrl) {
+  async function sagen(quelle, istUrl, anzeige) {
     while (redetGerade) await new Promise((r) => setTimeout(r, 150));
     redetGerade = true;
+    redeText = norm(istUrl ? (anzeige || "") : quelle);
     try { wakeErkennung?.stop(); } catch {}
     try { erkennung?.stop(); } catch {}
     setzeZustand("sprechen");
+    bargeStart();   // waehrend des Sprechens auf Unterbrechung lauschen
     try {
       if (istUrl) { await abspielen(quelle, false); return; }
       if (konfig.elevenlabs) {
@@ -484,19 +493,56 @@
         } catch { /* faellt auf die Browser-Stimme zurueck */ }
       }
       await browserStimme(quelle);
-    } finally { redetGerade = false; }
+    } finally { bargeStop(); redetGerade = false; redeText = ""; aktuellerStop = null; }
   }
 
   function sprich(text) { return sagen(text, false); }
 
+  const norm = (s) => String(s).toLowerCase().replace(/[^a-zäöüß0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+
+  // BARGE-IN (Wunsch Lukas 22.07.): Faengt Lukas waehrend Alexandras Rede an zu
+  // sprechen, hoert sie sofort auf und lauscht frisch. Damit sie sich nicht
+  // selbst unterbricht (ihre Stimme leckt trotz Echo-Unterdrueckung ins Mikro),
+  // wird ignoriert, was in ihrem gerade gesprochenen Satz (redeText) vorkommt.
+  function bargeStart() {
+    if (!SR) return;
+    bargeStop();
+    let b;
+    try { b = new SR(); } catch { return; }
+    bargeSR = b;
+    b.lang = "de-DE"; b.interimResults = true; b.continuous = true;
+    b.onresult = (ev) => {
+      const t = norm(Array.from(ev.results).map((r) => r[0].transcript).join(""));
+      if (!t || t.length < 2) return;
+      if (redeText && redeText.includes(t)) return; // das ist ihre eigene Stimme
+      unterbrechen();
+    };
+    b.onerror = () => {};
+    // Chrome beendet die Erkennung frueh -> neu starten, solange sie noch redet.
+    b.onend = () => { if (redetGerade && bargeSR === b) { try { b.start(); } catch {} } };
+    try { b.start(); } catch {}
+  }
+
+  function bargeStop() { const b = bargeSR; bargeSR = null; try { b?.stop(); } catch {} }
+
+  function unterbrechen() {
+    bargeStop();
+    gespraechsId++;                 // die laufende Antwort ist damit ueberholt
+    const stop = aktuellerStop; aktuellerStop = null;
+    if (stop) stop();               // stoppt Audio/TTS sofort
+    redetGerade = false;
+    imGespraech = true;
+    hoeren();                       // frisch zuhoeren, was Lukas jetzt sagt
+  }
+
   function abspielen(url, freigeben) {
     return new Promise((fertig) => {
       audio = new Audio(url);
-      audio.onended = audio.onerror = () => {
-        if (freigeben) URL.revokeObjectURL(url);
-        fertig();
-      };
-      audio.play().catch(() => fertig());
+      const ende = () => { if (freigeben) URL.revokeObjectURL(url); aktuellerStop = null; fertig(); };
+      audio.onended = audio.onerror = ende;
+      // Barge-in kann die Ausgabe sofort abwuergen.
+      aktuellerStop = () => { try { audio.pause(); } catch {} ende(); };
+      audio.play().catch(() => ende());
     });
   }
 
@@ -508,7 +554,9 @@
       u.rate = 1.05;
       const de = speechSynthesis.getVoices().find((v) => v.lang.startsWith("de"));
       if (de) u.voice = de;
-      u.onend = u.onerror = () => fertig();
+      const ende = () => { aktuellerStop = null; fertig(); };
+      u.onend = u.onerror = ende;
+      aktuellerStop = () => { try { window.speechSynthesis.cancel(); } catch {} ende(); };
       speechSynthesis.speak(u);
     });
   }
@@ -516,6 +564,9 @@
   function stoppen() {
     imGespraech = false;
     redetGerade = false;
+    gespraechsId++;
+    bargeStop();
+    aktuellerStop = null;
     try { audio?.pause(); } catch {}
     window.speechSynthesis?.cancel();
     try { erkennung?.abort(); } catch {}
