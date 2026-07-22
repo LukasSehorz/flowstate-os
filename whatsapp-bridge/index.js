@@ -78,6 +78,15 @@ async function start() {
       verbunden = true; hatQR = false;
       try { fs.unlinkSync(QR_PNG); } catch {}
       console.log("WhatsApp verbunden.");
+      // Adressbuch aktiv nachziehen: das Erst-Sync lief evtl. vor unserem Handler,
+      // beim Reconnect kommen nur noch Deltas. resyncAppState stoesst die
+      // Kontakt-Kollektionen neu an -> contacts.set/upsert feuern.
+      setTimeout(async () => {
+        try {
+          await sock.resyncAppState(["critical_unblock_low", "regular_high", "regular_low", "regular"], false);
+          console.log("Kontakt-Resync fertig — " + Object.keys(kontakte).length + " Kontakte bekannt.");
+        } catch (e) { console.log("Kontakt-Resync-Hinweis:", String(e.message).slice(0, 120)); }
+      }, 4000);
     }
     if (connection === "close") {
       verbunden = false;
