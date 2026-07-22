@@ -412,8 +412,6 @@
 
   // ---------------------------------------------------------------- Verarbeiten
 
-  const FUELLER = ["Moment, ich schau nach.", "Sekunde, schau ich kurz.", "Ich schau mal.", "Moment…"];
-
   async function verarbeiten(text) {
     const meine = ++gespraechsId;   // diese Runde; wird sie unterbrochen, bricht sie ab
     const begonnen = performance.now();
@@ -422,20 +420,23 @@
     setzeZustand("denken");
     if (el.karten) el.karten.innerHTML = "";
 
-    // Anfrage sofort losschicken; parallel dazu ein Sofort-Fueller, damit kein
-    // totes Warten entsteht, waehrend das Modell denkt (Wunsch Lukas 22.07.:
-    // erst "ich schau nach", dann die Antwort — wie in den Referenzvideos).
+    // Die eigentliche Antwort (Sonnet) losschicken …
     const anfrage = fetch("/api/sprache/frage", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
     }).then((r) => r.json()).catch(() => null);
 
-    let geantwortet = false;
-    setTimeout(() => {
-      if (!geantwortet && meine === gespraechsId) {
-        sprich(FUELLER[Math.floor(Math.random() * FUELLER.length)]).catch(() => {});
-      }
-    }, 350);
+    // … und PARALLEL eine blitzschnelle, ZUR AUFGABE passende Zusage (Haiku),
+    // die sofort gesprochen wird — kein totes Warten, keine Konserve (Wunsch
+    // Lukas 22.07.: die Ansage muss zur Aufgabe passen, wie ein echtes Gespraech).
+    let geantwortet = false, geackt = false;
+    const ack = (t) => { if (t && !geantwortet && !geackt && meine === gespraechsId) { geackt = true; sprich(t).catch(() => {}); } };
+    fetch("/api/sprache/zusage", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    }).then((r) => r.json()).then((z) => ack(z && z.zusage)).catch(() => {});
+    // Notfall, falls die Zusage leer/langsam ist und die Antwort dauert.
+    setTimeout(() => ack("Moment…"), 1100);
 
     const d = await anfrage;
     geantwortet = true;
