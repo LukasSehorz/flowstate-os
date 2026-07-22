@@ -236,8 +236,13 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
       if (r.ok && telegram.hatOwner?.()) { await telegram.push(r.text); console.log("Tages-Report gesendet."); }
     } catch (e) { console.error("Tages-Report:", e.message); }
   };
-  setInterval(reportPruefen, 5 * 60 * 1000).unref();
-  console.log(`Zweites Gehirn: Tages-Report taeglich um ${REPORT_STUNDE} Uhr.`);
+  // Standardmaessig AUS: den Abend-Report besitzt jetzt der Hermes-Cron
+  // ("Tagesreport und morgige To-dos"), der ihn generiert und ueber /api/melde
+  // ausliefert. Der Dashboard-Scheduler bleibt als Notreserve (REPORT_DASHBOARD=1).
+  if (process.env.REPORT_DASHBOARD === "1") {
+    setInterval(reportPruefen, 5 * 60 * 1000).unref();
+    console.log(`Zweites Gehirn: Dashboard-Tagesreport aktiv, taeglich um ${REPORT_STUNDE} Uhr.`);
+  }
 
   // Von Hand ausloesen/vorschauen (Test): { art?: "abend"|"morgen", senden?: true }
   app.post("/api/gehirn/report", async (req, res) => {

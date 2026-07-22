@@ -34,6 +34,22 @@ const PORT = Number(process.env.WA_BRIDGE_PORT || 3100);
 fs.mkdirSync(AUTH_DIR, { recursive: true });
 
 let sock = null, verbunden = false, hatQR = false;
+let reconnectGeplant = false;   // verhindert gestapelte Reconnects (Doppel-Socket)
+
+// Zugestellte-Verfolgung + Retry-Speicher (Fix 22.07. fuer "nur ein Haken"):
+//  - gesendet: die zuletzt gesendeten Nachrichten-Inhalte, damit getMessage bei
+//    einer Retry-Receipt (Empfaenger konnte nicht entschluesseln) NEU senden kann.
+//    OHNE das bleibt eine unzustellbare Nachricht fuer immer bei einem Haken.
+//  - zustellStatus: hoechster empfangener Status je Nachrichten-ID
+//    (2 = beim Server, 3 = beim Empfaenger zugestellt, 4 = gelesen). So kann
+//    /senden ehrlich melden, ob es WIRKLICH angekommen ist.
+const gesendet = new Map();
+const zustellStatus = new Map();
+function merkeGesendet(id, message) {
+  if (!id || !message) return;
+  gesendet.set(id, message);
+  if (gesendet.size > 500) gesendet.delete(gesendet.keys().next().value);
+}
 
 // Kontaktbuch aus WhatsApp (jid -> {name, notify}). Bleibt auf dem Server
 // (/wa-Volume), NICHT im Git-Vault — Kontaktliste ist rein operativ.
@@ -72,6 +88,11 @@ async function start() {
     browser: ["Flowstate OS", "Chrome", "120.0.0"],
     markOnlineOnConnect: false,   // nicht als "online" erscheinen -> unauffaellig
     syncFullHistory: false,
+    // Retry-Receipts bedienen: Fragt der Empfaenger eine Nachricht neu an (weil
+    // sein Geraet sie nicht entschluesseln konnte), MUSS Baileys den Inhalt neu
+    // senden koennen. Ohne diesen Rueckgriff bleibt sie fuer immer bei einem
+    // Haken. Das ist der Kern-Fix gegen "rausgeschickt, aber nicht angekommen".
+    getMessage: async (key) => gesendet.get(key?.id) || undefined,
   });
 
   sock.ev.on("creds.update", saveCreds);
@@ -106,7 +127,19 @@ async function start() {
         try { fs.rmSync(AUTH_DIR, { recursive: true, force: true }); } catch {}
         fs.mkdirSync(AUTH_DIR, { recursive: true });
       }
-      setTimeout(() => start().catch((e) => console.error("Reconnect-Fehler:", e.message)), abgemeldet ? 2000 : 3000);
+      // Alten Socket sauber schliessen und Reconnects NICHT stapeln: mehrere
+      // close-Events (oder ein close waehrend schon ein Reconnect laeuft) wuerden
+      // sonst zwei Sockets gleichzeitig oeffnen -> Sitzung desynchronisiert
+      // (die "Bad MAC"-Fehler). Ein Flag laesst nur EINEN Reconnect zu.
+      try { sock?.ev?.removeAllListeners?.(); sock?.ws?.close?.(); } catch {}
+      sock = null;
+      if (!reconnectGeplant) {
+        reconnectGeplant = true;
+        setTimeout(() => {
+          reconnectGeplant = false;
+          start().catch((e) => console.error("Reconnect-Fehler:", e.message));
+        }, abgemeldet ? 2000 : 3000);
+      }
     }
   });
 
@@ -115,6 +148,20 @@ async function start() {
   sock.ev.on("contacts.upsert", (arg) => mergeKontakte(arg));
   sock.ev.on("contacts.update", (arg) => mergeKontakte(arg));
   sock.ev.on("messaging-history.set", (arg) => mergeKontakte(arg?.contacts));
+
+  // Zustell-Quittungen: WhatsApp meldet den Fortschritt je Nachricht als Status
+  // (2 = beim Server, 3 = beim Empfaenger angekommen = zwei Haken, 4 = gelesen).
+  // Wir merken uns den hoechsten Wert, damit /senden ehrlich sagen kann, ob es
+  // WIRKLICH zugestellt wurde — statt blind "ist raus" bei nur einem Haken.
+  sock.ev.on("messages.update", (updates) => {
+    for (const u of updates || []) {
+      const id = u?.key?.id;
+      const st = u?.update?.status;
+      if (!id || typeof st !== "number") continue;
+      if (st > (zustellStatus.get(id) || 0)) zustellStatus.set(id, st);
+      if (zustellStatus.size > 1000) zustellStatus.delete(zustellStatus.keys().next().value);
+    }
+  });
 
   sock.ev.on("messages.upsert", ({ messages, type }) => {
     if (type !== "notify") return;
@@ -205,11 +252,32 @@ http.createServer((req, res) => {
         const { an, text } = JSON.parse(b || "{}");
         if (!sock || !verbunden) { res.writeHead(503); return json({ ok: false, grund: "WhatsApp nicht verbunden" }); }
         const jid = String(an).includes("@") ? an : String(an).replace(/[^0-9]/g, "") + "@s.whatsapp.net";
-        await sock.sendMessage(jid, { text: String(text || "") });
-        json({ ok: true, an: jid });
+        const msg = await sock.sendMessage(jid, { text: String(text || "") });
+        const id = msg?.key?.id || null;
+        // Fuer eine moegliche Retry-Receipt merken (dann kann Baileys neu senden).
+        if (id && msg?.message) merkeGesendet(id, msg.message);
+
+        // Auf echte Zustellung warten (Status 3 = zwei Haken). Kommt sofort
+        // zurueck, sobald angekommen; sonst hoechstens ~7 s. So melden wir NIE
+        // faelschlich "angekommen". (Lukas 22.07.: muss verlaesslich ankommen.)
+        let status = zustellStatus.get(id) || 2;
+        const bis = Date.now() + 7000;
+        while (id && status < 3 && Date.now() < bis) {
+          await new Promise((r) => setTimeout(r, 300));
+          status = zustellStatus.get(id) || status;
+        }
+        json({ ok: true, an: jid, id, status, zugestellt: status >= 3 });
       } catch (e) { res.writeHead(500); json({ ok: false, grund: String(e.message).slice(0, 200) }); }
     });
     return;
+  }
+
+  // Zustellstatus einer bereits gesendeten Nachricht nachfragen (fuer spaetere
+  // Bestaetigung, falls sie beim Senden noch nicht zugestellt war).
+  if (req.url.startsWith("/zustellung")) {
+    const id = new URL(req.url, "http://x").searchParams.get("id");
+    const status = zustellStatus.get(id) || 0;
+    return json({ id, status, zugestellt: status >= 3 });
   }
   res.writeHead(404); res.end("?");
 }).listen(PORT, () => console.log("WA-Bruecke HTTP auf Port " + PORT));
