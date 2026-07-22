@@ -435,8 +435,9 @@
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
     }).then((r) => r.json()).then((z) => ack(z && z.zusage)).catch(() => {});
-    // Notfall, falls die Zusage leer/langsam ist und die Antwort dauert.
-    setTimeout(() => ack("Moment…"), 1100);
+    // Notfall NUR, falls die passende Zusage ausbleibt (Fehler/leer). Spaet genug,
+    // dass die echte, zur Aufgabe passende Zusage Vorrang hat.
+    setTimeout(() => ack("Moment…"), 2000);
 
     const d = await anfrage;
     geantwortet = true;
