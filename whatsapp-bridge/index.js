@@ -43,11 +43,19 @@ function speichereKontakte() { try { fs.writeFileSync(CONTACTS, JSON.stringify(k
 function mergeKontakte(liste) {
   let geaendert = false;
   for (const c of liste || []) {
-    if (!c || !c.id || !c.id.endsWith("@s.whatsapp.net")) continue;
-    const alt = kontakte[c.id] || {};
+    if (!c || !c.id) continue;
+    const id = c.id;
+    if (!id.endsWith("@s.whatsapp.net") && !id.endsWith("@lid")) continue;
+    const alt = kontakte[id] || {};
     const name = c.name || c.verifiedName || alt.name || "";
     const notify = c.notify || alt.notify || "";
-    if (name !== alt.name || notify !== alt.notify) { kontakte[c.id] = { name, notify }; geaendert = true; }
+    if (name !== alt.name || notify !== alt.notify) { kontakte[id] = { name, notify, lid: c.lid || alt.lid || "" }; geaendert = true; }
+    // Manche Kontakte tragen zusaetzlich ihre LID -> als eigenen Eintrag spiegeln,
+    // damit LID-adressierte Nachrichten den Adressbuchnamen bekommen.
+    if (c.lid && c.lid.endsWith("@lid") && name) {
+      const l = kontakte[c.lid] || {};
+      if (l.name !== name) { kontakte[c.lid] = { name, notify: l.notify || notify || "", pn: id }; geaendert = true; }
+    }
   }
   if (geaendert) speichereKontakte();
 }
