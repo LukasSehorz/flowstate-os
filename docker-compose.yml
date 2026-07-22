@@ -43,6 +43,9 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_ALLOWED_CHAT=${TELEGRAM_ALLOWED_CHAT:-}
       - SELF_URL=http://127.0.0.1:3000
+      # Melde-Kanal: Secret, mit dem Hermes-Crons proaktiv ueber die Stimme
+      # abliefern duerfen (/api/melde steht vor dem Login-Gate).
+      - MELDE_SECRET=${MELDE_SECRET:-}
       # ElevenLabs — Stimme fuer /sprache. Der Schluessel steht in .env und
       # muss hier durchgereicht werden: Compose gibt nur weiter, was gelistet ist.
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
