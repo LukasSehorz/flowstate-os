@@ -410,6 +410,8 @@
 
   // ---------------------------------------------------------------- Verarbeiten
 
+  const FUELLER = ["Moment, ich schau nach.", "Sekunde, schau ich kurz.", "Ich schau mal.", "Moment…"];
+
   async function verarbeiten(text) {
     const meine = ++gespraechsId;   // diese Runde; wird sie unterbrochen, bricht sie ab
     const begonnen = performance.now();
@@ -418,18 +420,30 @@
     setzeZustand("denken");
     if (el.karten) el.karten.innerHTML = "";
 
-    let d;
-    try {
-      d = await fetch("/api/sprache/frage", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      }).then((r) => r.json());
-    } catch {
+    // Anfrage sofort losschicken; parallel dazu ein Sofort-Fueller, damit kein
+    // totes Warten entsteht, waehrend das Modell denkt (Wunsch Lukas 22.07.:
+    // erst "ich schau nach", dann die Antwort — wie in den Referenzvideos).
+    const anfrage = fetch("/api/sprache/frage", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    }).then((r) => r.json()).catch(() => null);
+
+    let geantwortet = false;
+    setTimeout(() => {
+      if (!geantwortet && meine === gespraechsId) {
+        sprich(FUELLER[Math.floor(Math.random() * FUELLER.length)]).catch(() => {});
+      }
+    }, 350);
+
+    const d = await anfrage;
+    geantwortet = true;
+    if (meine !== gespraechsId) return;
+    if (!d) {
       zeile("sie", "⚠️ Verbindung fehlgeschlagen.");
       await sprich("Verbindung hakt gerade — sag's gleich nochmal.").catch(() => {});
       return weiter();
     }
-    if (!d || !d.ok) { zeile("sie", "⚠️ " + (d?.hint || "Fehler")); return weiter(); }
+    if (!d.ok) { zeile("sie", "⚠️ " + (d.hint || "Fehler")); return weiter(); }
 
     (d.karten || []).forEach(karteZeigen);
 
@@ -575,18 +589,11 @@
     b.lang = "de-DE"; b.interimResults = true; b.continuous = true;
     b.onresult = (ev) => {
       const roh = Array.from(ev.results).map((r) => r[0].transcript).join("");
-      const t = norm(roh);
-      if (!t) return;
-      // "Stopp" zieht sofort — auch als einzelnes Wort, auch in der Gnadenfrist.
-      if (STOPP_RE.test(roh)) { hartStop(); return; }
-      // Gnadenfrist: in den ersten 2 s sonst NICHT unterbrechen — sonst schneidet
-      // ihr eigenes Echo den Satz ab (der "nur zur Haelfte"-Fehler). Lieber eine
-      // Unterbrechung verpassen als sie mitten im Satz abwuergen.
-      if (Date.now() - bargeStartZeit < 2000) return;
-      // Sonst nur bei KLARER Aeusserung (>= 3 Woerter, >= 9 Zeichen), nicht bei Rauschen/Echo.
-      if (t.length < 9 || t.split(" ").length < 3) return;
-      if (redeText && redeText.includes(t)) return; // das ist ihre eigene Stimme
-      unterbrechen();
+      // WAEHREND des Sprechens NUR auf ein klares "Stopp" reagieren — NICHT auf
+      // allgemeine Sprache. Grund: Spracherkennung + Lautsprecher-Echo verwechselt
+      // ihre eigene Stimme staendig mit dem Nutzer und bricht mitten im Satz ab
+      // (der "liest nur die Haelfte vor"-Fehler). Lieber sie immer ausreden lassen.
+      if (STOPP_RE.test(roh) && !(redeText && redeText.includes(norm(roh)))) hartStop();
     };
     b.onerror = () => {};
     // Chrome beendet die Erkennung frueh -> neu starten, solange sie noch redet.
