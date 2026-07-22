@@ -40,9 +40,11 @@
   let stilleTimer = null;         // wartet nach dem Reden auf echte Stille
   let letzteAktivitaet = 0;       // wann zuletzt gesprochen/geantwortet wurde
   let lausche = false;            // laeuft gerade eine Zuhoer-Erkennung? (verhindert Doppelstart)
-  // Tempo-Wuensche Lukas 22.07.: ausreden lassen, Gespraech lange offen halten.
+  // Tempo-Wuensche Lukas 22.07.: ausreden lassen, aber nicht ewig nachlaufen.
   const ENDE_STILLE_MS = 1400;    // so lange Pause NACH Sprache = fertig geredet
-  const GEDULD_MS = 25000;        // so lange Gesamt-Stille, bevor das Gespraech schliesst
+  const GEDULD_MS = 10000;        // so lange Gesamt-Stille, dann schliesst das Gespraech
+  // Klare Stopp-Kommandos: sofort aufhoeren, egal ob sie gerade redet oder zuhoert.
+  const STOPP_RE = /\b(stop|stopp|halt|aufh[oö]ren|sei still|ruhe|schluss|genug|danke das war'?s)\b/i;
 
   // ---------------------------------------------------------------- Oberflaeche
 
@@ -318,6 +320,7 @@
       abgeschickt = true;
       clearTimeout(stilleTimer);
       try { r.stop(); } catch {}
+      if (STOPP_RE.test(text)) { hartStop(); return; }   // "Stopp" -> Gespraech aus
       verarbeiten(text);
     };
 
@@ -548,13 +551,16 @@
     bargeStartZeit = Date.now();
     b.lang = "de-DE"; b.interimResults = true; b.continuous = true;
     b.onresult = (ev) => {
-      // Gnadenfrist: in den ersten 1,2 s NICHT unterbrechen — sonst schneidet ihr
-      // eigenes Echo den Satzanfang ab (genau der "nur zur Haelfte"-Fehler).
+      const roh = Array.from(ev.results).map((r) => r[0].transcript).join("");
+      const t = norm(roh);
+      if (!t) return;
+      // "Stopp" zieht sofort — auch als einzelnes Wort, auch in der Gnadenfrist.
+      if (STOPP_RE.test(roh)) { hartStop(); return; }
+      // Gnadenfrist: in den ersten 1,2 s sonst NICHT unterbrechen — sonst schneidet
+      // ihr eigenes Echo den Satzanfang ab (der "nur zur Haelfte"-Fehler).
       if (Date.now() - bargeStartZeit < 1200) return;
-      const t = norm(Array.from(ev.results).map((r) => r[0].transcript).join(""));
-      // Nur bei einer KLAREN Aeusserung unterbrechen (>= 2 Woerter, >= 6 Zeichen),
-      // nicht bei einem Rausch-Wort.
-      if (!t || t.length < 6 || t.split(" ").length < 2) return;
+      // Sonst nur bei KLARER Aeusserung (>= 2 Woerter, >= 6 Zeichen), nicht bei Rauschen.
+      if (t.length < 6 || t.split(" ").length < 2) return;
       if (redeText && redeText.includes(t)) return; // das ist ihre eigene Stimme
       unterbrechen();
     };
@@ -575,6 +581,15 @@
     imGespraech = true;
     letzteAktivitaet = Date.now();
     hoeren();                       // frisch zuhoeren, was Lukas jetzt sagt
+  }
+
+  // Harter Stopp: sofort still + Gespraech beenden (auf "Stopp"). Danach muss
+  // wieder "Hey Alexandra" kommen — genau das, was Lukas als Aus-Knopf will.
+  function hartStop() {
+    gespraechsId++;
+    const stop = aktuellerStop; aktuellerStop = null;
+    if (stop) stop();
+    stoppen();
   }
 
   function abspielen(url, freigeben) {
