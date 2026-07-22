@@ -81,6 +81,22 @@ app.get("/logout", (req, res) => {
   req.session.destroy(() => res.redirect("/login"));
 });
 
+// Melde-Kanal: proaktive Nachricht an Lukas' Telegram (Text + Sprache). STEHT
+// bewusst VOR dem Login-Gate, damit Hermes-Crons per HTTP abliefern koennen —
+// geschuetzt NUR durch das MELDE_SECRET (faellt ohne Secret geschlossen, sonst
+// waere der oeffentliche Endpunkt offen). So liefert Hermes seine Reports/Alerts
+// ueber die schnelle Stimme aus, statt selbst an Telegram zu schreiben.
+app.post("/api/melde", (req, res) => {
+  const secret = process.env.MELDE_SECRET || "";
+  if (!secret || String(req.get("x-melde-secret") || "") !== secret) {
+    return res.status(403).json({ ok: false, grund: "Secret fehlt oder falsch." });
+  }
+  const text = String(req.body?.text || "").slice(0, 3000);
+  if (!text.trim()) return res.json({ ok: false, grund: "Kein Text." });
+  require("./lib/telegram.js").push(text, { stimme: req.body?.stimme !== false })
+    .then((r) => res.json(r)).catch((e) => res.json({ ok: false, grund: String(e.message).slice(0, 200) }));
+});
+
 app.use((req, res, next) => {
   if (!PASSWORD) return res.status(500).send("DASHBOARD_PASSWORD ist nicht gesetzt.");
   // Wer im CRM angemeldet ist, ist auch im OS angemeldet — eine Identitaet fuer beides.
@@ -201,19 +217,7 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
     catch (e) { res.json({ ok: false, grund: String(e.message).slice(0, 200) }); }
   });
 
-  // Melde-Kanal: Hermes (oder eine Automatisierung) schickt Lukas proaktiv eine
-  // Nachricht ueber die schnelle Stimme (Text + Sprache in Telegram). Steht VOR
-  // dem Login-Gate offen, aber nur mit dem MELDE_SECRET — so kann Hermes' Cron
-  // per HTTP hier abliefern, ohne Dashboard-Session.
-  app.post("/api/melde", async (req, res) => {
-    if ((process.env.MELDE_SECRET || "") && req.get("x-melde-secret") !== process.env.MELDE_SECRET) {
-      return res.status(403).json({ ok: false, grund: "Secret fehlt/falsch." });
-    }
-    const text = String(req.body?.text || "").slice(0, 3000);
-    if (!text.trim()) return res.json({ ok: false, grund: "Kein Text." });
-    try { res.json(await telegram.push(text, { stimme: req.body?.stimme !== false })); }
-    catch (e) { res.json({ ok: false, grund: String(e.message).slice(0, 200) }); }
-  });
+  // (Der Melde-Kanal /api/melde steht bewusst VOR dem Login-Gate — siehe oben.)
 
   // Proaktiver Tages-Report (Wunsch Lukas 22.07.): jeden Abend um REPORT_STUNDE
   // meldet sich Alexandra ueber die schnelle Stimme (Telegram) mit einem Blick
