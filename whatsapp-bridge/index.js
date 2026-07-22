@@ -26,12 +26,30 @@ const WA_DIR = process.env.WA_DIR || "/wa";
 const AUTH_DIR = path.join(WA_DIR, "auth");
 const QR_PNG = path.join(WA_DIR, "qr.png");
 const PENDING = path.join(WA_DIR, "pending.jsonl");
+const CONTACTS = path.join(WA_DIR, "contacts.json");
 const SECRET = process.env.WA_BRIDGE_SECRET || "";
 const PORT = Number(process.env.WA_BRIDGE_PORT || 3100);
 
 fs.mkdirSync(AUTH_DIR, { recursive: true });
 
 let sock = null, verbunden = false, hatQR = false;
+
+// Kontaktbuch aus WhatsApp (jid -> {name, notify}). Bleibt auf dem Server
+// (/wa-Volume), NICHT im Git-Vault — Kontaktliste ist rein operativ.
+let kontakte = {};
+try { kontakte = JSON.parse(fs.readFileSync(CONTACTS, "utf-8")); } catch {}
+function speichereKontakte() { try { fs.writeFileSync(CONTACTS, JSON.stringify(kontakte)); } catch {} }
+function mergeKontakte(liste) {
+  let geaendert = false;
+  for (const c of liste || []) {
+    if (!c || !c.id || !c.id.endsWith("@s.whatsapp.net")) continue;
+    const alt = kontakte[c.id] || {};
+    const name = c.name || c.verifiedName || alt.name || "";
+    const notify = c.notify || alt.notify || "";
+    if (name !== alt.name || notify !== alt.notify) { kontakte[c.id] = { name, notify }; geaendert = true; }
+  }
+  if (geaendert) speichereKontakte();
+}
 
 async function start() {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
@@ -74,9 +92,24 @@ async function start() {
     }
   });
 
+  // Kontakte aus WhatsApp mitnehmen — damit "schick Jannik ..." aufloesbar ist.
+  sock.ev.on("contacts.set", (arg) => mergeKontakte(arg?.contacts || arg));
+  sock.ev.on("contacts.upsert", (arg) => mergeKontakte(arg));
+  sock.ev.on("contacts.update", (arg) => mergeKontakte(arg));
+  sock.ev.on("messaging-history.set", (arg) => mergeKontakte(arg?.contacts));
+
   sock.ev.on("messages.upsert", ({ messages, type }) => {
     if (type !== "notify") return;
-    for (const m of messages) { try { eingang(m); } catch { /* eine Nachricht darf nichts umwerfen */ } }
+    for (const m of messages) {
+      // Absendername als schwache Kontaktquelle mitnehmen (falls Adressbuch leer).
+      try {
+        const jid = m.key?.remoteJid;
+        if (jid && jid.endsWith("@s.whatsapp.net") && m.pushName && !kontakte[jid]?.name) {
+          mergeKontakte([{ id: jid, notify: m.pushName }]);
+        }
+      } catch {}
+      try { eingang(m); } catch { /* eine Nachricht darf nichts umwerfen */ }
+    }
   });
 }
 

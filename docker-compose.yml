@@ -35,6 +35,9 @@ services:
       - WA_DIR=/wa
       - WA_BRIDGE_URL=http://whatsapp:3100
       - WA_BRIDGE_SECRET=${WA_BRIDGE_SECRET:-}
+      # Wer per WhatsApp ohne Rueckfrage angeschrieben werden darf (Namen aus
+      # deinen Kontakten). Nummer kommt automatisch aus WhatsApp.
+      - INTERN_WA_NAMEN=${INTERN_WA_NAMEN:-jannik}
       # ElevenLabs — Stimme fuer /sprache. Der Schluessel steht in .env und
       # muss hier durchgereicht werden: Compose gibt nur weiter, was gelistet ist.
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
