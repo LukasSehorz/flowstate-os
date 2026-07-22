@@ -214,6 +214,35 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
     try { res.json(await telegram.push(text, { stimme: req.body?.stimme !== false })); }
     catch (e) { res.json({ ok: false, grund: String(e.message).slice(0, 200) }); }
   });
+
+  // Proaktiver Tages-Report (Wunsch Lukas 22.07.): jeden Abend um REPORT_STUNDE
+  // meldet sich Alexandra ueber die schnelle Stimme (Telegram) mit einem Blick
+  // auf morgen — Termine, To-Dos, Zahlen. Dashboard-nativ, mit Stimme.
+  const report = require("./lib/report.js");
+  const REPORT_STUNDE = Number(process.env.REPORT_STUNDE || 20);
+  const berlinStunde = () => Number(new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", hour: "2-digit", hour12: false }).format(new Date()));
+  const berlinTag = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date());
+  let letzterReportTag = "";
+  const reportPruefen = async () => {
+    const heute = berlinTag();
+    if (letzterReportTag === heute || berlinStunde() !== REPORT_STUNDE) return;
+    letzterReportTag = heute;
+    try {
+      const r = await report.baueReport({ art: "abend" });
+      if (r.ok && telegram.hatOwner?.()) { await telegram.push(r.text); console.log("Tages-Report gesendet."); }
+    } catch (e) { console.error("Tages-Report:", e.message); }
+  };
+  setInterval(reportPruefen, 5 * 60 * 1000).unref();
+  console.log(`Zweites Gehirn: Tages-Report taeglich um ${REPORT_STUNDE} Uhr.`);
+
+  // Von Hand ausloesen/vorschauen (Test): { art?: "abend"|"morgen", senden?: true }
+  app.post("/api/gehirn/report", async (req, res) => {
+    try {
+      const r = await report.baueReport({ art: req.body?.art === "morgen" ? "morgen" : "abend" });
+      if (r.ok && req.body?.senden && telegram.hatOwner?.()) await telegram.push(r.text);
+      res.json(r);
+    } catch (e) { res.json({ ok: false, grund: String(e.message).slice(0, 200) }); }
+  });
 }
 
 // ---------- Zentrale ----------
