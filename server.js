@@ -250,6 +250,32 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
   setInterval(reportPruefen, 5 * 60 * 1000).unref();
   console.log(`Zweites Gehirn: Morgen-Briefing ${BRIEFING_STUNDE} Uhr + Abend-Report ${REPORT_STUNDE} Uhr (Hermes generiert, Stimme liest vor).`);
 
+  // Waechter (P4.2): proaktive Warnungen tagsueber. Prueft CRM + Kalender und
+  // meldet Neues gebuendelt per Stimme; Tages-Dedup verhindert Wiederholung.
+  // Nur zwischen WAECHTER_VON und WAECHTER_BIS, damit nachts Ruhe ist.
+  const waechter = require("./lib/waechter.js");
+  const WAECHTER_VON = Number(process.env.WAECHTER_VON || 8);
+  const WAECHTER_BIS = Number(process.env.WAECHTER_BIS || 20);
+  const waechterPruefen = async () => {
+    const std = berlinStunde();
+    if (std < WAECHTER_VON || std >= WAECHTER_BIS) return;
+    try {
+      const r = await waechter.pruefe();
+      if (r.text && telegram.hatOwner?.()) { await telegram.push(r.text); console.log(`Waechter: ${r.anzahl} Warnung(en) gemeldet.`); }
+    } catch (e) { console.error("Waechter:", e.message); }
+  };
+  setInterval(waechterPruefen, 20 * 60 * 1000).unref();
+  console.log(`Zweites Gehirn: Waechter aktiv (${WAECHTER_VON}-${WAECHTER_BIS} Uhr, alle 20 Min).`);
+
+  // Waechter von Hand ausloesen (Test/Vorschau). senden:true schickt per Stimme.
+  app.post("/api/gehirn/waechter", async (req, res) => {
+    try {
+      const r = await waechter.pruefe();
+      if (r.text && req.body?.senden && telegram.hatOwner?.()) await telegram.push(r.text);
+      res.json(r);
+    } catch (e) { res.json({ ok: false, hint: String(e.message).slice(0, 200) }); }
+  });
+
   // Von Hand ausloesen/vorschauen (Test): { art?: "abend"|"morgen", senden?: true }
   app.post("/api/gehirn/report", async (req, res) => {
     try {
