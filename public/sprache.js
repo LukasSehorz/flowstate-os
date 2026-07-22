@@ -28,6 +28,8 @@
   let wakeAn = localStorage.getItem(WAKE_SPEICHER) !== "aus";
   let erkennung = null, wakeErkennung = null, wakeLaeuft = false;
   let audio = null, audioCtx = null, analyser = null, mikroStrom = null;
+  let playbackAnalyser = null;    // analysiert ALEXANDRAS Stimme (fuer die Kugel beim Sprechen)
+  let pegelLaeuft = false;
   let begruessungUrl = null;      // einmal erzeugt, danach wiederverwendet
   let letzteFrageAt = 0;
   let imGespraech = false;        // laeuft gerade ein zusammenhaengendes Gespraech?
@@ -348,38 +350,59 @@
 
   // ---------------------------------------------------------------- Pegel
 
+  function audioKontext() {
+    audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+    return audioCtx;
+  }
+
   async function pegelStarten() {
     if (analyser) return;
     try {
-      audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = audioKontext();
       // Echo-/Rauschunterdbrueckung: sonst hoert das Mikro Alexandras eigene
       // Stimme ueber die Lautsprecher und "antwortet sich selbst".
       mikroStrom ||= await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
-      const q = audioCtx.createMediaStreamSource(mikroStrom);
-      analyser = audioCtx.createAnalyser();
+      const q = ctx.createMediaStreamSource(mikroStrom);
+      analyser = ctx.createAnalyser();
       analyser.fftSize = 128;
       q.connect(analyser);
-      pegelSchleife();
-    } catch { /* ohne Pegel laeuft alles weiter, nur weniger huebsch */ }
+    } catch { /* ohne Mikro-Pegel laeuft alles weiter */ }
   }
 
+  // Alexandras Sprachausgabe an einen Analyser haengen, damit die Kugel beim
+  // Sprechen zu IHRER Stimme tanzt (nicht zum Mikro, das sie kaum hoert).
+  function verbindePlayback(elAudio) {
+    try {
+      const ctx = audioKontext();
+      const src = ctx.createMediaElementSource(elAudio);
+      src.connect(ctx.destination);   // ZUERST hoerbar machen
+      playbackAnalyser ||= (() => { const a = ctx.createAnalyser(); a.fftSize = 128; return a; })();
+      src.connect(playbackAnalyser);  // dann zusaetzlich analysieren
+    } catch { /* dann tragen die CSS-Animationen die Kugel */ }
+  }
+
+  // Eine Schleife fuer beide Quellen: beim Sprechen Alexandras Stimme, beim
+  // Lauschen das Mikro. Laeuft dauerhaft; ruht die Balken, wenn nichts los ist.
   function pegelSchleife() {
-    const daten = new Uint8Array(analyser.frequencyBinCount);
+    if (pegelLaeuft) return;
+    pegelLaeuft = true;
+    const daten = new Uint8Array(64);
     const striche = el.kugel.querySelectorAll(".pegel, .sm-pegel line");
     const tick = () => {
-      if (!analyser) return;
-      if (zustand !== "lauschen" && zustand !== "sprechen") {
+      const quelle = zustand === "sprechen" ? playbackAnalyser
+        : zustand === "lauschen" ? analyser : null;
+      if (quelle) {
+        quelle.getByteFrequencyData(daten);
+        striche.forEach((s, i) => {
+          const v = daten[i % daten.length] / 255;
+          s.style.transform = `scale(${(1 + v * 1.5).toFixed(3)})`;
+        });
+      } else {
         striche.forEach((s) => (s.style.transform = ""));
-        requestAnimationFrame(tick);
-        return;
       }
-      analyser.getByteFrequencyData(daten);
-      striche.forEach((s, i) => {
-        const v = daten[i % daten.length] / 255;
-        s.style.transform = `scale(${(1 + v * 0.9).toFixed(3)})`;
-      });
       requestAnimationFrame(tick);
     };
     tick();
@@ -595,6 +618,7 @@
   function abspielen(url, freigeben) {
     return new Promise((fertig) => {
       audio = new Audio(url);
+      verbindePlayback(audio);   // Kugel tanzt zu Alexandras Stimme
       const ende = () => { if (freigeben) URL.revokeObjectURL(url); aktuellerStop = null; fertig(); };
       audio.onended = audio.onerror = ende;
       // Barge-in kann die Ausgabe sofort abwuergen.
@@ -696,6 +720,7 @@
 
   setzeZustand("ruhe");
   wakePunktSetzen();
+  pegelSchleife();   // laeuft dauerhaft; nutzt Mikro (Lauschen) bzw. Stimme (Sprechen)
 
   fetch("/api/sprache/status").then((r) => r.json()).then((k) => {
     konfig = { ...konfig, ...k };
