@@ -46,7 +46,9 @@
   const ENDE_STILLE_MS = 1400;    // so lange Pause NACH Sprache = fertig geredet
   const GEDULD_MS = 10000;        // so lange Gesamt-Stille, dann schliesst das Gespraech
   // Klare Stopp-Kommandos: sofort aufhoeren, egal ob sie gerade redet oder zuhoert.
-  const STOPP_RE = /\b(stop|stopp|halt|aufh[oö]ren|sei still|ruhe|schluss|genug|danke das war'?s)\b/i;
+  // Bewusst eng: nur eindeutige Stopp-Befehle. "halt"/"genug"/"ruhe" sind im
+  // Deutschen zu alltaeglich — sonst stoppt sie sich beim eigenen "das ist halt so".
+  const STOPP_RE = /\b(stopp?|aufh[oö]ren|h[oö]r auf|sei (?:still|ruhig))\b/i;
 
   // ---------------------------------------------------------------- Oberflaeche
 
