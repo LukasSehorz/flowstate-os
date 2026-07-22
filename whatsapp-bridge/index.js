@@ -139,8 +139,6 @@ function verlaufSpeichern(m) {
   if (!jid || jid === "status@broadcast" || jid.endsWith("@newsletter") || jid.endsWith("@broadcast")) return;
   const text = textAus(m).trim();
   if (!text) return;
-  // DIAGNOSE (temporaer): zeigt, ob die Telefonnummer im Schluessel steckt.
-  if (jid.endsWith("@lid")) console.log("WA_KEY", JSON.stringify({ key: m.key, pn: m.key?.senderPn, alt: m.key?.remoteJidAlt, partAlt: m.key?.participantAlt, vname: m.verifiedBizName }).slice(0, 400));
   const eintrag = {
     jid,
     richtung: m.key.fromMe ? "ich" : "sie",
