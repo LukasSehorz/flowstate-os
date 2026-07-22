@@ -57,6 +57,13 @@ services:
       - WAKE_WORD=${WAKE_WORD:-alexandra}
       # CRM-Datenbank (Supabase, Region Frankfurt) — RLS greift in der Datenbank
       - DATABASE_URL=${DATABASE_URL}
+      # Buchhaltung (Lexware Office / lexoffice Public API) — offene Rechnungen.
+      # Ohne Key schlummert die Anbindung. P3.7.
+      - LEXWARE_API_KEY=${LEXWARE_API_KEY:-}
+      # Meta-Ads-KPIs (Marketing API): langlebiges Token mit ads_read + Werbekonto.
+      - META_ACCESS_TOKEN=${META_ACCESS_TOKEN:-}
+      - META_AD_ACCOUNT_ID=${META_AD_ACCOUNT_ID:-}
+      - META_API_VERSION=${META_API_VERSION:-v21.0}
     networks:
       # Ins Hermes-Netz haengen -> direkte Container-zu-Container-Verbindung,
       # Hermes ist dann als "hermes-agent-pocv-hermes-agent-1" erreichbar
