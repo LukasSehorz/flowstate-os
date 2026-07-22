@@ -147,11 +147,24 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
   }
 
   // Mail-Zufluss: neue Mails fliessen als Tagesnotiz ins Gehirn (eingang/mail).
+  // NEU (Bot-Uebernahme 22.07.): neue geschaeftliche Mails werden zugleich als
+  // Telegram-Alert ueber die schnelle Stimme gemeldet — das ersetzt Hermes'
+  // Mail-Cron, der nach der Uebernahme nicht mehr direkt an Telegram liefert.
   const posteingang = require("./lib/posteingang.js");
+  const telegram = require("./lib/telegram.js");
   const mailTakt = Number(process.env.MAIL_ZUFLUSS_MS || 15 * 60 * 1000);
   const mailLaufen = () =>
     posteingang.erfassen()
-      .then((r) => { if (r.ok && r.neu) console.log(`Mail-Zufluss: ${r.neu} neue Mail(s) -> ${r.datei}`); else if (!r.ok) console.error("Mail-Zufluss:", r.grund); })
+      .then((r) => {
+        if (r.ok && r.neu) {
+          console.log(`Mail-Zufluss: ${r.neu} neue Mail(s) -> ${r.datei}`);
+          if (telegram.hatOwner?.() && Array.isArray(r.neueMails) && r.neueMails.length) {
+            const liste = r.neueMails.map((m) => `• ${m.von}: ${m.betreff}`).join("\n");
+            const wort = r.neu === 1 ? "eine neue geschäftliche Mail" : `${r.neu} neue geschäftliche Mails`;
+            telegram.push(`Du hast ${wort}:\n${liste}\nSoll ich zu einer was aufsetzen?`).catch(() => {});
+          }
+        } else if (!r.ok) console.error("Mail-Zufluss:", r.grund);
+      })
       .catch((e) => console.error("Mail-Zufluss:", e.message));
   if (vault.schreibbar("eingang")) {
     mailLaufen();
@@ -185,6 +198,20 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
   });
   app.post("/api/gehirn/whatsapp", async (req, res) => {
     try { res.json(await whatsapp.verarbeitePending()); }
+    catch (e) { res.json({ ok: false, grund: String(e.message).slice(0, 200) }); }
+  });
+
+  // Melde-Kanal: Hermes (oder eine Automatisierung) schickt Lukas proaktiv eine
+  // Nachricht ueber die schnelle Stimme (Text + Sprache in Telegram). Steht VOR
+  // dem Login-Gate offen, aber nur mit dem MELDE_SECRET — so kann Hermes' Cron
+  // per HTTP hier abliefern, ohne Dashboard-Session.
+  app.post("/api/melde", async (req, res) => {
+    if ((process.env.MELDE_SECRET || "") && req.get("x-melde-secret") !== process.env.MELDE_SECRET) {
+      return res.status(403).json({ ok: false, grund: "Secret fehlt/falsch." });
+    }
+    const text = String(req.body?.text || "").slice(0, 3000);
+    if (!text.trim()) return res.json({ ok: false, grund: "Kein Text." });
+    try { res.json(await telegram.push(text, { stimme: req.body?.stimme !== false })); }
     catch (e) { res.json({ ok: false, grund: String(e.message).slice(0, 200) }); }
   });
 }
