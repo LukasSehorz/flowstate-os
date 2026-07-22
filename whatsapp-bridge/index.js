@@ -187,6 +187,19 @@ http.createServer((req, res) => {
 
   if (req.url === "/status") return json({ verbunden, qr: hatQR });
 
+  // Nummer -> aktuelle Chat-ID(s) aufloesen (fuer LID<->Nummer beim Lesen).
+  if (req.url.startsWith("/aufloesen")) {
+    (async () => {
+      try {
+        const nr = new URL(req.url, "http://x").searchParams.get("nummer");
+        if (!sock || !verbunden || !nr) return json({ jid: null, lid: null });
+        const r = await sock.onWhatsApp(nr.replace(/[^0-9]/g, ""));
+        json({ jid: r?.[0]?.jid || null, lid: r?.[0]?.lid || null, roh: JSON.stringify(r?.[0] || null).slice(0, 200) });
+      } catch (e) { json({ jid: null, fehler: String(e.message).slice(0, 150) }); }
+    })();
+    return;
+  }
+
   if (req.url === "/senden" && req.method === "POST") {
     let b = ""; req.on("data", (c) => (b += c));
     req.on("end", async () => {
