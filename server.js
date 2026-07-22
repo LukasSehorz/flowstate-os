@@ -128,17 +128,36 @@ catch (e) { console.error("Sprach-Modul konnte nicht geladen werden:", e.message
     chronik.schreibeTagesSnapshot()
       .then((r) => { if (!r.ok) console.error("Chronik:", r.grund); })
       .catch((e) => console.error("Chronik:", e.message));
-  if (vault.schreibbar()) {
+  if (vault.schreibbar("chronik")) {
     laufen();
     setInterval(laufen, takt).unref();
-    console.log(`Zweites Gehirn: Chronik alle ${Math.round(takt / 60000)} Min. -> ${vault.WURZEL}`);
+    console.log(`Zweites Gehirn: Chronik alle ${Math.round(takt / 60000)} Min.`);
   } else {
-    console.log("Zweites Gehirn: Vault-Schreibbereich nicht beschreibbar — Chronik pausiert.");
+    console.log("Zweites Gehirn: chronik nicht beschreibbar — Chronik pausiert.");
+  }
+
+  // Mail-Zufluss: neue Mails fliessen als Tagesnotiz ins Gehirn (eingang/mail).
+  const posteingang = require("./lib/posteingang.js");
+  const mailTakt = Number(process.env.MAIL_ZUFLUSS_MS || 15 * 60 * 1000);
+  const mailLaufen = () =>
+    posteingang.erfassen()
+      .then((r) => { if (r.ok && r.neu) console.log(`Mail-Zufluss: ${r.neu} neue Mail(s) -> ${r.datei}`); else if (!r.ok) console.error("Mail-Zufluss:", r.grund); })
+      .catch((e) => console.error("Mail-Zufluss:", e.message));
+  if (vault.schreibbar("eingang")) {
+    mailLaufen();
+    setInterval(mailLaufen, mailTakt).unref();
+    console.log(`Zweites Gehirn: Mail-Zufluss alle ${Math.round(mailTakt / 60000)} Min.`);
+  } else {
+    console.log("Zweites Gehirn: eingang nicht beschreibbar — Mail-Zufluss pausiert.");
   }
 
   // Von Hand ausloesen (Test / spaeter Dashboard-Kachel).
   app.post("/api/gehirn/chronik", async (req, res) => {
     try { res.json(await chronik.schreibeTagesSnapshot()); }
+    catch (e) { res.json({ ok: false, grund: String(e.message).slice(0, 200) }); }
+  });
+  app.post("/api/gehirn/mail", async (req, res) => {
+    try { res.json(await posteingang.erfassen()); }
     catch (e) { res.json({ ok: false, grund: String(e.message).slice(0, 200) }); }
   });
 }
