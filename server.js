@@ -98,6 +98,11 @@ app.use((req, res, next) => {
 try { require("./lib/sprache-routes.js")(app, { layout }); console.log("Sprach-Modul geladen"); }
 catch (e) { console.error("Sprach-Modul konnte nicht geladen werden:", e.message); }
 
+// WhatsApp-Koppelseite (/whatsapp). Die Bruecke laeuft als eigener Container;
+// faellt sie aus, zeigt die Seite nur "nicht verbunden" — das Dashboard bleibt heil.
+try { require("./lib/whatsapp.js")(app, { layout }); console.log("WhatsApp-Modul geladen"); }
+catch (e) { console.error("WhatsApp-Modul konnte nicht geladen werden:", e.message); }
+
 // Kalender im Hintergrund frisch halten, damit eine Sprachfrage nicht warten muss.
 // Kostet keine Token — das ist ein gws-cli-Aufruf, kein Modell.
 //
@@ -151,6 +156,19 @@ catch (e) { console.error("Sprach-Modul konnte nicht geladen werden:", e.message
     console.log("Zweites Gehirn: eingang nicht beschreibbar — Mail-Zufluss pausiert.");
   }
 
+  // WhatsApp-Zufluss: die Bruecke legt Nachrichten in /wa/pending.jsonl ab; wir
+  // holen sie regelmaessig, filtern auf Geschaeftliches und schreiben ins Gehirn.
+  const whatsapp = require("./lib/whatsapp.js");
+  const waTakt = Number(process.env.WA_ZUFLUSS_MS || 3 * 60 * 1000);
+  const waLaufen = () =>
+    whatsapp.verarbeitePending()
+      .then((r) => { if (r.ok && r.neu) console.log(`WhatsApp-Zufluss: ${r.neu} neue Nachricht(en) ins Gehirn`); else if (!r.ok) console.error("WhatsApp-Zufluss:", r.grund); })
+      .catch((e) => console.error("WhatsApp-Zufluss:", e.message));
+  if (vault.schreibbar("eingang")) {
+    setInterval(waLaufen, waTakt).unref();
+    console.log(`Zweites Gehirn: WhatsApp-Zufluss alle ${Math.round(waTakt / 60000)} Min.`);
+  }
+
   // Von Hand ausloesen (Test / spaeter Dashboard-Kachel).
   app.post("/api/gehirn/chronik", async (req, res) => {
     try { res.json(await chronik.schreibeTagesSnapshot()); }
@@ -158,6 +176,10 @@ catch (e) { console.error("Sprach-Modul konnte nicht geladen werden:", e.message
   });
   app.post("/api/gehirn/mail", async (req, res) => {
     try { res.json(await posteingang.erfassen()); }
+    catch (e) { res.json({ ok: false, grund: String(e.message).slice(0, 200) }); }
+  });
+  app.post("/api/gehirn/whatsapp", async (req, res) => {
+    try { res.json(await whatsapp.verarbeitePending()); }
     catch (e) { res.json({ ok: false, grund: String(e.message).slice(0, 200) }); }
   });
 }

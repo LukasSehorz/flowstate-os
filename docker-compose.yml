@@ -30,6 +30,11 @@ services:
       # als Wetter-Vorgabe, wenn keine Stadt genannt wird.
       - SCHNELL_DENKER_MODEL=${SCHNELL_DENKER_MODEL:-claude-sonnet-5}
       - STANDORT_ORT=${STANDORT_ORT:-Dorfen, Bayern}
+      # WhatsApp-Bruecke (eigener Container). Das Dashboard zeigt die Koppelseite
+      # und holt eingehende Nachrichten aus dem gemeinsamen /wa-Volume.
+      - WA_DIR=/wa
+      - WA_BRIDGE_URL=http://whatsapp:3100
+      - WA_BRIDGE_SECRET=${WA_BRIDGE_SECRET:-}
       # ElevenLabs — Stimme fuer /sprache. Der Schluessel steht in .env und
       # muss hier durchgereicht werden: Compose gibt nur weiter, was gelistet ist.
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
@@ -55,6 +60,8 @@ services:
       - /docker/hermes-agent-pocv/data/vault/chronik:/vault/chronik:rw
       - /docker/hermes-agent-pocv/data/vault/eingang:/vault/eingang:rw
       - dashboard-data:/data
+      # Gemeinsam mit der WhatsApp-Bruecke: QR-Bild + eingehende Nachrichten.
+      - wa-state:/wa
       # Google-Token von Hermes mitnutzen (liegt unter .config/gws-cli).
       # rw statt ro: OAuth-Token laufen ab und muessen erneuert (zurueck-
       # geschrieben) werden. Read-only liess jeden Mailversand scheitern,
@@ -76,8 +83,25 @@ services:
       - traefik.http.routers.flowstate.tls.certresolver=letsencrypt
       - traefik.http.services.flowstate.loadbalancer.server.port=3000
 
+  # WhatsApp-Bruecke (Baileys) — eigener Container, bewusst isoliert. Kein
+  # Traefik-Label, kein veroeffentlichter Port: nur ueber das Docker-Netz
+  # erreichbar. Faellt er aus, laeuft das Dashboard unbeirrt weiter.
+  whatsapp:
+    build: ./whatsapp-bridge
+    container_name: flowstate-whatsapp
+    restart: unless-stopped
+    environment:
+      - WA_DIR=/wa
+      - WA_BRIDGE_PORT=3100
+      - WA_BRIDGE_SECRET=${WA_BRIDGE_SECRET:-}
+    volumes:
+      - wa-state:/wa
+    networks:
+      - default
+
 volumes:
   dashboard-data:
+  wa-state:
 
 networks:
   hermes:

@@ -1,0 +1,13 @@
+{
+  "name": "flowstate-whatsapp-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WhatsApp-Bruecke (Baileys) fuer Flowstate OS — liest eingehende Nachrichten ins zweite Gehirn und sendet auf Anweisung.",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.0",
+    "qrcode": "^1.5.4",
+    "pino": "^9.5.0"
+  }
+}
