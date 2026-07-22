@@ -226,15 +226,21 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
   const REPORT_STUNDE = Number(process.env.REPORT_STUNDE || 20);
   const berlinStunde = () => Number(new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", hour: "2-digit", hour12: false }).format(new Date()));
   const berlinTag = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date());
-  let letzterReportTag = "";
-  const reportPruefen = async () => {
-    const heute = berlinTag();
-    if (letzterReportTag === heute || berlinStunde() !== REPORT_STUNDE) return;
-    letzterReportTag = heute;
+  // Zwei proaktive Meldungen (Bereich J, "Herzstück"): morgens ein Briefing
+  // (Blick auf heute), abends der Report (Blick auf morgen). Beide von Hermes
+  // generiert, per Stimme ausgeliefert.
+  const BRIEFING_STUNDE = Number(process.env.BRIEFING_STUNDE || 8);
+  let letzterReportTag = "", letzterBriefingTag = "";
+  const proaktivSenden = async (art, name) => {
     try {
-      const r = await report.baueReport({ art: "abend" });
-      if (r.ok && telegram.hatOwner?.()) { await telegram.push(r.text); console.log("Tages-Report gesendet."); }
-    } catch (e) { console.error("Tages-Report:", e.message); }
+      const r = await report.baueReport({ art });
+      if (r.ok && telegram.hatOwner?.()) { await telegram.push(r.text); console.log(`${name} gesendet (${r.quelle || "?"}).`); }
+    } catch (e) { console.error(`${name}:`, e.message); }
+  };
+  const reportPruefen = async () => {
+    const heute = berlinTag(), std = berlinStunde();
+    if (letzterBriefingTag !== heute && std === BRIEFING_STUNDE) { letzterBriefingTag = heute; await proaktivSenden("morgen", "Morgen-Briefing"); }
+    if (letzterReportTag !== heute && std === REPORT_STUNDE) { letzterReportTag = heute; await proaktivSenden("abend", "Abend-Report"); }
   };
   // Das Dashboard besitzt den Report (Entscheidung 22.07.): Es PLANT hier
   // zuverlaessig, laesst ihn von HERMES generieren (report.js) und liest ihn per
@@ -242,7 +248,7 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
   // stoppt bei jedem Modellwechsel und er kann keine Stimme. So kommt der Report
   // verlaesslich und in Alexandras Stimme.
   setInterval(reportPruefen, 5 * 60 * 1000).unref();
-  console.log(`Zweites Gehirn: Tages-Report taeglich um ${REPORT_STUNDE} Uhr (Hermes generiert, Stimme liest vor).`);
+  console.log(`Zweites Gehirn: Morgen-Briefing ${BRIEFING_STUNDE} Uhr + Abend-Report ${REPORT_STUNDE} Uhr (Hermes generiert, Stimme liest vor).`);
 
   // Von Hand ausloesen/vorschauen (Test): { art?: "abend"|"morgen", senden?: true }
   app.post("/api/gehirn/report", async (req, res) => {
