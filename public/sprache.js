@@ -579,11 +579,12 @@
       if (!t) return;
       // "Stopp" zieht sofort — auch als einzelnes Wort, auch in der Gnadenfrist.
       if (STOPP_RE.test(roh)) { hartStop(); return; }
-      // Gnadenfrist: in den ersten 1,2 s sonst NICHT unterbrechen — sonst schneidet
-      // ihr eigenes Echo den Satzanfang ab (der "nur zur Haelfte"-Fehler).
-      if (Date.now() - bargeStartZeit < 1200) return;
-      // Sonst nur bei KLARER Aeusserung (>= 2 Woerter, >= 6 Zeichen), nicht bei Rauschen.
-      if (t.length < 6 || t.split(" ").length < 2) return;
+      // Gnadenfrist: in den ersten 2 s sonst NICHT unterbrechen — sonst schneidet
+      // ihr eigenes Echo den Satz ab (der "nur zur Haelfte"-Fehler). Lieber eine
+      // Unterbrechung verpassen als sie mitten im Satz abwuergen.
+      if (Date.now() - bargeStartZeit < 2000) return;
+      // Sonst nur bei KLARER Aeusserung (>= 3 Woerter, >= 9 Zeichen), nicht bei Rauschen/Echo.
+      if (t.length < 9 || t.split(" ").length < 3) return;
       if (redeText && redeText.includes(t)) return; // das ist ihre eigene Stimme
       unterbrechen();
     };
