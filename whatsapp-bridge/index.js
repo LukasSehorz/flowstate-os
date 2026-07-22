@@ -27,6 +27,7 @@ const AUTH_DIR = path.join(WA_DIR, "auth");
 const QR_PNG = path.join(WA_DIR, "qr.png");
 const PENDING = path.join(WA_DIR, "pending.jsonl");
 const CONTACTS = path.join(WA_DIR, "contacts.json");
+const VERLAUF = path.join(WA_DIR, "verlauf.jsonl");
 const SECRET = process.env.WA_BRIDGE_SECRET || "";
 const PORT = Number(process.env.WA_BRIDGE_PORT || 3100);
 
@@ -117,9 +118,33 @@ async function start() {
           mergeKontakte([{ id: jid, notify: m.pushName }]);
         }
       } catch {}
+      try { verlaufSpeichern(m); } catch {}   // ALLE Chats mitschreiben (nur lesen)
       try { eingang(m); } catch { /* eine Nachricht darf nichts umwerfen */ }
     }
   });
+}
+
+// Rollender Chatverlauf (ein- UND ausgehend, alle Chats) — NUR server-lokal im
+// /wa-Volume, NIE im Git-Vault. Damit Alexandra einen Chat auf Zuruf lesen kann.
+function verlaufSpeichern(m) {
+  const jid = m.key?.remoteJid || "";
+  if (!jid || jid === "status@broadcast" || jid.endsWith("@newsletter") || jid.endsWith("@broadcast")) return;
+  const text = textAus(m).trim();
+  if (!text) return;
+  const eintrag = {
+    jid,
+    richtung: m.key.fromMe ? "ich" : "sie",
+    von: m.key.fromMe ? "Lukas" : (m.pushName || jid.split("@")[0]),
+    ts: Number(m.messageTimestamp) || Math.floor(Date.now() / 1000),
+    text: text.slice(0, 1000),
+  };
+  fs.appendFileSync(VERLAUF, JSON.stringify(eintrag) + "\n");
+  try {
+    if (fs.statSync(VERLAUF).size > 900 * 1024) {
+      const zeilen = fs.readFileSync(VERLAUF, "utf-8").split("\n").filter(Boolean);
+      fs.writeFileSync(VERLAUF, zeilen.slice(-2500).join("\n") + "\n");
+    }
+  } catch {}
 }
 
 function textAus(m) {
