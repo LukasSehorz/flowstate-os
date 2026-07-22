@@ -103,6 +103,11 @@ catch (e) { console.error("Sprach-Modul konnte nicht geladen werden:", e.message
 try { require("./lib/whatsapp.js")(app, { layout }); console.log("WhatsApp-Modul geladen"); }
 catch (e) { console.error("WhatsApp-Modul konnte nicht geladen werden:", e.message); }
 
+// Telegram-Bot (Alexandra auf Telegram, Schnellspur + Sprachantwort). Schlummert
+// ohne TELEGRAM_BOT_TOKEN — beruehrt Hermes' eigenes Telegram nicht.
+try { require("./lib/telegram.js").starten(); }
+catch (e) { console.error("Telegram-Modul:", e.message); }
+
 // Kalender im Hintergrund frisch halten, damit eine Sprachfrage nicht warten muss.
 // Kostet keine Token — das ist ein gws-cli-Aufruf, kein Modell.
 //

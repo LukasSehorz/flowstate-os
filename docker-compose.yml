@@ -38,6 +38,11 @@ services:
       # Wer per WhatsApp ohne Rueckfrage angeschrieben werden darf (Namen aus
       # deinen Kontakten). Nummer kommt automatisch aus WhatsApp.
       - INTERN_WA_NAMEN=${INTERN_WA_NAMEN:-jannik}
+      # Telegram-Bot (eigener Alexandra-Bot). Ohne Token schlummert er.
+      # SELF_URL: das Dashboard ruft seine eigene Schnellspur intern auf.
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_ALLOWED_CHAT=${TELEGRAM_ALLOWED_CHAT:-}
+      - SELF_URL=http://127.0.0.1:3000
       # ElevenLabs — Stimme fuer /sprache. Der Schluessel steht in .env und
       # muss hier durchgereicht werden: Compose gibt nur weiter, was gelistet ist.
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
