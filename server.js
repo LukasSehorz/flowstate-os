@@ -115,6 +115,34 @@ catch (e) { console.error("Sprach-Modul konnte nicht geladen werden:", e.message
   console.log(`Zustand: Kalender alle ${Math.round(takt / 60000)} Min.`);
 }
 
+// Zweites Gehirn — Zufluss (Entscheidung Lukas 22.07.): Firmen-Aggregatzahlen
+// fliessen taeglich als Chronik-Note in den Vault und synchronisieren sich ueber
+// vault-sync.sh nach Obsidian. Nur Zahlen, keine Kundendaten (DSGVO). Der Takt
+// ist grob (stuendlich pruefen, aber pro Tag EINE Datei ueberschreiben) — so ist
+// die Zahl immer aktuell, ohne den Vault mit Versionen zu fluten.
+{
+  const chronik = require("./lib/chronik.js");
+  const vault = require("./lib/vault.js");
+  const takt = Number(process.env.CHRONIK_TAKT_MS || 60 * 60 * 1000);
+  const laufen = () =>
+    chronik.schreibeTagesSnapshot()
+      .then((r) => { if (!r.ok) console.error("Chronik:", r.grund); })
+      .catch((e) => console.error("Chronik:", e.message));
+  if (vault.schreibbar()) {
+    laufen();
+    setInterval(laufen, takt).unref();
+    console.log(`Zweites Gehirn: Chronik alle ${Math.round(takt / 60000)} Min. -> ${vault.WURZEL}`);
+  } else {
+    console.log("Zweites Gehirn: Vault-Schreibbereich nicht beschreibbar — Chronik pausiert.");
+  }
+
+  // Von Hand ausloesen (Test / spaeter Dashboard-Kachel).
+  app.post("/api/gehirn/chronik", async (req, res) => {
+    try { res.json(await chronik.schreibeTagesSnapshot()); }
+    catch (e) { res.json({ ok: false, grund: String(e.message).slice(0, 200) }); }
+  });
+}
+
 // ---------- Zentrale ----------
 app.get("/", async (req, res) => {
   const heute = new Date().toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });

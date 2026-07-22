@@ -48,6 +48,10 @@ services:
       - hermes
     volumes:
       - /docker/hermes-agent-pocv/data/vault:/vault:ro
+      # Zweites Gehirn: NUR dieser Unterordner ist beschreibbar. Der Vault-Sync
+      # (Host-Cron) committet + pusht ihn nach Obsidian. Rest bleibt :ro, damit
+      # der Dashboard-Code REGELN.md/Skills nicht anfassen kann.
+      - /docker/hermes-agent-pocv/data/vault/chronik:/vault/chronik:rw
       - dashboard-data:/data
       # Google-Token von Hermes mitnutzen (liegt unter .config/gws-cli).
       # rw statt ro: OAuth-Token laufen ab und muessen erneuert (zurueck-
