@@ -45,6 +45,14 @@ function istFehler(e) {
 let zaehler = { frage: 0, reserve: 0, keinJson: 0, standAlt: 0, auftragFehler: 0, erzaehlt: 0, streamAus: 0 };
 const dauern = [];
 
+// Gestartete Auftraege, die nie fertig wurden — das faellt sonst niemandem auf.
+const gestartet = new Map(), beendet = new Set();
+for (const e of zeilen) {
+  if (e.art === "auftrag-start") gestartet.set(e.id, e);
+  if (e.art === "auftrag") beendet.add(e.id);
+}
+const haengen = [...gestartet.entries()].filter(([id]) => !beendet.has(id));
+
 for (const e of zeilen) {
   if (e.art === "erzaehlspur" && e.satz) zaehler.erzaehlt++;
   if (e.art === "hermes-stream" && e.moeglich === false) zaehler.streamAus++;
@@ -84,7 +92,9 @@ for (const e of zeilen) {
       ? `   └─ ERZAEHLSPUR: „${e.satz}“ (Zwischenstand ${e.zeichen} Zeichen)`
       : `   └─ ERZAEHLSPUR: kein Satz${e.fehler ? " — " + e.fehler : ""}`);
   } else if (e.art === "hermes-stream") {
-    console.log(`   └─ HERMES-STREAMING ${e.moeglich === false ? "NICHT MOEGLICH" : "ok"}${e.grund ? " — " + e.grund : ""}`);
+    console.log(`   └─ HERMES-STREAMING ${e.moeglich === false ? "NICHT MOEGLICH" : "ok (erste Daten nach " + sek(e.ersteDatenMs) + ")"}${e.grund ? " — " + e.grund : ""}`);
+  } else if (e.art === "auftrag-start") {
+    console.log(`   └─ Auftrag "${e.was}" GESTARTET (${e.id}): ${String(e.auftrag || "").slice(0, 80)}`);
   } else if (e.art === "kalender-frisch") {
     console.log(`   └─ Kalender nach Auftrag ${e.nach} neu eingelesen`);
   } else {
@@ -103,3 +113,7 @@ console.log(`Reserve eingesprungen: ${zaehler.reserve} · kein sauberes JSON: ${
   `Stand nicht frisch: ${zaehler.standAlt} · Auftraege fehlgeschlagen: ${zaehler.auftragFehler}`);
 console.log(`Erzaehlspur: ${zaehler.erzaehlt} Zwischensaetze` +
   (zaehler.streamAus ? ` · Hermes-Streaming ${zaehler.streamAus}x nicht moeglich` : ""));
+if (haengen.length) {
+  console.log(`\n⚠️  ${haengen.length} Auftrag/Auftraege gestartet, aber NIE fertig geworden:`);
+  for (const [id, e] of haengen) console.log(`   ${uhr(e.zeit)} "${e.was}" (${id}): ${String(e.auftrag || "").slice(0, 70)}`);
+}
