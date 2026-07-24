@@ -42,8 +42,21 @@ pruefe("Leer wird abgelehnt", zeitNormal("") === null);
 pruefe("Halbes Datum wird abgelehnt", zeitNormal("2026-07") === null);
 
 // --- Ende automatisch bestimmen ------------------------------------------
+//
+// Diese Faelle sind der Grund, warum der Test ueberhaupt existiert: Die erste
+// Fassung von stundeSpaeter() las die Uhrzeit in der Zeitzone des PROZESSES und
+// schrieb den Versatz der Eingabe darauf. Auf dem Entwicklerrechner (Berlin)
+// stimmte das zufaellig, im Container (UTC) wurde aus Start 14:00 ein Ende von
+// 13:00 — Google lehnte den Termin ab. Der Test lief gruen und war wertlos.
+// Deshalb wird unten AUSDRUECKLICH in mehreren Zeitzonen geprueft.
 pruefe("Eine Stunde drauf", stundeSpaeter("2026-07-26T10:00:00+02:00") === "2026-07-26T11:00:00+02:00");
 pruefe("Ueber Mitternacht hinweg", stundeSpaeter("2026-07-26T23:30:00+02:00") === "2026-07-27T00:30:00+02:00");
+pruefe("Ueber den Monatswechsel", stundeSpaeter("2026-07-31T23:30:00+02:00") === "2026-08-01T00:30:00+02:00");
+pruefe("Zulu-Zeit behaelt Zulu", stundeSpaeter("2026-07-26T10:00:00Z") === "2026-07-26T11:00:00Z");
+pruefe("Winterzeit-Versatz bleibt stehen", stundeSpaeter("2026-01-15T09:30:00+01:00") === "2026-01-15T10:30:00+01:00");
+pruefe("Ende liegt immer NACH dem Start",
+  Date.parse(stundeSpaeter("2026-07-26T14:00:00+02:00")) > Date.parse("2026-07-26T14:00:00+02:00"));
+pruefe("Unlesbares ergibt null", stundeSpaeter("2026-07-26T14:00") === null);
 
 // --- Termin finden: Lukas nennt eine Beschreibung, keine ID --------------
 const { terminFinden } = require("../lib/sprache-routes.js");
@@ -79,6 +92,31 @@ pruefe("Termine ohne ID kommen nicht in Frage",
   r = await werkzeuge.terminEintragen({ titel: "Spazieren", start: "2026-07-26T10:00" });
   pruefe("Ohne gws-cli: sauberer Fehler statt Absturz", typeof r.ok === "boolean");
   console.log(`   (hier ${r.ok ? "eingetragen" : "erwartet fehlgeschlagen: " + String(r.grund).slice(0, 60)})`);
+
+  // --- Der eigentliche Waechter: dasselbe in FREMDEN Zeitzonen ------------
+  //
+  // Der Fehler vom 25.07. war nur sichtbar, wenn Prozess-Zeitzone und
+  // Termin-Zeitzone auseinanderliefen. Genau das wird hier erzwungen: derselbe
+  // Test laeuft in Kindprozessen mit TZ=UTC, Amerika und Asien. Kommt dort ein
+  // anderes Ergebnis heraus als in Berlin, rechnet der Code mit der Zeitzone
+  // des Servers — und das darf er nicht.
+  if (!process.env.TERMIN_TEST_KIND) {
+    const { execFileSync } = require("child_process");
+    const proben = ["UTC", "America/New_York", "Asia/Tokyo", "Europe/Berlin"];
+    const skript = `const {stundeSpaeter,zeitNormal}=require(${JSON.stringify(require.resolve("../lib/werkzeuge.js"))});` +
+      `console.log(JSON.stringify([stundeSpaeter("2026-07-26T14:00:00+02:00"),` +
+      `stundeSpaeter("2026-07-26T23:30:00+02:00"),zeitNormal("2026-07-26T10:00")]));`;
+    const erwartet = JSON.stringify(["2026-07-26T15:00:00+02:00", "2026-07-27T00:30:00+02:00", "2026-07-26T10:00:00+02:00"]);
+    for (const tz of proben) {
+      let raus = "";
+      try {
+        raus = execFileSync(process.execPath, ["-e", skript],
+          { env: { ...process.env, TZ: tz, TERMIN_TEST_KIND: "1" }, encoding: "utf-8" }).trim();
+      } catch (e) { raus = "FEHLER: " + String(e.message).slice(0, 80); }
+      pruefe(`Zeitzonen-unabhaengig in ${tz}`, raus === erwartet);
+      if (raus !== erwartet) console.log(`      erwartet ${erwartet}\n      bekommen ${raus}`);
+    }
+  }
 
   console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Faelle bestanden.");
   process.exit(fehler ? 1 : 0);
