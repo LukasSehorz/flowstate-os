@@ -852,8 +852,24 @@ const PLACEHOLDERS = {
   buchhaltung: ["Buchhaltung", "Einnahmen & Ausgaben auf einen Blick, Lexware-Anbindung, Beleg-Eingang. Pain Point Nr. 2 aus dem Onboarding."],
   marketing: ["Marketing & Content", "Redaktionsplan, Social-Posts (Masse schlägt Qualität), Kampagnen-Zahlen, Funnel-Übersicht (Zahnärzte, Physios)."],
   projekte: ["Projekte", "Laufende Kundenprojekte mit Status, nächsten Schritten und Verantwortlichen. Entsteht automatisch bei Deal = gewonnen."],
-  einstellungen: ["Einstellungen", "Benutzer, Zugänge, Instanzen (Alexandra/Jarvis), Modell-Routing, Kostenübersicht."],
 };
+
+// Einstellungen: eigene Seite (kein Platzhalter), zeigt die angemeldete Identitaet
+// (Wunsch Lukas 22.07.: "man sollte immer nachsehen koennen, mit welcher Mail man
+// angemeldet ist").
+app.get("/einstellungen", (req, res) => {
+  const u = req.session.crm;
+  const konto = u
+    ? `<div class="row"><span>Name</span><span><strong>${esc(u.name)}</strong></span></div>
+       <div class="row"><span>E-Mail</span><span><strong>${esc(u.email)}</strong></span></div>
+       <div class="row"><span>Rolle</span><span>${esc(u.rolle)}</span></div>`
+    : `<p class="muted">Du bist über das gemeinsame <strong>Dashboard-Passwort</strong> angemeldet — das ist kein persönliches Konto und hat keine E-Mail. Für dein persönliches Konto (mit E-Mail) über <a class="btn-link" href="/login">Login</a> mit deiner E-Mail anmelden.</p>`;
+  res.send(layout("Einstellungen", "einstellungen", `
+    <div class="card"><h2>Angemeldet als</h2>${konto}
+      <p class="muted small" style="margin-top:12px"><a class="btn-link" href="/logout">Abmelden</a></p></div>
+    <div class="card placeholder"><h2>🔜 Weitere Einstellungen in Vorbereitung</h2>
+      <p>Benutzer &amp; Zugänge, Instanzen (Alexandra/Jarvis), Modell-Routing, Kostenübersicht.</p></div>`, req));
+});
 
 for (const [id, [title, desc]] of Object.entries(PLACEHOLDERS)) {
   app.get("/" + id, (req, res) => {
