@@ -3,3 +3,8 @@ data/
 .env
 *.log
 shots/
+.DS_Store
+**/.DS_Store
+.claude/
+/Bilder/
+/C:/
