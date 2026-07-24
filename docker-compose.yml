@@ -29,6 +29,12 @@ services:
       # Auswertung (Wetter, Zahlen), unabhaengig von Hermes. STANDORT_ORT dient
       # als Wetter-Vorgabe, wenn keine Stadt genannt wird.
       - SCHNELL_DENKER_MODEL=${SCHNELL_DENKER_MODEL:-claude-sonnet-5}
+      # Verstehen der Sprachbefehle (Entscheidung 24.07.): Sonnet statt Haiku,
+      # der schwerste Schritt bekommt das staerkste Modell. Blitz-Zusage bleibt
+      # Haiku. Faellt Sonnet aus, faengt Haiku als Reserve auf.
+      - SPRACHE_VERSTEHEN_MODEL=${SPRACHE_VERSTEHEN_MODEL:-claude-sonnet-5}
+      # Sprachprotokoll: Tagesdateien unter /data/sprachlog/ (Aufbewahrung Tage).
+      - SPRACHLOG_TAGE=${SPRACHLOG_TAGE:-30}
       - STANDORT_ORT=${STANDORT_ORT:-Dorfen, Bayern}
       # WhatsApp-Bruecke (eigener Container). Das Dashboard zeigt die Koppelseite
       # und holt eingehende Nachrichten aus dem gemeinsamen /wa-Volume.
