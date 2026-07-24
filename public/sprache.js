@@ -42,13 +42,35 @@
   let stilleTimer = null;         // wartet nach dem Reden auf echte Stille
   let letzteAktivitaet = 0;       // wann zuletzt gesprochen/geantwortet wurde
   let lausche = false;            // laeuft gerade eine Zuhoer-Erkennung? (verhindert Doppelstart)
+  let offeneArbeit = 0;           // wie viele Hintergrundauftraege gerade laufen
   // Tempo-Wuensche Lukas 22.07.: ausreden lassen, aber nicht ewig nachlaufen.
   const ENDE_STILLE_MS = 1400;    // so lange Pause NACH Sprache = fertig geredet
-  const GEDULD_MS = 10000;        // so lange Gesamt-Stille, dann schliesst das Gespraech
+  // Geduld (Lukas 24.07.): Das Gespraech bleibt OFFEN, bis er es beendet — vorher
+  // fiel es nach 10 s Stille zu und er musste staendig neu wecken. Jetzt drei
+  // Minuten Ruhe, und solange im Hintergrund etwas laeuft, schliesst es GAR NICHT:
+  // er soll jederzeit "wie schaut's aus?" dazwischenfragen koennen.
+  const GEDULD_MS = 180000;
   // Klare Stopp-Kommandos: sofort aufhoeren, egal ob sie gerade redet oder zuhoert.
   // Bewusst eng: nur eindeutige Stopp-Befehle. "halt"/"genug"/"ruhe" sind im
   // Deutschen zu alltaeglich — sonst stoppt sie sich beim eigenen "das ist halt so".
   const STOPP_RE = /\b(stopp?|aufh[oö]ren|h[oö]r auf|sei (?:still|ruhig))\b/i;
+  // Das Gespraech WIRKLICH beenden — nur auf eine klare Verabschiedung
+  // (Lukas 24.07.). Wichtig: "ok, ich mach mich an die Arbeit" beendet NICHT,
+  // da bleibt sie an. Fragen ("bist du fertig?") beenden ebenfalls nie.
+  const ENDE_RE = new RegExp(
+    "(?:^|\\b)(?:" +
+    "das war'?s(?: erst ?mal| f[uü]r jetzt| danke)?" +
+    "|passt(?:,? (?:so|danke|fertig|erst ?mal))" +
+    "|fertig f[uü]r (?:jetzt|heute)" +
+    "|schalt\\w*(?: ich)?(?: dich)?(?: wieder)? (?:ab|aus)" +
+    "|mach(?:e|st)?(?: ich)?(?: dich)?(?: wieder)? aus" +
+    "|(?:bis (?:sp[aä]ter|dann|morgen))|tsch[uü]ss|ciao|feierabend" +
+    "|danke,? das war'?s" +
+    ")(?:\\b|$)", "i");
+  // Alles Fragende beendet nie — "bist du fertig?" ist eine Zwischenfrage.
+  const FRAGE_RE = /\?|^\s*(?:bist|hast|habt|wie|was|wann|wo|warum|wieso|kannst|ist|sind|gibt)\b/i;
+
+  const willBeenden = (t) => ENDE_RE.test(t) && !FRAGE_RE.test(t);
 
   // ---------------------------------------------------------------- Oberflaeche
 
@@ -251,11 +273,23 @@
   }
 
   // Stille Runde: Gespraech offen halten, solange die Geduld reicht — nicht
-  // gleich schliessen (sonst muesste Lukas staendig neu wecken).
+  // gleich schliessen (sonst muesste Lukas staendig neu wecken). Laeuft im
+  // Hintergrund noch Arbeit, bleibt es unbegrenzt offen: er soll jederzeit
+  // "wie schaut's aus?" dazwischenwerfen koennen (Lukas 24.07.).
   function geduld() {
     if (!imGespraech) { setzeZustand("ruhe"); return; }
-    if (Date.now() - letzteAktivitaet > GEDULD_MS) { gespraechBeenden(); return; }
+    if (!offeneArbeit && Date.now() - letzteAktivitaet > GEDULD_MS) { gespraechBeenden(); return; }
     setTimeout(() => { if (imGespraech) hoeren(); }, 250);
+  }
+
+  // Verabschiedung auf einen klaren Schlusssatz ("passt, das war's").
+  async function verabschieden() {
+    const s = offeneArbeit
+      ? "Alles klar — ich arbeite im Hintergrund weiter und meld mich, sobald es steht."
+      : "Alles klar, bis später.";
+    zeile("sie", s);
+    await sprich(s).catch(() => {});
+    gespraechBeenden();
   }
 
   // Begruessung: beim ERSTEN Mal die volle Ansage ("Grosser Herrscher..."),
@@ -325,6 +359,7 @@
       clearTimeout(stilleTimer);
       try { r.stop(); } catch {}
       if (STOPP_RE.test(text)) { hartStop(); return; }   // "Stopp" -> Gespraech aus
+      if (willBeenden(text)) { verabschieden(); return; } // "passt, das war's" -> aus
       verarbeiten(text);
     };
 
@@ -486,10 +521,12 @@
     }
 
     if (lang.length) {
-      // Nur lange Arbeit: sie hat "ich meld mich" gesagt (oder wir sagen es),
-      // dann pausiert das Gespraech — Lukas ist frei.
-      if (!d.sprich) await sprich("Alles klar — das dauert ein paar Minuten, ich meld mich, sobald es fertig ist.");
-      return gespraechBeenden();
+      // Lange Arbeit laeuft im Hintergrund — das Gespraech bleibt trotzdem OFFEN
+      // (Lukas 24.07.). Vorher schloss es hier, und er musste erst wieder
+      // "Hey Alexandra" sagen, um nachzufragen. Jetzt hoert sie einfach weiter
+      // zu: "wie schaut's aus?" beantwortet sie aus dem laufenden Stand.
+      if (!d.sprich) await sprich("Alles klar — das dauert einen Moment, ich bleib dran.");
+      return weiter();
     }
 
     weiter();
@@ -530,20 +567,25 @@
   // Gespraech pausiert ist. Meldet das Ergebnis, sobald es da ist: aus der Ruhe
   // heraus, ohne dass Lukas erneut fragen muss.
   async function hintergrundAuftrag(id) {
-    for (let i = 0; i < 400; i++) {
-      await new Promise((r) => setTimeout(r, 1500));
-      const d = await fetch("/api/sprache/auftrag/" + id).then((r) => r.json()).catch(() => null);
-      if (!d) continue;              // Netzhusten: weiter versuchen
-      if (!d.ok) return;
-      if (d.fertig) {
-        const text = d.reply ||
-          ("Ich hab's versucht, aber es hat nicht ganz geklappt" + (d.hint ? " — " + d.hint : "") + ".");
-        zeile("sie", text);
-        await sprich(text);         // stoppt Wake/Lauschen, spricht, seriell
-        if (!imGespraech) setzeZustand("ruhe");
-        return;
+    offeneArbeit++;                 // solange das laeuft, schliesst das Gespraech nicht
+    try {
+      for (let i = 0; i < 400; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const d = await fetch("/api/sprache/auftrag/" + id).then((r) => r.json()).catch(() => null);
+        if (!d) continue;              // Netzhusten: weiter versuchen
+        if (!d.ok) return;
+        if (d.fertig) {
+          const text = d.reply ||
+            ("Ich hab's versucht, aber es hat nicht ganz geklappt" + (d.hint ? " — " + d.hint : "") + ".");
+          zeile("sie", text);
+          await sprich(text);         // stoppt Wake/Lauschen, spricht, seriell
+          // Laeuft das Gespraech noch, gleich weiterhoeren — Lukas kann direkt
+          // nachfassen, ohne neu zu wecken.
+          if (imGespraech) weiter(); else setzeZustand("ruhe");
+          return;
+        }
       }
-    }
+    } finally { offeneArbeit = Math.max(0, offeneArbeit - 1); }
   }
 
   // ---------------------------------------------------------------- Sprechen
