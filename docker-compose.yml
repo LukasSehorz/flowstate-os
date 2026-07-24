@@ -18,6 +18,12 @@ services:
       - HERMES_CHAT_URL=${HERMES_CHAT_URL}
       - HERMES_API_KEY=${HERMES_API_KEY}
       - HERMES_MODEL=hermes-agent
+      # Erzaehlspur (Stufe 2, 24.07.): Hermes wird beim Streamen nach
+      # Zwischenstaenden gefragt, damit Alexandra unterwegs sagen kann, woran
+      # sie gerade ist — aus echtem Text, nie geraten. Kann der Endpunkt kein
+      # Streaming, faellt alles automatisch auf den bisherigen Weg zurueck.
+      # Auf "aus" setzen, um das Streamen ganz abzuschalten.
+      - HERMES_STREAM=${HERMES_STREAM:-an}
       # Schnellspur (Ebene 1/2) — direktes Modell ohne Agent-Schleife.
       # E1-Entscheidung 21.07.2026: Anthropic Haiku 4.5. Ohne Schluessel
       # faellt alles auf Hermes zurueck (langsamer, aber nie kaputt).
