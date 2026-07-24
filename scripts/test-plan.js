@@ -26,22 +26,35 @@ function auftragAnlegen(id) {
 (async () => {
   const original = schnell.frage;
 
-  // 1. Normalfall: vier saubere Zeilen.
+  // 1. Normalfall lange Arbeit: vier Schritte + Abschluss-Satz.
   schnell.frage = async () => [
     "Ich fang mit der Struktur an — Ueberschrift, Nutzen, Beispiele.",
     "Jetzt schreib ich den Einstieg, der muss sitzen.",
     "Dann kommen die Beispiele, sonst bleibt es abstrakt.",
     "Zum Schluss les ich nochmal in Ruhe drueber.",
+    "Ab hier dauert's ein paar Minuten — ich meld mich.",
   ].join("\n");
-  await planBauen("t1", "Onepager ueber ChatGPT erstellen");
-  let e = AUFTRAEGE.get("t1") || auftragAnlegen("t1");
-  // planBauen legt den Plan nur an, wenn der Auftrag existiert -> neu bauen.
   auftragAnlegen("t2");
   await planBauen("t2", "Onepager ueber ChatGPT erstellen");
-  e = AUFTRAEGE.get("t2");
+  let e = AUFTRAEGE.get("t2");
   pruefe("Vier Schritte uebernommen", e.plan?.length === 4);
   pruefe("Zaehler startet bei null", e.planIndex === 0);
   pruefe("Erster Schritt ist der erste Satz", e.plan[0].startsWith("Ich fang mit der Struktur"));
+  pruefe("Abschluss-Satz getrennt abgelegt", e.abschluss === "Ab hier dauert's ein paar Minuten — ich meld mich.");
+  pruefe("Abschluss steht NICHT in den Schritten", !e.plan.includes(e.abschluss));
+
+  // 1b. Recherche bekommt weniger Schritte (sie ist in Sekunden durch).
+  schnell.frage = async () => [
+    "Ich such erst die aktuellen Zahlen.",
+    "Dann vergleich ich die Anbieter.",
+    "Danach fass ich es kurz zusammen.",
+    "Bin gleich durch, dauert nicht lang.",
+  ].join("\n");
+  auftragAnlegen("t2b");
+  await planBauen("t2b", "Preise fuer Meta-Ads recherchieren", "sonnet");
+  const b = AUFTRAEGE.get("t2b");
+  pruefe("Recherche: nur drei Schritte", b.plan?.length === 3);
+  pruefe("Recherche: vierte Zeile wird zum Abschluss", b.abschluss === "Bin gleich durch, dauert nicht lang.");
 
   // 2. Aufzaehlungszeichen, Nummern und Anfuehrungszeichen fliegen raus.
   schnell.frage = async () => [
@@ -67,6 +80,18 @@ function auftragAnlegen(id) {
   pruefe("Hoechstens vier Schritte", e.plan.length === 4);
   pruefe("Erster echter Satz gewinnt", e.plan[0] === "Ich starte mit der Gliederung.");
 
+  // 3b. Liefert das Modell NUR die Schritte (keine Abschlusszeile), darf der
+  //     letzte Arbeitsschritt nicht als Abschied missbraucht werden.
+  schnell.frage = async () => [
+    "Ich sortier erst die Unterlagen.", "Dann rechne ich durch.",
+    "Danach schreib ich es auf.", "Zum Schluss pruef ich die Zahlen.",
+  ].join("\n");
+  auftragAnlegen("t4b");
+  await planBauen("t4b", "Angebot rechnen");
+  const c = AUFTRAEGE.get("t4b");
+  pruefe("Ohne fuenfte Zeile: kein erfundener Abschluss", c.abschluss === "");
+  pruefe("Ohne fuenfte Zeile: alle vier Schritte bleiben", c.plan.length === 4);
+
   // 4. Faellt das Modell aus, bleibt sie STILL — lieber nichts als eine Floskel.
   schnell.frage = async () => { throw new Error("Anthropic 529"); };
   auftragAnlegen("t5");
@@ -87,7 +112,7 @@ function auftragAnlegen(id) {
   pruefe("Unbekannter Auftrag crasht nicht", !geworfen);
 
   schnell.frage = original;
-  for (const id of ["t1", "t2", "t3", "t4", "t5", "t6"]) AUFTRAEGE.delete(id);
+  for (const id of ["t2", "t2b", "t3", "t4", "t4b", "t5", "t6"]) AUFTRAEGE.delete(id);
   console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Faelle bestanden.");
   process.exit(fehler ? 1 : 0);
 })();

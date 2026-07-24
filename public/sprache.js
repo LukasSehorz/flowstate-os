@@ -585,7 +585,10 @@
   async function auftragKurz(id, leise = false) {
     const warte = zeile("sie", "…einen Moment", true);
     setzeZustand("denken");
-    let fueller = false;
+    // Auch hier die Erzaehlspur (Lukas 25.07.): Bei einer Recherche will er
+    // mitgenommen werden, statt einmal "bin gleich so weit" zu hoeren — das
+    // war immer derselbe Satz und sagte nichts ueber die Aufgabe aus.
+    let naechsteErzaehlung = Date.now() + 4000;
     for (let i = 0; i < 45; i++) {
       await new Promise((r) => setTimeout(r, 1200));
       const d = await fetch("/api/sprache/auftrag/" + id).then((r) => r.json()).catch(() => null);
@@ -598,12 +601,12 @@
         return;
       }
       const sek = Math.round(i * 1.2 + 1);
-      // Nach ~6 s eine ehrliche Zwischenansage, einmal — kein Dauergeplapper,
-      // und nur wenn diese Aktion allein laeuft (sonst reden mehrere durcheinander).
-      if (!fueller && !leise && sek >= 6) {
-        fueller = true;
-        const f = "Bin gleich so weit, ich schau noch kurz.";
-        zeile("sie", f); sprich(f).catch(() => {});
+      // Laufen mehrere Aktionen parallel, bleibt es still — sonst reden sie
+      // durcheinander. Der Server liefert nur echte Vorgehens-Saetze.
+      if (!leise && Date.now() >= naechsteErzaehlung && !redetGerade) {
+        naechsteErzaehlung = Date.now() + 5200;
+        const f = await fetch("/api/sprache/fortschritt/" + id).then((r) => r.json()).catch(() => null);
+        if (f?.satz && !redetGerade) { zeile("sie", f.satz); await sprich(f.satz).catch(() => {}); }
       }
       if (warte) warte.textContent = "…einen Moment (" + sek + " s)";
     }
@@ -628,7 +631,7 @@
         // damit kaeme nie ein Satz.)
         const lukasSpricht = Date.now() - letzteAktivitaet < 3000;
         if (Date.now() >= naechsteErzaehlung && !redetGerade && !lukasSpricht) {
-          naechsteErzaehlung = Date.now() + 12500;
+          naechsteErzaehlung = Date.now() + 5200;   // dicht genug zum Mitgehen
           const f = await fetch("/api/sprache/fortschritt/" + id).then((r) => r.json()).catch(() => null);
           if (f?.satz && !redetGerade) {
             zeile("sie", f.satz);
