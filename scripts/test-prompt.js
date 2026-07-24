@@ -28,8 +28,12 @@ const hat = (...teile) => teile.every((t) => p.toLowerCase().includes(t.toLowerC
 pruefe("Werkzeug-Verbot (sonst 50 s statt 3)", hat("RUFE KEINE WERKZEUGE AUF"));
 pruefe("JSON-Vertrag mit allen sieben Feldern",
   hat("zusage", "text", "mail", "whatsapp", "termin", "aktionen", "zeige"));
-pruefe("Termine gehen direkt, nicht mehr an hermes",
-  hat("Termine eintragen", "KEINE Aktion an hermes"));
+pruefe("Kalender geht direkt, nicht mehr an hermes",
+  hat("Kalender aendern", "NIE ueber hermes"));
+pruefe("Alle drei Kalender-Faelle beschrieben",
+  hat("EINTRAGEN", "VERSCHIEBEN", "ABSAGEN"));
+pruefe("Freie Zeiten kommen aus dem STAND, ohne Werkzeug",
+  hat("WANN HAB ICH ZEIT", "Keine Aktion"));
 pruefe("Alle sechs Aktionsarten erklaert",
   hat("wetter", "mail", "wa_lesen", "gehirn", "sonnet", "hermes"));
 pruefe("Aktionen laufen parallel", hat("parallel"));
@@ -68,8 +72,18 @@ pruefe("Aktionsliste nicht faelschlich 'fuenf' genannt (es sind sechs)",
   !/die fuenf aktionsarten/i.test(p));
 
 // --- Groesse: der eigentliche Zweck der Uebung ----------------------------
+//
+// Ausgangswert war 11.814 Zeichen — da war die Regeltreue messbar schlecht
+// (6 von 36 Anfragen fielen aus). Nach dem Entschlacken: 5.632.
+//
+// Am 25.07. bewusst von 7.000 auf 7.500 angehoben: Der Kalender-Abschnitt
+// (eintragen/verschieben/absagen) ist neue FUNKTIONALITAET, kein Wildwuchs —
+// er nimmt Hermes Arbeit ab, die dort 44 s dauerte. Die Grenze wandert nicht
+// bei jeder Gelegenheit mit: Wer sie das naechste Mal reisst, soll erst
+// zusammenstreichen und nur dann anheben, wenn wirklich Neues dazukommt.
+const GRENZE = 7500;
 console.log(`\nGroesse: ${p.length} Zeichen (~${Math.round(p.length / 3.6)} Token)`);
-pruefe("Bleibt unter 7.000 Zeichen (war 11.814)", p.length < 7000);
+pruefe(`Bleibt unter ${GRENZE} Zeichen (war 11.814)`, p.length < GRENZE);
 
 console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Faelle bestanden.");
 process.exit(fehler ? 1 : 0);

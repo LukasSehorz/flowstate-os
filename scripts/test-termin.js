@@ -45,6 +45,28 @@ pruefe("Halbes Datum wird abgelehnt", zeitNormal("2026-07") === null);
 pruefe("Eine Stunde drauf", stundeSpaeter("2026-07-26T10:00:00+02:00") === "2026-07-26T11:00:00+02:00");
 pruefe("Ueber Mitternacht hinweg", stundeSpaeter("2026-07-26T23:30:00+02:00") === "2026-07-27T00:30:00+02:00");
 
+// --- Termin finden: Lukas nennt eine Beschreibung, keine ID --------------
+const { terminFinden } = require("../lib/sprache-routes.js");
+const KAL = [
+  { id: "e1", titel: "Physio", start: "2026-07-27T10:00:00+02:00" },
+  { id: "e2", titel: "Kalhofer-Anruf", start: "2026-07-27T14:00:00+02:00" },
+  { id: "e3", titel: "Physio", start: "2026-07-30T10:00:00+02:00" },
+  { id: "e4", titel: "Erstgespräch Herr Müller", start: "2026-07-28T09:00:00+02:00" },
+];
+pruefe("Eindeutiger Titel wird gefunden", terminFinden("Kalhofer-Anruf", KAL)?.id === "e2");
+pruefe("Teilwort reicht", terminFinden("Kalhofer", KAL)?.id === "e2");
+pruefe("Fuellwoerter stoeren nicht ('den Termin mit Müller')",
+  terminFinden("den Termin mit Müller", KAL)?.id === "e4");
+pruefe("Zwei gleichnamige -> mehrdeutig statt geraten",
+  Array.isArray(terminFinden("Physio", KAL)?.mehrdeutig));
+pruefe("Mit Tag eingegrenzt wird es eindeutig",
+  terminFinden("Physio", KAL, "2026-07-30")?.id === "e3");
+pruefe("Unbekannter Termin -> null", terminFinden("Zahnarzt", KAL) === null);
+pruefe("Leere Beschreibung -> null", terminFinden("", KAL) === null);
+pruefe("Leerer Kalender -> null", terminFinden("Physio", []) === null);
+pruefe("Termine ohne ID kommen nicht in Frage",
+  terminFinden("Ohne", [{ titel: "Ohne ID", start: "2026-07-27T10:00:00+02:00" }]) === null);
+
 // --- terminEintragen: Pruefungen VOR dem Aufruf ---------------------------
 (async () => {
   let r = await werkzeuge.terminEintragen({ titel: "", start: "2026-07-26T10:00" });
