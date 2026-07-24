@@ -112,6 +112,7 @@ node scripts/test-sprache.js  # Sprach-Verstehen (Sonnet + Haiku-Reserve, ohne e
 node scripts/test-kontakte.js # WhatsApp-Kontaktaufloesung (LID vs. echte Nummer) + Gruppen-Freigabe
 node scripts/test-gespraech.js  # Welche Saetze beenden das Gespraech, welche nicht
 node scripts/test-erzaehlspur.js # Streaming-Empfang von Hermes (Zwischenstaende)
+node scripts/test-plan.js     # Vorgehensplan, den sie waehrend der Arbeit erzaehlt
 node scripts/shot-alles.js    # Screenshots aller Seiten in hell & dunkel (braucht Chrome)
 ```
 

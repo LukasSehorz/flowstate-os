@@ -89,8 +89,12 @@ for (const e of zeilen) {
     console.log(`   └─ WhatsApp an ${e.an}: ${e.ausgang}${e.grund ? " — " + e.grund : ""}`);
   } else if (e.art === "erzaehlspur") {
     console.log(e.satz
-      ? `   └─ ERZAEHLSPUR: „${e.satz}“ (Zwischenstand ${e.zeichen} Zeichen)`
+      ? `   └─ ERZAEHLT${e.schritt ? " (Schritt " + e.schritt + ")" : ""}: „${e.satz}“`
       : `   └─ ERZAEHLSPUR: kein Satz${e.fehler ? " — " + e.fehler : ""}`);
+  } else if (e.art === "plan") {
+    console.log((e.schritte || []).length
+      ? `   └─ VORGEHENSPLAN (${e.schritte.length} Schritte):\n` + e.schritte.map((s) => `        · ${s}`).join("\n")
+      : `   └─ VORGEHENSPLAN: keiner${e.fehler ? " — " + e.fehler : ""}`);
   } else if (e.art === "hermes-stream") {
     console.log(`   └─ HERMES-STREAMING ${e.moeglich === false ? "NICHT MOEGLICH" : "ok (erste Daten nach " + sek(e.ersteDatenMs) + ")"}${e.grund ? " — " + e.grund : ""}`);
   } else if (e.art === "auftrag-start") {

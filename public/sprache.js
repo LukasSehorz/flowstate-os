@@ -615,16 +615,20 @@
   // heraus, ohne dass Lukas erneut fragen muss.
   async function hintergrundAuftrag(id) {
     offeneArbeit++;                 // solange das laeuft, schliesst das Gespraech nicht
-    let naechsteErzaehlung = Date.now() + 8000;   // erst nach ~8 s das erste Mal
+    let naechsteErzaehlung = Date.now() + 5000;   // erster Schritt nach ~5 s
     try {
       for (let i = 0; i < 400; i++) {
         await new Promise((r) => setTimeout(r, 1500));
 
-        // Erzaehlspur (Stufe 2): unterwegs kurz sagen, woran sie gerade ist.
-        // Nur wenn sie gerade nicht ohnehin redet und Lukas nicht spricht —
-        // sie soll begleiten, nicht dazwischenfunken.
-        if (Date.now() >= naechsteErzaehlung && !redetGerade && zustand !== "lauschen") {
-          naechsteErzaehlung = Date.now() + 12000;
+        // Erzaehlspur: unterwegs sagen, WORAN sie arbeitet.
+        // Zwei Bedingungen, damit sie begleitet statt dazwischenzufunken:
+        // sie redet gerade nicht — und Lukas hat in den letzten Sekunden nichts
+        // gesagt. (Auf den Zustand "lauschen" zu pruefen waere falsch: waehrend
+        // der Arbeit bleibt das Gespraech offen, sie hoert also DAUERND zu —
+        // damit kaeme nie ein Satz.)
+        const lukasSpricht = Date.now() - letzteAktivitaet < 3000;
+        if (Date.now() >= naechsteErzaehlung && !redetGerade && !lukasSpricht) {
+          naechsteErzaehlung = Date.now() + 12500;
           const f = await fetch("/api/sprache/fortschritt/" + id).then((r) => r.json()).catch(() => null);
           if (f?.satz && !redetGerade) {
             zeile("sie", f.satz);
