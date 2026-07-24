@@ -43,6 +43,7 @@
   let letzteAktivitaet = 0;       // wann zuletzt gesprochen/geantwortet wurde
   let lausche = false;            // laeuft gerade eine Zuhoer-Erkennung? (verhindert Doppelstart)
   let offeneArbeit = 0;           // wie viele Hintergrundauftraege gerade laufen
+  let pausiert = false;           // Mikro auf Pause — Gespraech bleibt aber offen
   // Tempo-Wuensche Lukas 22.07.: ausreden lassen, aber nicht ewig nachlaufen.
   const ENDE_STILLE_MS = 1400;    // so lange Pause NACH Sprache = fertig geredet
   // Geduld (Lukas 24.07.): Das Gespraech bleibt OFFEN, bis er es beendet — vorher
@@ -137,6 +138,9 @@
 .sm-kugel[data-zustand="denken"]{border-color:var(--warning)}
 .sm-kugel[data-zustand="denken"] .sm-ring{stroke:var(--warning);stroke-dasharray:20 60;
   animation:sm-dreh 1.1s linear infinite}
+.sm-kugel[data-zustand="pause"]{border-color:var(--border);opacity:.6}
+.sm-kugel[data-zustand="pause"] .sm-pegel line{opacity:.12}
+.sm-kugel[data-zustand="pause"] .sm-ring{animation:none}
 .sm-kugel[data-zustand="sprechen"]{border-color:var(--success)}
 .sm-kugel[data-zustand="sprechen"] .sm-ring{stroke:var(--success)}
 .sm-kugel[data-zustand="sprechen"] .sm-pegel line{stroke:var(--success);opacity:.9}
@@ -164,7 +168,7 @@
 
   // ---------------------------------------------------------------- Zustand
 
-  const WORTE = { ruhe: "bereit", lauschen: "hört zu", denken: "denkt nach", sprechen: "spricht" };
+  const WORTE = { ruhe: "bereit", lauschen: "hört zu", denken: "denkt nach", sprechen: "spricht", pause: "hört gerade nicht zu" };
 
   function setzeZustand(z, text) {
     zustand = z;
@@ -260,6 +264,8 @@
   function gespraechBeenden() {
     imGespraech = false;
     lausche = false;
+    pausiert = false;               // beim naechsten Wecken wieder normal zuhoeren
+    pauseKnopfSetzen();
     clearTimeout(stilleTimer);
     setzeZustand("ruhe");
   }
@@ -269,7 +275,8 @@
   function weiter() {
     if (!imGespraech) { setzeZustand("ruhe"); return; }
     letzteAktivitaet = Date.now();   // frische Geduld nach jeder Antwort
-    setTimeout(() => { if (imGespraech) hoeren(); }, 350);
+    if (pausiert) { setzeZustand("pause"); return; }   // Mikro aus -> nicht wieder anfangen
+    setTimeout(() => { if (imGespraech && !pausiert) hoeren(); }, 350);
   }
 
   // Stille Runde: Gespraech offen halten, solange die Geduld reicht — nicht
@@ -278,8 +285,47 @@
   // "wie schaut's aus?" dazwischenwerfen koennen (Lukas 24.07.).
   function geduld() {
     if (!imGespraech) { setzeZustand("ruhe"); return; }
+    if (pausiert) { setzeZustand("pause"); return; }   // Pause laeuft nicht ab
     if (!offeneArbeit && Date.now() - letzteAktivitaet > GEDULD_MS) { gespraechBeenden(); return; }
-    setTimeout(() => { if (imGespraech) hoeren(); }, 250);
+    setTimeout(() => { if (imGespraech && !pausiert) hoeren(); }, 250);
+  }
+
+  // Mikro-Pause (Wunsch Lukas 24.07.): Sie soll ansprechbereit BLEIBEN, aber
+  // gerade nicht zuhoeren — z. B. wenn er nebenher telefoniert oder laut denkt.
+  // Wichtig: Das Gespraech bleibt offen. Beim Fortsetzen kann er direkt
+  // weiterreden, OHNE "Hey Alexandra" zu sagen. Ergebnisse aus dem Hintergrund
+  // sagt sie auch waehrend der Pause weiterhin an.
+  function pauseUmschalten() {
+    if (!imGespraech) return gespraechStarten(false);   // aus der Ruhe: Gespraech starten
+    pausiert ? fortsetzen() : pausieren();
+  }
+
+  function pausieren() {
+    pausiert = true;
+    clearTimeout(stilleTimer);
+    try { erkennung?.abort(); } catch {}
+    lausche = false;
+    setzeZustand("pause");
+    if (el.hinweis) el.hinweis.textContent = "Mikro pausiert — klick auf die Kugel, dann rede einfach weiter";
+    pauseKnopfSetzen();
+  }
+
+  function fortsetzen() {
+    pausiert = false;
+    letzteAktivitaet = Date.now();      // frische Geduld, nicht sofort zufallen
+    pauseKnopfSetzen();
+    if (el.hinweis) el.hinweis.textContent = "…";
+    hoeren();                            // direkt weiter — kein Weckwort noetig
+  }
+
+  function pauseKnopfSetzen() {
+    const k = document.getElementById("btn-pause");
+    if (!k) return;
+    k.textContent = pausiert ? "Weiter" : "Pause";
+    k.title = pausiert
+      ? "Wieder zuhören — du kannst direkt weiterreden"
+      : "Mikro pausieren — sie bleibt ansprechbereit, hört aber nicht zu";
+    k.classList.toggle("an", pausiert);
   }
 
   // Verabschiedung auf einen klaren Schlusssatz ("passt, das war's").
@@ -339,6 +385,7 @@
 
   function hoeren() {
     if (!SR || lausche) return;     // laeuft schon eine Erkennung -> nicht doppeln
+    if (pausiert) { setzeZustand("pause"); return; }   // Mikro bewusst aus
     try { wakeErkennung?.stop(); } catch {}
     let r;
     try { r = new SR(); } catch { return; }
@@ -751,11 +798,20 @@
 
   // Klick auf die Kugel: in Ruhe startet es ein Gespraech (ohne Begruessung —
   // man hat ja aktiv geklickt); waehrend eines Gespraechs bricht es ab.
-  el.kugel.addEventListener("click", () => (zustand === "ruhe" ? gespraechStarten(false) : stoppen()));
+  // Klick auf die Kugel (Lukas 24.07.): aus der Ruhe startet er das Gespraech,
+  // waehrend eines Gespraechs pausiert/loest er das Mikro — er beendet NICHT
+  // mehr das ganze Gespraech. Zum Beenden gibt es "Stopp" (Knopf oder gesagt)
+  // und die Verabschiedung ("passt, fertig").
+  el.kugel.addEventListener("click", () => {
+    if (zustand === "ruhe" && !imGespraech) return gespraechStarten(false);
+    if (redetGerade) return unterbrechen();   // sie redet -> reinreden bleibt reinreden
+    pauseUmschalten();
+  });
   el.kugel.addEventListener("keydown", (e) => {
     if (e.key === " " || e.key === "Enter") { e.preventDefault(); el.kugel.click(); }
   });
   el.wakeKnopf?.addEventListener("click", wakeUmschalten);
+  document.getElementById("btn-pause")?.addEventListener("click", pauseUmschalten);
   document.getElementById("btn-stop")?.addEventListener("click", stoppen);
   document.getElementById("btn-frisch")?.addEventListener("click", async (ev) => {
     const b = ev.currentTarget, alt = b.textContent;
