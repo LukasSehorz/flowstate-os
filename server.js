@@ -864,11 +864,47 @@ app.get("/einstellungen", (req, res) => {
        <div class="row"><span>E-Mail</span><span><strong>${esc(u.email)}</strong></span></div>
        <div class="row"><span>Rolle</span><span>${esc(u.rolle)}</span></div>`
     : `<p class="muted">Du bist über das gemeinsame <strong>Dashboard-Passwort</strong> angemeldet — das ist kein persönliches Konto und hat keine E-Mail. Für dein persönliches Konto (mit E-Mail) über <a class="btn-link" href="/login">Login</a> mit deiner E-Mail anmelden.</p>`;
+  // Passwort-Aenderung nur fuer persoenliche Konten (CRM-Login).
+  const pwForm = u ? `
+    <div class="card"><h2>Passwort ändern</h2>
+      <p class="muted small">Ändert das Passwort deines persönlichen Kontos (${esc(u.email)}).</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
+        <input id="pw-neu" type="password" autocomplete="new-password" placeholder="Neues Passwort (min. 6 Zeichen)"
+          style="flex:1;min-width:220px;padding:9px 12px;border:1px solid var(--line,#d9dee5);border-radius:8px;background:var(--bg,#fff);color:inherit">
+        <button type="button" class="btn" onclick="pwAendern()">Ändern</button>
+        <span id="pw-status" class="muted small"></span>
+      </div>
+    </div>
+    <script>
+      async function pwAendern(){
+        var el=document.getElementById('pw-neu'), s=document.getElementById('pw-status'), neu=el.value;
+        if(!neu||neu.length<6){s.textContent='Mindestens 6 Zeichen.';return;}
+        s.textContent='…';
+        try{
+          var r=await fetch('/api/einstellungen/passwort',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({neu:neu})});
+          var d=await r.json();
+          s.textContent=d.ok?'✅ Passwort geändert.':('Fehler: '+(d.hint||'?'));
+          if(d.ok) el.value='';
+        }catch(e){ s.textContent='Fehler beim Speichern.'; }
+      }
+    </script>` : "";
   res.send(layout("Einstellungen", "einstellungen", `
     <div class="card"><h2>Angemeldet als</h2>${konto}
       <p class="muted small" style="margin-top:12px"><a class="btn-link" href="/logout">Abmelden</a></p></div>
+    ${pwForm}
     <div class="card placeholder"><h2>🔜 Weitere Einstellungen in Vorbereitung</h2>
       <p>Benutzer &amp; Zugänge, Instanzen (Alexandra/Jarvis), Modell-Routing, Kostenübersicht.</p></div>`, req));
+});
+
+// Passwort des eigenen (persoenlichen) Kontos aendern.
+app.post("/api/einstellungen/passwort", async (req, res) => {
+  if (!req.session.crm) return res.json({ ok: false, hint: "Nur mit persönlichem Konto (E-Mail-Login) möglich." });
+  const neu = String(req.body?.neu || "");
+  if (neu.length < 6) return res.json({ ok: false, hint: "Mindestens 6 Zeichen." });
+  try {
+    await require("./lib/crm.js").passwortAendern(req.session.crm.id, neu);
+    res.json({ ok: true });
+  } catch (e) { res.json({ ok: false, hint: String(e.message).slice(0, 150) }); }
 });
 
 for (const [id, [title, desc]] of Object.entries(PLACEHOLDERS)) {
