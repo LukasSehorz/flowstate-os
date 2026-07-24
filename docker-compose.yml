@@ -42,6 +42,11 @@ services:
       # Sprachprotokoll: Tagesdateien unter /data/sprachlog/ (Aufbewahrung Tage).
       - SPRACHLOG_TAGE=${SPRACHLOG_TAGE:-30}
       - STANDORT_ORT=${STANDORT_ORT:-Dorfen, Bayern}
+      # Schnelles Nachschlagen (Phase 4, 25.07.): Serper liefert echte
+      # Google-Treffer ueber einen legitimen Anbieter — ein Abruf, unter einer
+      # Sekunde. Ohne Schluessel wird Wikipedia genutzt (gratis, aber schwach
+      # bei Aktuellem); hilft auch das nicht, geht es an die gruendliche Suche.
+      - SERPER_API_KEY=${SERPER_API_KEY:-}
       # Wie weit der Kalender im STAND nach vorn reicht (Stufe 3, 25.07.):
       # 14 Tage waren zu knapp — "was steht in drei Wochen an?" lief ins Leere.
       - KALENDER_TAGE=${KALENDER_TAGE:-35}
