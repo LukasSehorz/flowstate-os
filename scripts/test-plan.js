@@ -43,18 +43,20 @@ function auftragAnlegen(id) {
   pruefe("Abschluss-Satz getrennt abgelegt", e.abschluss === "Ab hier dauert's ein paar Minuten — ich meld mich.");
   pruefe("Abschluss steht NICHT in den Schritten", !e.plan.includes(e.abschluss));
 
-  // 1b. Recherche bekommt weniger Schritte (sie ist in Sekunden durch).
+  // 1b. Recherche: nur zwei Schritte, KEIN Abschluss-Satz — sie ist durch,
+  //     bevor er faellig waere (Rueckmeldung Lukas 25.07.: bei einer kurzen
+  //     Suche redet sie sonst mehr, als sie sucht).
   schnell.frage = async () => [
-    "Ich such erst die aktuellen Zahlen.",
-    "Dann vergleich ich die Anbieter.",
-    "Danach fass ich es kurz zusammen.",
+    "Ich schau erst, was die grossen Tech-Seiten heute melden.",
+    "Dann gleich ich ab, ob die Zahlen ueberall gleich sind.",
     "Bin gleich durch, dauert nicht lang.",
   ].join("\n");
   auftragAnlegen("t2b");
   await planBauen("t2b", "Preise fuer Meta-Ads recherchieren", "sonnet");
   const b = AUFTRAEGE.get("t2b");
-  pruefe("Recherche: nur drei Schritte", b.plan?.length === 3);
-  pruefe("Recherche: vierte Zeile wird zum Abschluss", b.abschluss === "Bin gleich durch, dauert nicht lang.");
+  pruefe("Recherche: nur zwei Schritte", b.plan?.length === 2);
+  pruefe("Recherche: KEIN Abschluss-Satz", b.abschluss === "");
+  pruefe("Recherche: Schritte nennen etwas Konkretes", /Tech-Seiten/.test(b.plan[0]));
 
   // 2. Aufzaehlungszeichen, Nummern und Anfuehrungszeichen fliegen raus.
   schnell.frage = async () => [
