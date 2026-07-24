@@ -108,6 +108,7 @@ Danach im Browser **Strg+F5**.
 ```bash
 node scripts/test-crm.js      # CRM-Logik + Rechtetrennung (räumt seine Testdaten selbst weg)
 node scripts/test-kalender.js # Kalender-Auswertung
+node scripts/test-sprache.js  # Sprach-Verstehen (Sonnet + Haiku-Reserve, ohne echte API)
 node scripts/shot-alles.js    # Screenshots aller Seiten in hell & dunkel (braucht Chrome)
 ```
 
