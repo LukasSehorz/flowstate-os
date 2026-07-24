@@ -618,7 +618,14 @@
   // heraus, ohne dass Lukas erneut fragen muss.
   async function hintergrundAuftrag(id) {
     offeneArbeit++;                 // solange das laeuft, schliesst das Gespraech nicht
-    let naechsteErzaehlung = Date.now() + 5000;   // erster Schritt nach ~5 s
+    // Abstand wird von Satz zu Satz GROESSER (Rueckmeldung Lukas 25.07.: eine
+    // vorformulierte Erzaehlung im starren Takt wirkt kuenstlich, besonders wenn
+    // die Arbeit lange dauert). Ein Mensch erzaehlt am Anfang dicht, wenn er
+    // sich reindenkt, und wird dann ruhiger. 5 s, 8 s, 12 s, 18 s deckt so etwa
+    // 45 Sekunden ab, statt alles in den ersten 20 Sekunden abzuspulen und
+    // danach zu schweigen.
+    let luecke = 5000;
+    let naechsteErzaehlung = Date.now() + luecke;
     try {
       for (let i = 0; i < 400; i++) {
         await new Promise((r) => setTimeout(r, 1500));
@@ -631,7 +638,8 @@
         // damit kaeme nie ein Satz.)
         const lukasSpricht = Date.now() - letzteAktivitaet < 3000;
         if (Date.now() >= naechsteErzaehlung && !redetGerade && !lukasSpricht) {
-          naechsteErzaehlung = Date.now() + 5200;   // dicht genug zum Mitgehen
+          luecke = Math.min(Math.round(luecke * 1.5), 20000);
+          naechsteErzaehlung = Date.now() + luecke;
           const f = await fetch("/api/sprache/fortschritt/" + id).then((r) => r.json()).catch(() => null);
           if (f?.satz && !redetGerade) {
             zeile("sie", f.satz);

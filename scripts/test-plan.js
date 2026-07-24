@@ -85,14 +85,28 @@ function auftragAnlegen(id) {
   // 3b. Liefert das Modell NUR die Schritte (keine Abschlusszeile), darf der
   //     letzte Arbeitsschritt nicht als Abschied missbraucht werden.
   schnell.frage = async () => [
-    "Ich sortier erst die Unterlagen.", "Dann rechne ich durch.",
-    "Danach schreib ich es auf.", "Zum Schluss pruef ich die Zahlen.",
+    "Ich sortier erst die Unterlagen.", "Dann rechne ich die Posten durch.",
+    "Danach schreib ich den Vorschlag auf.", "Zum Schluss pruef ich die Zahlen.",
   ].join("\n");
   auftragAnlegen("t4b");
   await planBauen("t4b", "Angebot rechnen");
   const c = AUFTRAEGE.get("t4b");
   pruefe("Ohne fuenfte Zeile: kein erfundener Abschluss", c.abschluss === "");
   pruefe("Ohne fuenfte Zeile: alle vier Schritte bleiben", c.plan.length === 4);
+
+  // 3c. Vage Taetigkeitssaetze fliegen raus (Rueckmeldung Lukas 25.07.:
+  //     "er sagt drei Mal, dass er nachschaut, nur in anderen Worten").
+  schnell.frage = async () => [
+    "Ich sortier erst die Unterlagen.",   // konkret -> bleibt
+    "Dann rechne ich durch.",             // nennt nichts -> raus
+    "Danach schreib ich es auf.",         // nennt nichts -> raus
+    "Zum Schluss pruef ich die Zahlen.",  // konkret -> bleibt
+  ].join("\n");
+  auftragAnlegen("t4c");
+  await planBauen("t4c", "Angebot rechnen");
+  const v = AUFTRAEGE.get("t4c");
+  pruefe("Vage Saetze werden aussortiert", v.plan.length === 2);
+  pruefe("Die konkreten bleiben", /Unterlagen/.test(v.plan[0]) && /Zahlen/.test(v.plan[1]));
 
   // 4. Faellt das Modell aus, bleibt sie STILL — lieber nichts als eine Floskel.
   schnell.frage = async () => { throw new Error("Anthropic 529"); };
@@ -114,7 +128,7 @@ function auftragAnlegen(id) {
   pruefe("Unbekannter Auftrag crasht nicht", !geworfen);
 
   schnell.frage = original;
-  for (const id of ["t2", "t2b", "t3", "t4", "t4b", "t5", "t6"]) AUFTRAEGE.delete(id);
+  for (const id of ["t2", "t2b", "t3", "t4", "t4b", "t4c", "t5", "t6"]) AUFTRAEGE.delete(id);
   console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Faelle bestanden.");
   process.exit(fehler ? 1 : 0);
 })();

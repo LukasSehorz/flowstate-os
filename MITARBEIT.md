@@ -115,7 +115,9 @@ node scripts/test-erzaehlspur.js # Streaming-Empfang von Hermes (Zwischenstaende
 node scripts/test-plan.js     # Vorgehensplan, den sie waehrend der Arbeit erzaehlt
 node scripts/test-prompt.js   # Wacht ueber die Regeln im System-Prompt (Groesse + Inhalt)
 node scripts/test-suche.js    # Schnelles Nachschlagen (--netz fuer den Wikipedia-Teil)
-node scripts/test-termin.js   # Termin direkt eintragen (Zeitumrechnung, Zeitzonen)
+node scripts/test-termin.js   # Termin eintragen/verschieben/absagen (Zeitzonen!)
+node scripts/test-erzaehlfilter.js # Filter gegen leere und doppelte Zwischensaetze
+node scripts/test-wa-lesen.js # WhatsApp lesen: einzelner Chat + "was ist neu"
 node scripts/shot-alles.js    # Screenshots aller Seiten in hell & dunkel (braucht Chrome)
 ```
 
