@@ -89,17 +89,19 @@ body.crm-dashboard-design .leer-icon{background:linear-gradient(160deg,#FFFFFF 0
    Ueberschreibt sowohl das Blau-Theme als auch Janniks grauen CRM-Dashboard-Look. */
 :root[data-weiss="1"],
 :root[data-weiss="1"] body.crm-dashboard-design{
-  --blau-900:#1F2937;--blau-800:#273244;--blau-700:#374151;--blau-600:#48566A;
-  --blau-500:#5B6B80;--blau-400:#8A93A3;--blau-300:#B4BBC6;--blau-200:#D7DBE2;
-  --blau-100:#E9ECF1;--blau-50:#F3F5F8;
-  --background:#FFFFFF;--surface:#FFFFFF;--surface-2:#F5F6F8;--surface-3:#ECEEF1;
-  --border:#E4E7EC;--border-stark:#D0D5DD;
-  --foreground:#1A2230;--text-secondary:#48566A;--text-muted:#8A93A3;
-  --primary:#48566A;--primary-hover:#374151;--primary-soft:#F0F2F5;
-  --akzent:#48566A;--akzent-flaeche:#F0F2F5;--akzent-rand:#E4E7EC;
-  --stage-1:#E4E7EC;--stage-2:#CBD2DB;--stage-3:#AEB7C4;--stage-4:#8A93A3;
-  --stage-5:#6B7688;--stage-6:#4B5568;--stage-7:#374151;--stage-8:#4B5568;
-  --s1:0 1px 2px rgba(26,34,48,.05);--s2:0 2px 8px rgba(26,34,48,.07);--s3:0 14px 40px rgba(26,34,48,.14);
+  /* Urspruengliches Flowstate-BLAU erzwingen (auch ueber data-theme=dark UND
+     Janniks CRM-Grau) — Lukas will das Blau behalten, nur alles weiss. */
+  --blau-900:#0B2545;--blau-800:#12376B;--blau-700:#1B4B93;--blau-600:#2563EB;
+  --blau-500:#3B82F6;--blau-400:#60A5FA;--blau-300:#93C5FD;--blau-200:#BFDBFE;
+  --blau-100:#DBEAFE;--blau-50:#EFF6FF;
+  --background:#F7F8FB;--surface:#FFFFFF;--surface-2:#F1F3F9;--surface-3:#E8ECF5;
+  --border:#E6E9F0;--border-stark:#D3DAE6;
+  --foreground:#0F1B2D;--text-secondary:#4A5568;--text-muted:#7A8699;
+  --primary:#2563EB;--primary-hover:#1B4B93;--primary-soft:#EFF6FF;
+  --akzent:#2563EB;--akzent-flaeche:#EFF6FF;--akzent-rand:#BFDBFE;
+  --stage-1:#93C5FD;--stage-2:#60A5FA;--stage-3:#3B82F6;--stage-4:#2563EB;
+  --stage-5:#1B4B93;--stage-6:#12376B;--stage-7:#0B2545;--stage-8:#157A48;
+  --s1:0 1px 2px rgba(15,27,45,.05);--s2:0 2px 8px rgba(15,27,45,.07);--s3:0 14px 40px rgba(15,27,45,.16);
 }
 /* Janniks Verlaufs-Flaechen im CRM-Dashboard im Weiss-Modus flach weiss machen. */
 :root[data-weiss="1"] body.crm-dashboard-design .forecast,
@@ -108,6 +110,45 @@ body.crm-dashboard-design .leer-icon{background:linear-gradient(160deg,#FFFFFF 0
 :root[data-weiss="1"] body.crm-dashboard-design .zeitraum,
 :root[data-weiss="1"] body.crm-dashboard-design .segmente,
 :root[data-weiss="1"] body.crm-dashboard-design .leer-icon{background:#FFFFFF}
+/* Die zwei dunklen Anker-Karten (Umsatz-Hero + Umsatz je Person) -> weiss. */
+:root[data-weiss="1"] body.crm-dashboard-design .karte-mitte,
+:root[data-weiss="1"] body.crm-dashboard-design .karte-dunkel{
+  background:#FFFFFF;border-color:var(--border);color:var(--foreground);box-shadow:var(--s2)}
+:root[data-weiss="1"] body.crm-dashboard-design .karte-mitte .kachel-zahl,
+:root[data-weiss="1"] body.crm-dashboard-design .karte-mitte .hero-umsatz-neben-zahl,
+:root[data-weiss="1"] body.crm-dashboard-design .karte-mitte .mini-stat b,
+:root[data-weiss="1"] body.crm-dashboard-design .karte-dunkel h2,
+:root[data-weiss="1"] body.crm-dashboard-design .karte-dunkel .balken-wert{color:var(--foreground)}
+:root[data-weiss="1"] body.crm-dashboard-design .karte-mitte .kachel-label,
+:root[data-weiss="1"] body.crm-dashboard-design .karte-mitte .kachel-mini-titel,
+:root[data-weiss="1"] body.crm-dashboard-design .karte-mitte .mini-stat .caption,
+:root[data-weiss="1"] body.crm-dashboard-design .karte-mitte .caption,
+:root[data-weiss="1"] body.crm-dashboard-design .karte-mitte .kachel-mini-ziel,
+:root[data-weiss="1"] body.crm-dashboard-design .karte-dunkel .sub,
+:root[data-weiss="1"] body.crm-dashboard-design .karte-dunkel .caption,
+:root[data-weiss="1"] body.crm-dashboard-design .karte-dunkel .balken-label{color:var(--text-secondary)}
+:root[data-weiss="1"] body.crm-dashboard-design .karte-mitte .mini-stat-reihe{border-bottom-color:var(--border)}
+/* Balken (je Person) im Weiss-Modus blau statt hell. */
+:root[data-weiss="1"] body.crm-dashboard-design .karte-dunkel .balken{background:linear-gradient(180deg,var(--blau-500) 0%,var(--blau-600) 100%)}
+
+/* Sidebar (Rail) -> weiss mit BLAUEN Icons/Akzenten. */
+:root[data-weiss="1"] .rail{
+  background:#FFFFFF;border-color:var(--border);color:var(--text-secondary);
+  box-shadow:0 20px 48px -14px rgba(15,27,45,.13), inset 0 1px 0 rgba(255,255,255,.6)}
+:root[data-weiss="1"] .rail a{color:var(--primary)}
+:root[data-weiss="1"] .rail a:hover{background:var(--primary-soft);color:var(--primary-hover)}
+:root[data-weiss="1"] .rail a.offen{color:var(--primary-hover)}
+:root[data-weiss="1"] .rail a.aktiv{color:var(--primary-hover);
+  background:var(--primary-soft);box-shadow:inset 0 0 0 1px var(--akzent-rand)}
+:root[data-weiss="1"] .rail-gruppe{color:var(--text-muted)}
+:root[data-weiss="1"] .rail-marke .rail-wort{color:var(--foreground)}
+:root[data-weiss="1"] .rail-nutzer{border-top-color:var(--border)}
+:root[data-weiss="1"] .rail-nutzer .rail-wort span:first-child{color:var(--foreground)}
+:root[data-weiss="1"] .rail-nutzer .rail-wort span:last-child{color:var(--text-muted)!important}
+:root[data-weiss="1"] .rail button{color:var(--text-secondary)}
+:root[data-weiss="1"] .rail button:hover{background:var(--danger-flaeche);color:var(--danger)}
+:root[data-weiss="1"] .rail-logo{background:linear-gradient(158deg,var(--blau-600) 0%,var(--blau-800) 100%);color:#fff}
+:root[data-weiss="1"] .rail-avatar{background:linear-gradient(160deg,var(--blau-600),var(--blau-800));color:#fff}
 /* Der Weiss-Umschalter in der Topbar: klar beschriftete Pille. */
 .topbar .weiss-schalter{width:auto;height:auto;min-width:0;padding:6px 12px;border-radius:999px;
   font:600 12px/1 'Inter',system-ui,sans-serif;color:var(--text-secondary);
