@@ -26,8 +26,10 @@ const hat = (...teile) => teile.every((t) => p.toLowerCase().includes(t.toLowerC
 
 // --- Diese Regeln MUESSEN drinbleiben (jede aus einem echten Vorfall) ------
 pruefe("Werkzeug-Verbot (sonst 50 s statt 3)", hat("RUFE KEINE WERKZEUGE AUF"));
-pruefe("JSON-Vertrag mit allen sechs Feldern",
-  hat("zusage", "text", "mail", "whatsapp", "aktionen", "zeige"));
+pruefe("JSON-Vertrag mit allen sieben Feldern",
+  hat("zusage", "text", "mail", "whatsapp", "termin", "aktionen", "zeige"));
+pruefe("Termine gehen direkt, nicht mehr an hermes",
+  hat("Termine eintragen", "KEINE Aktion an hermes"));
 pruefe("Alle sechs Aktionsarten erklaert",
   hat("wetter", "mail", "wa_lesen", "gehirn", "sonnet", "hermes"));
 pruefe("Aktionen laufen parallel", hat("parallel"));
