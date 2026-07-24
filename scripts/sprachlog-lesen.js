@@ -42,10 +42,12 @@ function istFehler(e) {
   return false;
 }
 
-let zaehler = { frage: 0, reserve: 0, keinJson: 0, standAlt: 0, auftragFehler: 0 };
+let zaehler = { frage: 0, reserve: 0, keinJson: 0, standAlt: 0, auftragFehler: 0, erzaehlt: 0, streamAus: 0 };
 const dauern = [];
 
 for (const e of zeilen) {
+  if (e.art === "erzaehlspur" && e.satz) zaehler.erzaehlt++;
+  if (e.art === "hermes-stream" && e.moeglich === false) zaehler.streamAus++;
   if (e.art === "frage") {
     zaehler.frage++;
     if (e.verstehen?.reserve) zaehler.reserve++;
@@ -77,6 +79,20 @@ for (const e of zeilen) {
     console.log(`   └─ Stimme ${e.ok ? "ok" : "FEHLGESCHLAGEN"} (${e.zeichen} Zeichen, ${sek(e.dauerMs)})${e.fehler ? " — " + e.fehler : ""}`);
   } else if (e.art === "wa-freigabe") {
     console.log(`   └─ WhatsApp an ${e.an}: ${e.ausgang}${e.grund ? " — " + e.grund : ""}`);
+  } else if (e.art === "erzaehlspur") {
+    console.log(e.satz
+      ? `   └─ ERZAEHLSPUR: „${e.satz}“ (Zwischenstand ${e.zeichen} Zeichen)`
+      : `   └─ ERZAEHLSPUR: kein Satz${e.fehler ? " — " + e.fehler : ""}`);
+  } else if (e.art === "hermes-stream") {
+    console.log(`   └─ HERMES-STREAMING ${e.moeglich === false ? "NICHT MOEGLICH" : "ok"}${e.grund ? " — " + e.grund : ""}`);
+  } else if (e.art === "kalender-frisch") {
+    console.log(`   └─ Kalender nach Auftrag ${e.nach} neu eingelesen`);
+  } else {
+    // Auffangnetz: lieber roh anzeigen als verschlucken. Genau das ist am
+    // 24.07. passiert — neue Eintragsarten fielen still hinten runter und
+    // die Suche im Protokoll fand nichts, obwohl alles drinstand.
+    const { zeit, art, ...rest } = e;
+    console.log(`   └─ ${String(art || "?").toUpperCase()}: ${JSON.stringify(rest).slice(0, 300)}`);
   }
 }
 
@@ -85,3 +101,5 @@ console.log(`\n─────────────────────�
 console.log(`${datum}: ${zaehler.frage} Fragen · Verstehen im Schnitt ${sek(schnitt)}`);
 console.log(`Reserve eingesprungen: ${zaehler.reserve} · kein sauberes JSON: ${zaehler.keinJson} · ` +
   `Stand nicht frisch: ${zaehler.standAlt} · Auftraege fehlgeschlagen: ${zaehler.auftragFehler}`);
+console.log(`Erzaehlspur: ${zaehler.erzaehlt} Zwischensaetze` +
+  (zaehler.streamAus ? ` · Hermes-Streaming ${zaehler.streamAus}x nicht moeglich` : ""));
