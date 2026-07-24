@@ -76,6 +76,32 @@ function mergeKontakte(liste) {
   if (geaendert) speichereKontakte();
 }
 
+// Gruppenverzeichnis (jid -> {name}). Wie das Kontaktbuch nur auf dem Server.
+// Ohne das liesse sich "schick das in die Gruppe Team Flowstate" nicht
+// aufloesen: WhatsApp adressiert Gruppen ueber "<id>@g.us", und diese IDs
+// tauchen in den Kontakten nicht auf.
+const GRUPPEN = path.join(WA_DIR, "gruppen.json");
+let gruppen = {};
+try { gruppen = JSON.parse(fs.readFileSync(GRUPPEN, "utf-8")); } catch {}
+
+async function gruppenSammeln() {
+  if (!sock || !verbunden) return;
+  try {
+    const alle = await sock.groupFetchAllParticipating();
+    let geaendert = false;
+    for (const [jid, g] of Object.entries(alle || {})) {
+      const name = g?.subject || "";
+      if (!name || gruppen[jid]?.name === name) continue;
+      gruppen[jid] = { name };
+      geaendert = true;
+    }
+    if (geaendert) { try { fs.writeFileSync(GRUPPEN, JSON.stringify(gruppen)); } catch {} }
+    console.log("Gruppen erfasst — " + Object.keys(gruppen).length + " Gruppen bekannt.");
+  } catch (e) {
+    console.log("Gruppen-Hinweis:", String(e.message).slice(0, 120));
+  }
+}
+
 async function start() {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   let version;
@@ -116,6 +142,7 @@ async function start() {
           await sock.resyncAppState(["critical_unblock_low", "regular_high", "regular_low", "regular"], false);
           console.log("Kontakt-Resync fertig — " + Object.keys(kontakte).length + " Kontakte bekannt.");
         } catch (e) { console.log("Kontakt-Resync-Hinweis:", String(e.message).slice(0, 120)); }
+        gruppenSammeln();
       }, 4000);
     }
     if (connection === "close") {
@@ -148,6 +175,10 @@ async function start() {
   sock.ev.on("contacts.upsert", (arg) => mergeKontakte(arg));
   sock.ev.on("contacts.update", (arg) => mergeKontakte(arg));
   sock.ev.on("messaging-history.set", (arg) => mergeKontakte(arg?.contacts));
+
+  // Gruppen: neue oder umbenannte mitnehmen, damit die Namen aktuell bleiben.
+  sock.ev.on("groups.upsert", () => gruppenSammeln());
+  sock.ev.on("groups.update", () => gruppenSammeln());
 
   // Zustell-Quittungen: WhatsApp meldet den Fortschritt je Nachricht als Status
   // (2 = beim Server, 3 = beim Empfaenger angekommen = zwei Haken, 4 = gelesen).

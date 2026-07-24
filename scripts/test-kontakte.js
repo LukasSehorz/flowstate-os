@@ -82,6 +82,37 @@ fs.writeFileSync(path.join(TMP, "kontakte.json"), JSON.stringify([
 const c2 = kontakte.finde("Chris");
 pruefe("Manuelles Buch gewinnt und loest die Mehrdeutigkeit", c2?.nummer === "491700009999");
 
+// --------------------------------------------------------------- Gruppen
+//
+// Gruppen erreichen viele Leute auf einmal. Deshalb gilt eine Freigabeliste:
+// nur ausdruecklich genannte Arbeitsgruppen sind adressierbar, private nie.
+fs.rmSync(path.join(TMP, "kontakte.json"), { force: true });
+fs.writeFileSync(path.join(TMP, "gruppen.json"), JSON.stringify({
+  "111111@g.us": { name: "Team Flowstate" },
+  "222222@g.us": { name: "Flowstate" },
+  "333333@g.us": { name: "KI" },
+  "444444@g.us": { name: "Padel" },
+  "555555@g.us": { name: "Social Media Flowstate" },
+  "666666@g.us": { name: "Familie Sehorz" },          // privat — NIE freigegeben
+  "777777@g.us": { name: "Flowstate privat" },        // aehnlicher Name, NICHT freigegeben
+}));
+process.env.WA_GRUPPEN = "Team Flowstate,Flowstate,KI,Padel,Social Media Flowstate";
+
+pruefe("Freigegeben: genau 5 Gruppen sichtbar", kontakte.gruppen().length === 5);
+pruefe("Freigegeben: 'Team Flowstate' gefunden", kontakte.findeGruppe("Team Flowstate")?.jid === "111111@g.us");
+pruefe("Freigegeben: 'KI' gefunden", kontakte.findeGruppe("KI")?.jid === "333333@g.us");
+pruefe("Freigegeben: 'Padel' gefunden", kontakte.findeGruppe("Padel")?.jid === "444444@g.us");
+pruefe("Gesperrt: 'Familie Sehorz' NICHT erreichbar", kontakte.findeGruppe("Familie Sehorz") === null);
+pruefe("Gesperrt: 'Flowstate privat' NICHT erreichbar", kontakte.findeGruppe("Flowstate privat") === null);
+pruefe("'Flowstate' trifft die freigegebene, nicht die private",
+  kontakte.findeGruppe("Flowstate")?.jid === "222222@g.us");
+pruefe("Gruppe liefert eine JID, keine Telefonnummer",
+  String(kontakte.findeGruppe("KI")?.jid || "").endsWith("@g.us"));
+
+// Ohne Freigabeliste ist GAR NICHTS erreichbar — sicherer Grundzustand.
+process.env.WA_GRUPPEN = "";
+pruefe("Ohne Freigabeliste: keine Gruppe erreichbar", kontakte.gruppen().length === 0 && kontakte.findeGruppe("KI") === null);
+
 fs.rmSync(TMP, { recursive: true, force: true });
 console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Faelle bestanden.");
 process.exit(fehler ? 1 : 0);

@@ -44,6 +44,11 @@ services:
       # Wer per WhatsApp ohne Rueckfrage angeschrieben werden darf (Namen aus
       # deinen Kontakten). Nummer kommt automatisch aus WhatsApp.
       - INTERN_WA_NAMEN=${INTERN_WA_NAMEN:-jannik}
+      # In WELCHE WhatsApp-Gruppen Alexandra schreiben darf (Namen exakt wie in
+      # WhatsApp, mit Komma getrennt). Freigabeliste statt Verbotsliste: was hier
+      # nicht steht, existiert fuer sie nicht — private Gruppen sind damit von
+      # vornherein aussen vor. Leer = gar keine Gruppen. Entscheidung Lukas 24.07.
+      - WA_GRUPPEN=${WA_GRUPPEN:-}
       # Telegram-Bot (eigener Alexandra-Bot). Ohne Token schlummert er.
       # SELF_URL: das Dashboard ruft seine eigene Schnellspur intern auf.
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
