@@ -8,7 +8,7 @@
 
 process.env.VAULT_PATH = process.env.VAULT_PATH || __dirname; // stimmeLaden faellt auf Notnagel zurueck
 const schnell = require("../lib/schnell.js");
-const { ausZustand } = require("../lib/sprache-routes.js");
+const { ausZustand, markerAufloesen, betrifftKalender } = require("../lib/sprache-routes.js");
 
 let fehler = 0;
 function pruefe(name, wahr) {
@@ -63,6 +63,28 @@ const GUTE_ANTWORT = JSON.stringify({
   // 5. Temperature-Weiche in schnell.js: Sonnet 5 darf KEIN temperature bekommen
   pruefe("Temp-Weiche: sonnet-5 ohne temperature", !/-4-|haiku-4|opus-4/.test("claude-sonnet-5"));
   pruefe("Temp-Weiche: haiku-4-5 mit temperature", /-4-|haiku-4|opus-4/.test("claude-haiku-4-5"));
+
+  // 6. Kalender-Erkennung (loest die Auffrischung nach Hermes-Auftraegen aus)
+  pruefe("Kalender erkannt: 'im Kalender eintragen'", betrifftKalender("kannst du morgen im Kalender eintragen dass ich spazieren gehe"));
+  pruefe("Kalender erkannt: 'Termin verschieben'", betrifftKalender("verschieb den Termin mit Physio"));
+  pruefe("Kalender NICHT erkannt: PowerPoint", !betrifftKalender("bau mir eine kurze PowerPoint ueber Performance Marketing"));
+
+  // 7. Marker-Aufloesung — der Kern des Fixes vom 24.07.:
+  //    Solange etwas laeuft, darf es nicht als erledigt gelten; ist es fertig,
+  //    darf es nicht ewig als "laeuft noch" im Verlauf stehen.
+  let h = [{ role: "assistant", content: "Trag ich dir gleich ein.\n[LAEUFT NOCH #a1-x: Kalendereintrag morgen 10 Uhr — noch NICHT bestaetigt, nicht als erledigt vorlesen]" }];
+  markerAufloesen(h, "a1-x", true, "Kalendereintrag morgen 10 Uhr");
+  pruefe("Marker: nach Erfolg kein 'LAEUFT NOCH' mehr", !h[0].content.includes("LAEUFT NOCH"));
+  pruefe("Marker: nach Erfolg bestaetigter FAKT", h[0].content.includes("[FAKT: erledigt und bestaetigt — Kalendereintrag morgen 10 Uhr]"));
+  pruefe("Marker: gesprochener Satz bleibt erhalten", h[0].content.startsWith("Trag ich dir gleich ein."));
+
+  h = [{ role: "assistant", content: "Bin dran.\n[LAEUFT NOCH #a2-y: Angebot fuer Kunde — noch NICHT bestaetigt]" }];
+  markerAufloesen(h, "a2-y", false, "Angebot fuer Kunde");
+  pruefe("Marker: Scheitern wird ehrlich vermerkt", h[0].content.includes("FEHLGESCHLAGEN, nicht erledigt"));
+
+  h = [{ role: "assistant", content: "Bin dran.\n[LAEUFT NOCH #a3-z: Etwas anderes — noch NICHT bestaetigt]" }];
+  markerAufloesen(h, "a1-x", true, "Kalendereintrag");
+  pruefe("Marker: fremde ID bleibt unangetastet", h[0].content.includes("[LAEUFT NOCH #a3-z"));
 
   schnell.frage = original;
   console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Faelle bestanden.");
