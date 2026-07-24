@@ -81,6 +81,11 @@ for (const e of zeilen) {
     if (v.fehler) console.log(`   Fehler: ${v.fehler}`);
   } else if (e.art === "auftrag") {
     console.log(`   └─ Auftrag "${e.was}" ${e.ok ? "fertig" : "FEHLGESCHLAGEN"} nach ${sek(e.dauerMs)}${e.hint ? " — " + e.hint : ""}`);
+    if (e.antwort) console.log(`        ANTWORT: ${e.antwort.replace(/\s+/g, " ").slice(0, 240)}`);
+  } else if (e.art === "schnellsuche") {
+    console.log(`   └─ SCHNELLSUCHE ${e.genutzt ? "genutzt" : "NICHT genutzt"} (${e.titel || "?"}, ${sek(e.dauerMs)})${e.grund ? " — " + e.grund : ""}`);
+  } else if (e.art === "zusage-verworfen") {
+    console.log(`   └─ ZUSAGE VERWORFEN (${e.grund}): „${e.zusage}“`);
   } else if (e.art === "zusage") {
     console.log(`[${uhr(e.zeit)}] Blitz-Zusage (${sek(e.dauerMs)}): "${e.zusage}"${e.fehler ? " — FEHLER: " + e.fehler : ""}`);
   } else if (e.art === "stimme" && (!e.ok || !nurFehler)) {
