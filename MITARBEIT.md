@@ -118,6 +118,8 @@ node scripts/test-suche.js    # Schnelles Nachschlagen (--netz fuer den Wikipedi
 node scripts/test-termin.js   # Termin eintragen/verschieben/absagen (Zeitzonen!)
 node scripts/test-erzaehlfilter.js # Filter gegen leere und doppelte Zwischensaetze
 node scripts/test-wa-lesen.js # WhatsApp lesen: einzelner Chat + "was ist neu"
+node scripts/test-crm-sprache.js      # CRM per Sprache: Lead, Notiz, Wiedervorlage, Anruf
+node scripts/test-zufluss-telegram.js # Telegram-Fakten ins Gehirn (idempotent)
 node scripts/shot-alles.js    # Screenshots aller Seiten in hell & dunkel (braucht Chrome)
 ```
 

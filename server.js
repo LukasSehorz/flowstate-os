@@ -203,7 +203,28 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
     console.log(`Zweites Gehirn: WhatsApp-Zufluss alle ${Math.round(waTakt / 60000)} Min.`);
   }
 
+  // Telegram-Verdichtung (Bauplan P3.3): Aus dem Tagesgespraech mit Alexandra
+  // wandern die FAKTEN ins Gehirn — Entscheidungen, Aufgaben, Ideen, kein
+  // Protokoll. Sonst versickern Erkenntnisse im Chat. Laeuft ueber Haiku
+  // (Extraktion, keine Denkarbeit) und schreibt nach eingang/erkenntnisse/,
+  // also NICHT in denselben Ordner wie die Quelle — sonst verdichtet der
+  // naechste Lauf seine eigene Ausgabe. Ohne neues Gespraech: kein Modellaufruf.
+  const zuflussTelegram = require("./lib/zufluss-telegram.js");
+  const tgTakt = Number(process.env.TELEGRAM_VERDICHTUNG_MS || 6 * 60 * 60 * 1000);
+  const tgLaufen = () =>
+    zuflussTelegram.verdichte()
+      .then((r) => { if (r.ok && r.neu) console.log(`Telegram-Verdichtung: ${r.neu} Erkenntnis(se) -> ${r.datei}`); else if (!r.ok) console.error("Telegram-Verdichtung:", r.grund); })
+      .catch((e) => console.error("Telegram-Verdichtung:", e.message));
+  if (vault.schreibbar("eingang") && zuflussTelegram.verfuegbar()) {
+    setInterval(tgLaufen, tgTakt).unref();
+    console.log(`Zweites Gehirn: Telegram-Verdichtung alle ${Math.round(tgTakt / 3600000)} Std.`);
+  }
+
   // Von Hand ausloesen (Test / spaeter Dashboard-Kachel).
+  app.post("/api/gehirn/telegram", async (req, res) => {
+    try { res.json(await zuflussTelegram.verdichte()); }
+    catch (e) { res.json({ ok: false, grund: String(e.message).slice(0, 200) }); }
+  });
   app.post("/api/gehirn/chronik", async (req, res) => {
     try { res.json(await chronik.schreibeTagesSnapshot()); }
     catch (e) { res.json({ ok: false, grund: String(e.message).slice(0, 200) }); }

@@ -73,17 +73,34 @@ pruefe("Aktionsliste nicht faelschlich 'fuenf' genannt (es sind sechs)",
 
 // --- Groesse: der eigentliche Zweck der Uebung ----------------------------
 //
-// Ausgangswert war 11.814 Zeichen — da war die Regeltreue messbar schlecht
-// (6 von 36 Anfragen fielen aus). Nach dem Entschlacken: 5.632.
+// Korrektur am 25.07.: Dieser Waechter hat nur den FORMAT_ANHANG gemessen —
+// also einen Teil dessen, was das Modell wirklich liest. Wer Text in die
+// Vault-Datei STIMME-alexandra.md verschiebt, haette ihn ausgetrickst, ohne
+// dass ein einziges Token gespart wird. Gemessen wird jetzt, was tatsaechlich
+// als System-Prompt rausgeht: FORMAT_ANHANG + STIMME.
 //
-// Am 25.07. bewusst von 7.000 auf 7.500 angehoben: Der Kalender-Abschnitt
-// (eintragen/verschieben/absagen) ist neue FUNKTIONALITAET, kein Wildwuchs —
-// er nimmt Hermes Arbeit ab, die dort 44 s dauerte. Die Grenze wandert nicht
-// bei jeder Gelegenheit mit: Wer sie das naechste Mal reisst, soll erst
-// zusammenstreichen und nur dann anheben, wenn wirklich Neues dazukommt.
-const GRENZE = 7500;
-console.log(`\nGroesse: ${p.length} Zeichen (~${Math.round(p.length / 3.6)} Token)`);
-pruefe(`Bleibt unter ${GRENZE} Zeichen (war 11.814)`, p.length < GRENZE);
+// Die Bezugsgroesse ist eine MESSUNG, keine Meinung: Am 24.07. waren es
+// zusammen 18.291 Zeichen (mit den Stilproben sogar mehr), und da fielen 6 von
+// 36 Anfragen aus, das Verstehen brauchte 6,2 s. Nach dem Entschlacken lag es
+// bei rund 10.700 Zeichen und 3,5-4,1 s. Die Grenze haelt uns deutlich unter
+// dem nachweislich schlechten Wert — sie darf mitwachsen, wenn echte
+// Faehigkeiten dazukommen, aber nie durch Umschichten.
+const VAULT = process.env.VAULT_PATH || "C:/dev/flowstate-vault";
+const stimmeDatei = path.join(VAULT, "instanzen", "lukas", "STIMME-alexandra.md");
+let stimme = "";
+try { stimme = fs.readFileSync(stimmeDatei, "utf-8"); } catch {}
+
+const GRENZE = 13000;   // nachweislich schlecht war 18.291
+const gesamt = p.length + stimme.length;
+console.log(`\nFORMAT_ANHANG: ${p.length} Zeichen`);
+if (stimme) {
+  console.log(`STIMME:        ${stimme.length} Zeichen`);
+  console.log(`SYSTEM gesamt: ${gesamt} Zeichen (~${Math.round(gesamt / 3.6)} Token)`);
+  pruefe(`System-Prompt bleibt unter ${GRENZE} Zeichen (schlecht war 18.291)`, gesamt < GRENZE);
+} else {
+  console.log(`(STIMME nicht gefunden unter ${stimmeDatei} — nur der Anhang wird geprueft)`);
+  pruefe("FORMAT_ANHANG bleibt unter 8.500 Zeichen", p.length < 8500);
+}
 
 console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Faelle bestanden.");
 process.exit(fehler ? 1 : 0);
