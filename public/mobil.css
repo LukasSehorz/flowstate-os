@@ -1,0 +1,290 @@
+/* =====================================================================
+   mobil.css — nur die mobilen Anpassungen der Sprachseite (/sprache).
+   Gehoert zu P5.1 (PWA auf dem iPhone). Aendert nichts am Desktop.
+
+   ─────────────────────────────────────────────────────────────────────
+   EHRLICHER STAND: WAS AUF DEM IPHONE GEHT — UND WAS NICHT
+   (Recherche 25.07.2026, Quellen unten. Bitte lesen, bevor jemand hier
+   ein Wake-Word-Versprechen einbaut.)
+   ─────────────────────────────────────────────────────────────────────
+
+   GEHT in der installierten PWA (Homescreen, display:standalone):
+   • Installation selbst, eigenes Fenster, Splash aus manifest.json.
+   • Mikrofon ueber getUserMedia. Der WebKit-Fehler 185448 ist seit
+     iOS 13.4 behoben — die Pegel-Animation der Kugel (analyser in
+     public/sprache.js) tanzt also auch als App vom Homescreen.
+   • Sprachausgabe: speechSynthesis und das Abspielen der ElevenLabs-
+     Datei. ABER: iOS verlangt fuer den ERSTEN Ton eine echte
+     Nutzergeste. Ein Tipp auf die Kugel ist eine. Eine Antwort, die
+     Minuten spaeter ohne Tipp kommt, kann stumm bleiben, weil
+     abspielen() jedes Mal ein NEUES Audio-Objekt anlegt.
+   • Homescreen-Apps sind in der EU nicht abgeschafft. Apple hatte das
+     fuer iOS 17.4 angekuendigt und die Entscheidung im Maerz 2024
+     zurueckgenommen. Deutschland ist also kein Sonderfall.
+
+   GEHT NICHT — und wird auch nicht gehen:
+   • webkitSpeechRecognition im Standalone-Modus. Genau das ist der
+     Knackpunkt: In Safari als TAB laeuft die Erkennung, vom Homescreen
+     gestartet meldet sie nichts, fragt nicht nach dem Mikro und liefert
+     kein Ergebnis. Mehrfach berichtet (Apple-Forum 748048 ohne
+     Antwort, react-speech-recognition #104), von Apple nie bestaetigt
+     und nie behoben. Folge: In der installierten App versteht
+     Alexandra derzeit NICHTS — weder Wake-Word noch Diktat. Solange
+     das so ist, ist auf dem iPhone der Safari-TAB der funktionierende
+     Weg, nicht das Homescreen-Symbol. Wer es in der App braucht, muss
+     an /api/ vorbei einen eigenen Weg bauen: Ton per MediaRecorder
+     aufnehmen (getUserMedia geht ja) und serverseitig transkribieren.
+   • "Hey Alexandra" im Hintergrund. Es gibt auf iOS keine Schnittstelle
+     fuer ein eigenes Wake-Word; diese Ebene gehoert Siri. Eine PWA
+     bekommt keine Hintergrund-Audiositzung (das Gegenstueck zu
+     UIBackgroundModes fehlt). Sobald die App weggeschoben wird oder der
+     Bildschirm sperrt, ist das Mikro aus. Dauerlauschen funktioniert
+     nur mit offener App und wachem Display — realistisch also nur am
+     Schreibtisch mit Ladekabel.
+   • Hintergrundarbeit generell: Background Sync und Periodic Sync
+     fehlen. Lange Auftraege (offeneArbeit in sprache.js) laufen nur,
+     solange die App vorn ist.
+   • Speicher: rund 50 MB fuer die PWA, und ungenutzte Caches raeumt
+     iOS nach etwa 7 Tagen ab. Deshalb cacht public/sw.js bewusst nur
+     die Huelle und niemals /api/.
+
+   Quellen: bugs.webkit.org 185448 · developer.apple.com/forums/thread/748048
+   · github.com/JamesBrill/react-speech-recognition issue 104
+   · magicbell.com/blog/pwa-ios-limitations-safari-support-complete-guide
+   · 9to5mac.com/2024/03/01 (EU-Ruecknahme) · picovoice.ai/blog/ios-speech-recognition
+
+   ─────────────────────────────────────────────────────────────────────
+   ZWEI TECHNISCHE HINWEISE ZUM CSS HIER
+   ─────────────────────────────────────────────────────────────────────
+   1) Das CSS der Sprachbuehne steht als <style> INNERHALB der Seite
+      (lib/sprache-routes.js, Funktion seite()) — also NACH diesem
+      Stylesheet im Dokument. Bei gleicher Spezifitaet gewinnt das
+      Spaetere. Deshalb hier bewusst hoehere Spezifitaet
+      (`body:has(.voix) .voix`) bzw. an einer Stelle `!important`.
+      Die Datei dort wird nicht angefasst.
+   2) `body:has(.voix)` ist die einzige Moeglichkeit, nur die
+      Sprachseite zu treffen: sie setzt keine eigene Body-Klasse. :has()
+      kennt Safari seit 15.4. Aeltere Browser verwerfen genau diese
+      Regel und behalten das Desktop-Layout — kein Schaden.
+   ===================================================================== */
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   1. DER EIGENTLICHE FEHLER VON HEUTE: kein Hover auf dem Touchgeraet
+   ═══════════════════════════════════════════════════════════════════
+   Die Werkzeugleiste steht im Seiten-CSS auf opacity:.35 und wird nur
+   ueber `.voix:hover` sichtbar. Auf einem Fingergeraet tritt :hover
+   nie ein — Wake, Pause, Stopp und Auffrischen bleiben also dauerhaft
+   halb durchsichtig und wirken kaputt. `(hover: none)` ist die
+   ehrliche Ursache-Abfrage (greift auch auf einem breiten Tablet),
+   die Breiten- und Standalone-Bloecke weiter unten wiederholen es zur
+   Sicherheit. `!important` ist hier begruendet: das Seiten-CSS steht
+   spaeter im Dokument (siehe Hinweis 1 oben) und darf nicht bearbeitet
+   werden. */
+@media (hover: none) {
+  .voix-tools { opacity: 1 !important; }
+  /* Kein grauer Blitz beim Antippen, und kein 300-ms-Warten auf einen
+     moeglichen Doppeltipp — die Kugel soll sofort reagieren. */
+  .voix-orb,
+  .vx-tool {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   2. SCHMALE BILDSCHIRME (iPhone im Browser-Tab)
+   ═══════════════════════════════════════════════════════════════════ */
+@media (max-width: 820px) {
+
+  /* Werkzeuge sichtbar — auch fuer Geraete, die (hover:none) nicht
+     korrekt melden (z. B. Simulator, Geraetevorschau im Desktop). */
+  .voix-tools { opacity: 1 !important; }
+
+  /* ── Buehne: volle Breite und echte Bildschirmhoehe ──────────────
+     Die Seite hat links noch die fixierte Rail (64 px ab 860 px
+     Breite) — die bleibt, sie ist die einzige Navigation. Aber der
+     Innenabstand von <main> (16px/14px aus crm.css) wird auf dieser
+     Seite entfernt: die Buehne ist ein Bild, kein Textblock, und
+     jeder Pixel Breite macht die Kugel groesser. */
+  body:has(.voix) main {
+    padding: 0;
+    /* Querformat: iPhone-Ecken/Notch liegen dann links oder rechts. */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  body:has(.voix) .voix {
+    margin: 0;
+    border-radius: 0;
+    /* 100vh ist auf iOS die GROSSE Ansicht — inklusive des Platzes, den
+       Safaris Adress- und Werkzeugleiste einnehmen. Die Buehne wird
+       damit hoeher als das Sichtbare, und die Werkzeugleiste am unteren
+       Rand rutscht unter Safaris Leiste: nicht antippbar. 100dvh misst
+       das tatsaechlich Sichtbare und wandert mit. */
+    min-height: calc(100vh - 96px);
+  }
+  @supports (height: 100dvh) {
+    body:has(.voix) .voix { min-height: calc(100dvh - 96px); }
+  }
+
+  /* ── Kugel: gross und mittig ─────────────────────────────────────
+     Statt min(66vmin,560px) hier bis an den Rand: 92 % der nun
+     abstandsfreien Buehne, gedeckelt durch 78vmin, damit sie im
+     Querformat nicht hoeher wird als der Bildschirm. place-items der
+     Buehne zentriert sie schon — hier nur noch die Groesse. */
+  body:has(.voix) .voix-orb {
+    width: min(92%, 78vmin);
+    /* Platz fuer die Werkzeugleiste unten, damit die Kugel optisch in
+       der freien Flaeche sitzt und nicht hinter den Knoepfen klebt. */
+    margin-bottom: 8vh;
+  }
+
+  /* Der Hinweistext haengt unter der Kugel. Bei groesserer Kugel
+     braucht er mehr Abstand und weniger Sperrung. Wichtig: er MUSS
+     umbrechen duerfen — sprache.js schreibt hier nicht nur den kurzen
+     Hinweis hinein, sondern auch das gerade Verstandene und im
+     Fehlerfall den langen Satz "Mikrofon nicht freigegeben — …". Die
+     Buehne hat overflow:hidden; eine Zeile ohne Umbruch waere genau
+     dann abgeschnitten, wenn der Text am wichtigsten ist. */
+  body:has(.voix) .voix-cue {
+    bottom: -11%;
+    font-size: 10.5px;
+    letter-spacing: .18em;
+    line-height: 1.7;
+    text-align: center;
+    max-width: 84vw;
+  }
+
+  /* ── Werkzeugleiste: erreichbar und vollstaendig ─────────────────
+     Fuenf Elemente in einer nicht umbrechenden Reihe passen nicht in
+     ~330 px; die Buehne hat overflow:hidden, es wuerde also einfach
+     abgeschnitten. Deshalb Umbruch erlauben und die Leiste in der
+     Breite begrenzen. `bottom` respektiert den Home-Indicator. */
+  body:has(.voix) .voix-tools {
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: calc(100% - 24px);
+    gap: 6px;
+    padding: 6px 8px;
+    row-gap: 4px;
+  }
+  /* Apple gibt 44 pt als kleinste sicher treffbare Flaeche an — die
+     Knoepfe waren mit 6px/12px Polsterung darunter. */
+  body:has(.voix) .vx-tool {
+    min-height: 44px;
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  /* "Stimme: ElevenLabs" ist eine Information fuer den Schreibtisch,
+     kein Bedienelement. Auf dem Telefon nimmt sie nur die Breite weg,
+     die Wake/Pause/Stopp brauchen. */
+  body:has(.voix) .vx-voice { display: none; }
+
+  /* Die Aurora ist eine grosse, dauerhaft animierte Flaeche mit 30 px
+     Weichzeichner. Auf dem Telefon ist das der teuerste Teil des
+     Bildes und laeuft womoeglich stundenlang, waehrend das Geraet
+     zuhoert. Etwas weniger Weichzeichner und Koernung kostet kaum
+     Wirkung, aber merkbar Akku. */
+  body:has(.voix) .voix-atmo { filter: blur(20px); }
+  body:has(.voix) .voix-grain { opacity: .035; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   3. ALS APP VOM HOMESCREEN GESTARTET (display:standalone)
+   ═══════════════════════════════════════════════════════════════════
+   Hier gibt es keine Browserleisten mehr: die Seite ist das ganze
+   Fenster. Deshalb darf die Buehne die volle Hoehe nehmen — und muss
+   sich um Notch und Home-Indicator selbst kuemmern, die der Browser
+   sonst uebernimmt.
+   Die env(safe-area-inset-*) sind absichtlich auf allen vier Seiten
+   gesetzt: welche davon groesser als 0 sind, haengt an
+   apple-mobile-web-app-status-bar-style im <head>. So sitzt es
+   richtig, egal wie sich das entschieden wird. */
+@media (display-mode: standalone) {
+
+  /* Auch hier: kein Hover, also dauerhaft sichtbar. Gilt zusaetzlich
+     fuer ein iPad im Standalone-Modus, das breiter als 820 px ist. */
+  .voix-tools { opacity: 1 !important; }
+  .voix-orb, .vx-tool {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* Die Rail und die Kopfleiste sind `position:fixed` mit 14 px
+     Abstand — ohne Statusleiste des Browsers laegen sie unter der
+     Notch bzw. unter dem Home-Indicator. Bewusst NICHT auf die
+     Sprachseite eingeschraenkt: im App-Fenster gilt das ueberall, und
+     diese Regel greift ausschliesslich im Standalone-Modus, also nur
+     in der neuen PWA-Situation. */
+  .rail {
+    top: calc(14px + env(safe-area-inset-top));
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    left: calc(14px + env(safe-area-inset-left));
+  }
+  .topbar {
+    margin-top: calc(14px + env(safe-area-inset-top));
+    margin-right: calc(14px + env(safe-area-inset-right));
+  }
+
+  /* Buehne randlos ueber das gesamte Fenster. */
+  body:has(.voix) main {
+    padding: 0;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  body:has(.voix) .voix {
+    margin: 0;
+    border-radius: 0;
+    min-height: calc(100vh - 96px);
+  }
+  @supports (height: 100dvh) {
+    body:has(.voix) .voix { min-height: calc(100dvh - 96px); }
+  }
+
+  body:has(.voix) .voix-tools {
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: calc(100% - 24px);
+  }
+  body:has(.voix) .vx-tool { min-height: 44px; padding: 10px 14px; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   4. APP-FENSTER UND SCHMAL — das iPhone am Homescreen
+   ═══════════════════════════════════════════════════════════════════
+   Beides zusammen ist der Zielfall aus P5.1. Nur hier darf die Kugel
+   wirklich alles nehmen: keine Browserleiste, kein Desktop. */
+@media (display-mode: standalone) and (max-width: 820px) {
+  body:has(.voix) .voix-orb {
+    width: min(94%, 82vmin);
+    margin-bottom: 6vh;
+  }
+  body:has(.voix) .vx-voice { display: none; }
+  /* Kein versehentliches Verschieben der Buehne beim Wischen: eine
+     App scrollt nicht, wenn sie aus einem Bild besteht. Der
+     Gummiband-Effekt wuerde die Kugel bei jedem Tipp verrutschen
+     lassen. Nur im App-Fenster — im Browser-Tab braucht Safari das
+     Scrollen, um seine Leisten einzuklappen. */
+  body:has(.voix) { overscroll-behavior-y: none; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   5. Bewegung reduzieren — Systemeinstellung respektieren
+   ═══════════════════════════════════════════════════════════════════
+   Das Seiten-CSS stellt schon alle Animationen ab. Damit fehlt aber
+   auch die einzige Rueckmeldung "sie hoert zu / denkt nach": der Pegel
+   steht still, und der Hinweistext wird in genau diesen Zustaenden
+   ausgeblendet. Auf dem Telefon bleibt dann nichts uebrig, woran man
+   erkennt, ob das Antippen etwas bewirkt hat. Also uebernimmt der Text
+   die Aufgabe — nur fuer lauschen und denken. Beim Sprechen ist die
+   Stimme selbst die Rueckmeldung. */
+@media (prefers-reduced-motion: reduce) and (max-width: 820px) {
+  body:has(.voix) .voix-orb[data-zustand="lauschen"] .voix-cue,
+  body:has(.voix) .voix-orb[data-zustand="denken"] .voix-cue { opacity: 1; }
+}

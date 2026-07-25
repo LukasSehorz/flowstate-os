@@ -1,0 +1,32 @@
+{
+  "name": "Alexandra",
+  "short_name": "Alexandra",
+  "description": "Alexandra — die Stimme von flowstateOS. Kugel antippen, sprechen, fertig.",
+  "lang": "de",
+  "dir": "ltr",
+  "start_url": "/sprache",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#060a12",
+  "theme_color": "#060a12",
+  "icons": [
+    {
+      "src": "/bilder/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/bilder/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/bilder/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

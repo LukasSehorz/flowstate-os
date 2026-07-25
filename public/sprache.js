@@ -858,6 +858,24 @@
     el.kugel.style.opacity = ".5";
   }
 
+  // iPhone-Falle (Recherche 25.07.): Als vom Homescreen installierte App gibt
+  // es webkitSpeechRecognition auf iOS ZWAR — sie fragt aber nie nach dem
+  // Mikrofon und liefert weder Ergebnis noch Fehler. Der Nutzer tippt also auf
+  // die Kugel und es passiert schlicht nichts, ohne jede Erklaerung. (Seit
+  // Jahren offen bei Apple, nie bestaetigt, nie behoben.) Im Safari-TAB
+  // funktioniert dieselbe Seite.
+  //
+  // Deshalb hier ehrlich sagen, was los ist, statt den Nutzer raten zu lassen.
+  // Sobald wir Aufnahme + serverseitige Transkription haben, faellt das weg.
+  const istIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const alsApp = window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  if (SR && istIOS && alsApp && el.hinweis) {
+    el.hinweis.textContent = "In der App hört das iPhone leider nicht zu — öffne die Seite in Safari.";
+    el.kugel.style.opacity = ".55";
+  }
+
   setzeZustand("ruhe");
   wakePunktSetzen();
   pegelSchleife();   // laeuft dauerhaft; nutzt Mikro (Lauschen) bzw. Stimme (Sprechen)
