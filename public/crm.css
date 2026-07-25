@@ -227,6 +227,14 @@ body.login-seite{display:grid;place-items:center;min-height:100vh;
 .reiter a:hover{color:var(--foreground);background:var(--surface-2);text-decoration:none}
 .reiter a.aktiv{color:var(--foreground);background:var(--surface);font-weight:600;
   box-shadow:0 4px 14px -8px rgba(18,17,14,.35), inset 0 1px 0 rgba(255,255,255,.7)}
+/* Wessen Deals sehe ich — steht mit Abstand rechts neben den Reitern. */
+.personen{display:flex;gap:3px;margin-left:22px;padding-left:22px;
+  border-left:1px solid var(--border);flex-wrap:wrap;align-items:center}
+.personen a{padding:7px 12px;font-size:13px;font-weight:500;color:var(--text-muted);
+  border-radius:9px;white-space:nowrap;transition:color var(--tempo),background var(--tempo)}
+.personen a:hover{color:var(--foreground);background:var(--surface-2);text-decoration:none}
+.personen a.aktiv{color:var(--foreground);background:var(--surface-2);font-weight:650;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.7)}
 .segmente{display:inline-flex;gap:2px;background:var(--surface-2);padding:3px;
   border-radius:9px;margin:8px 0 8px auto}
 .segmente a{padding:6px 14px;border-radius:7px;font-size:13px;font-weight:500;color:var(--text-secondary)}
@@ -481,7 +489,9 @@ table.tabelle{width:100%;border-collapse:collapse}
 /* Titel bekommt eine eigene Zeile, darunter Wichtigkeit/Dringlichkeit/Tag/Knopf —
    sonst quetschen die Auswahlfelder das Eingabefeld auf null. */
 /* In der schmalen Spalte stehen die Felder untereinander, Tag und Knopf nebeneinander. */
-.akte-todo-neu{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-top:4px}
+/* Titel und die beiden Auswahlfelder ueber die volle Breite, darunter die zwei
+   Datumsfelder nebeneinander und der Knopf daneben. */
+.akte-todo-neu{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-top:4px}
 .akte-todo-neu input[name=titel],.akte-todo-neu select{grid-column:1/-1}
 /* Phasen im "Aktueller Stand" der Lead-Akte */
 .phasen-liste{display:grid;gap:7px}
@@ -711,12 +721,157 @@ body.crm-dashboard-design .anruf-tabelle tbody tr:last-child td{border-bottom:0}
 .balken-summe .balken{background:linear-gradient(180deg,var(--blau-600),var(--blau-900))}
 .balken-summe .balken-label{font-weight:600;color:var(--foreground)}
 
+/* ---------- Team-Leistung ---------- */
+/* Drei gleich breite Kacheln nebeneinander; auf schmalen Schirmen untereinander. */
+.team-reihe{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:16px}
+@media (max-width:1100px){.team-reihe{grid-template-columns:1fr}}
+.team-reihe .karte{margin-bottom:0;display:flex;flex-direction:column}
+.team-reihe .balken-block{margin-top:auto}
+/* Umschalter über einer Kachel: Zeitraum bzw. Kennzahl */
+.zeit-schalter{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 12px;padding:3px;border-radius:11px;
+  background:var(--surface-2);border:1px solid var(--border)}
+.zeit-schalter button{flex:1 1 auto;background:transparent;color:var(--text-secondary);
+  border:0;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;white-space:nowrap;
+  box-shadow:none;transition:background var(--tempo),color var(--tempo)}
+.zeit-schalter button:hover{background:rgba(255,255,255,.6);color:var(--foreground);box-shadow:none}
+.zeit-schalter button.an{background:var(--surface);color:var(--foreground);box-shadow:var(--s1)}
+.karte-kopf .zeit-schalter{margin:0;flex:0 0 auto;max-width:60%}
+/* Zahl über dem Balken — bei 0 blasser, damit die Spitzenwerte herausstechen */
+.balken-null .balken{opacity:.35}
+.balken-null .balken-wert{color:var(--text-muted);font-weight:500}
+/* In den schmalen Kacheln stehen mehr Säulen nebeneinander: kleinere Beschriftung,
+   und lange Quellennamen dürfen umbrechen statt überzulaufen. */
+.team-reihe .balken-block{height:190px;padding-top:20px}
+.team-reihe .balken-label{font-size:10.5px;white-space:normal;text-align:center;line-height:1.25}
+/* In den schmalen Kacheln stehen bis zu sieben Säulen: die Zahl darf nicht mehr
+   über den Balken hinausragen, sonst überlappen die Nachbarn. */
+.team-reihe .balken-block{gap:8px}
+.team-reihe .balken-wert{font-size:11px;left:-3px;right:-3px}
+.team-reihe .balken{max-width:46px}
+/* Grundgesamtheit unter dem Namen: "1 von 3" — ordnet die Prozentzahl ein */
+.balken-basis{font-size:10px;color:var(--text-muted);text-align:center;line-height:1.2;
+  margin-top:-4px;white-space:nowrap}
+.balken-basis:empty{display:none}
+
+/* ---------- Fenster beim Überfahren einer Säule ----------
+   Zeigt die absoluten Zahlen hinter der Prozentangabe: "40 Leads · 5 Kunden".
+   Schwebt über der Säule, milchig hinterlegt, und faengt keine Mausereignisse ab. */
+.balken-saeule{position:relative;outline:none}
+/* Sitzt am oberen Rand des Balkenfelds — nie über den Umschaltern, egal wie hoch
+   der Balken darunter ist. Milchig, aber deckend genug zum Lesen. */
+.balken-fenster{position:absolute;top:0;left:50%;transform:translate(-50%,6px);
+  z-index:40;min-width:168px;max-width:230px;display:flex;flex-direction:column;gap:2px;
+  padding:11px 14px;border-radius:13px;text-align:left;
+  background:rgba(253,252,250,.94);-webkit-backdrop-filter:blur(18px) saturate(1.6);
+  backdrop-filter:blur(18px) saturate(1.6);
+  border:1px solid rgba(255,255,255,.9);
+  box-shadow:0 18px 40px -14px rgba(18,17,14,.4), 0 0 0 1px rgba(43,42,40,.06);
+  opacity:0;pointer-events:none;
+  transition:opacity var(--tempo),transform var(--tempo)}
+.balken-saeule:hover .balken-fenster,
+.balken-saeule:focus-visible .balken-fenster{opacity:1;transform:translate(-50%,0)}
+.balken-fenster .bf-name{font-size:13px;font-weight:650;line-height:1.25}
+.balken-fenster .bf-zeit{font-size:10.5px;color:var(--text-muted);text-transform:none;margin-bottom:4px}
+.balken-fenster .bf-zahlen{font-size:12.5px;font-weight:600;color:var(--foreground);line-height:1.35}
+.balken-fenster .bf-quote{font-size:11.5px;color:var(--text-secondary)}
+.balken-fenster .bf-quote:empty{display:none}
+/* Die äußeren Säulen dürfen nicht aus der Kachel herauslaufen */
+.balken-saeule:first-child .balken-fenster{left:0;transform:translate(0,6px)}
+.balken-saeule:first-child:hover .balken-fenster{transform:translate(0,0)}
+.balken-saeule:last-child .balken-fenster{left:auto;right:0;transform:translate(0,6px)}
+.balken-saeule:last-child:hover .balken-fenster{transform:translate(0,0)}
+/* Beim Überfahren tritt die Säule selbst leicht hervor */
+.balken-saeule:hover .balken{filter:brightness(1.06)}
+
+/* ---------- Team-Tabelle: Bestand links, Tageswerte rechts ---------- */
+.team-tabelle .gruppen-zeile th{padding-bottom:2px;border-bottom:0;font-size:10.5px;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
+.team-tabelle .gruppe{text-align:center;border-bottom:1px solid var(--border)}
+.team-tabelle .gruppe-heute{color:var(--blau-700)}
+/* Feine Trennlinie zwischen Bestand und Heute */
+.team-tabelle .heute-erst{border-left:1px solid var(--border)}
+.team-tabelle .null{color:var(--text-muted)}
+.team-tabelle .zeile-sub{display:block;font-size:11px;color:var(--text-muted);font-weight:400;margin-top:2px}
+.badge.still{background:var(--surface-2);color:var(--text-muted);cursor:help}
+
+/* ---------- Personenseite ---------- */
+.person-aufgaben{display:flex;flex-wrap:wrap;gap:6px}
+.person-aufgaben .badge{font-size:11.5px;padding:4px 10px}
+/* Kennzahlenreihe über einem Diagramm */
+.kennzeilen{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.kennzeilen-vier{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:820px){.kennzeilen,.kennzeilen-vier{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kennzeilen .kennzeile{display:flex;flex-direction:column;gap:2px;padding:11px 14px;
+  border-radius:12px;background:linear-gradient(158deg,#FFFFFF 0%,var(--surface-2) 100%);
+  border:1px solid var(--border)}
+.kennzeilen .kennzeile>span{font-size:11px;color:var(--text-muted);letter-spacing:.02em}
+.kennzeilen .kennzeile>b{font-size:21px;font-weight:700;letter-spacing:-.02em;line-height:1.15}
+.kennzeilen .kennzeile>i{font-size:11px;color:var(--text-secondary);font-style:normal;line-height:1.3}
+.kennzeilen .kennzeile>i:empty{display:none}
+/* Die drei Quoten des Cold Callings */
+.quoten-reihe{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:820px){.quoten-reihe{grid-template-columns:1fr}}
+.quote-kachel{display:flex;flex-direction:column;gap:3px;padding:13px 15px;border-radius:12px;
+  background:linear-gradient(158deg,var(--blau-50) 0%,var(--blau-100) 100%);
+  border:1px solid var(--blau-200)}
+.quote-kachel>span{font-size:11.5px;font-weight:600;color:var(--blau-800)}
+.quote-kachel>b{font-size:26px;font-weight:700;letter-spacing:-.025em;color:var(--blau-900);line-height:1.1}
+.quote-kachel>i{font-size:11px;color:var(--blau-700);font-style:normal}
+/* Vergleich zum Team-Schnitt — ordnet die Quote ein */
+.quote-kachel>em{font-size:10.5px;font-style:normal;color:var(--text-muted);margin-top:3px;line-height:1.3}
+.quote-kachel>em:empty{display:none}
+.quote-kachel>em.besser{color:var(--success);font-weight:600}
+.quote-kachel>em.schlechter{color:var(--danger);font-weight:600}
+/* Im grauen Design sind die drei Quoten die wichtigsten Zahlen der Seite —
+   dunkel abgesetzt wie die Navigationsleiste, damit sie den Blick fangen. */
+body.crm-dashboard-design .quote-kachel{
+  background:linear-gradient(158deg,#3B3A37 0%,#2A2925 100%);
+  border-color:rgba(255,255,255,.07);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08), var(--s2)}
+body.crm-dashboard-design .quote-kachel>span{color:rgba(242,240,235,.72)}
+body.crm-dashboard-design .quote-kachel>b{color:#FFFFFF}
+body.crm-dashboard-design .quote-kachel>i{color:rgba(242,240,235,.55)}
+body.crm-dashboard-design .quote-kachel>em{color:rgba(242,240,235,.5)}
+body.crm-dashboard-design .quote-kachel>em.besser{color:#8FD3A8}
+body.crm-dashboard-design .quote-kachel>em.schlechter{color:#F0A79E}
+
+/* Zwei Kacheln nebeneinander: offene Pipeline und Verlustgründe */
+.person-reihe{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:1000px){.person-reihe{grid-template-columns:1fr}}
+.person-reihe .karte{margin-bottom:0}
+/* Aufzaehlung mit Punkt, Text, Anzahl und Betrag */
+.liste-zeilen{display:flex;flex-direction:column}
+.liste-zeile{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--border)}
+.liste-zeile:last-of-type{border-bottom:0}
+.lz-punkt{width:9px;height:9px;border-radius:3px;flex-shrink:0;background:var(--text-muted)}
+.lz-punkt.sparte-webdesign{background:#1F3A63}
+.lz-punkt.sparte-performance{background:#C4671F}
+.lz-punkt.sparte-ki{background:#7B2233}
+.lz-text{flex:1;min-width:0;font-size:13px;font-weight:550;line-height:1.3}
+.lz-text i{display:block;font-size:10.5px;font-style:normal;color:var(--text-muted);font-weight:400}
+.lz-zahl{font-size:13px;color:var(--text-secondary);min-width:24px;text-align:right}
+.lz-wert{font-size:13px;font-weight:650;min-width:74px;text-align:right}
+.liste-fuss{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin-top:10px;padding-top:11px;border-top:1px solid var(--border-stark);font-size:12.5px}
+.liste-fuss span{color:var(--text-secondary)}
+.liste-fuss b{font-size:15px;font-weight:700}
+/* Verlustgründe als waagrechte Balken */
+.grund-zeile{display:grid;grid-template-columns:1fr 96px 26px;align-items:center;gap:11px;padding:7px 0}
+.gz-text{font-size:12.5px;line-height:1.3}
+.gz-spur{height:7px;border-radius:99px;background:var(--surface-2);overflow:hidden;
+  box-shadow:inset 0 1px 2px rgba(43,42,40,.12)}
+.gz-spur i{display:block;height:100%;border-radius:99px;
+  background:linear-gradient(90deg,#D98A80,#A32B22)}
+.gz-zahl{font-size:12.5px;font-weight:650;text-align:right}
+
 /* ---------- Kanban ---------- */
 .kanban{display:flex;gap:14px;overflow-x:auto;padding:2px 2px 18px;align-items:flex-start}
 .spalte{flex:0 0 286px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
   padding:14px;box-shadow:var(--s1);border-top:3px solid var(--stufe,var(--stage-3))}
 .spalte-kopf{margin-bottom:12px}
-.spalte-titel-zeile{display:flex;align-items:center;justify-content:space-between;gap:8px}
+/* Zwei Zeilen Platz: lange Namen wie "Erstgespräch / Readiness-Check gebucht"
+   duerfen umbrechen, ohne die Karten der Nachbarspalten nach unten zu schieben. */
+.spalte-titel-zeile{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px}
 .spalte-titel{font-size:14px;font-weight:600}
 .spalte-zahl{font-size:12px;font-weight:600;color:var(--text-muted)}
 .spalte-quote{font-size:11.5px;color:var(--text-muted);margin-top:2px}
@@ -731,14 +886,171 @@ body.crm-dashboard-design .anruf-tabelle tbody tr:last-child td{border-bottom:0}
 .deal-name{font-weight:600;font-size:13.5px;line-height:1.35;flex:1}
 .deal-griff{color:var(--border-stark)}
 .deal-griff svg{width:13px;height:13px}
-.deal-betrag{font-size:17px;font-weight:700;letter-spacing:-.02em;margin:7px 0 4px}
+.deal-person{font-size:11.5px;color:var(--text-muted);margin:2px 0 0 16px;line-height:1.35}
+.deal-betrag{font-size:22px;font-weight:700;letter-spacing:-.025em;margin:8px 0 7px;
+  display:flex;align-items:baseline;gap:8px;color:var(--deal-farbe,var(--foreground))}
+.deal-bonus{font-size:10.5px;font-weight:650;letter-spacing:.02em;padding:2px 7px;border-radius:99px;
+  background:var(--deal-flaeche,var(--surface-3));color:var(--deal-farbe,var(--text-secondary));cursor:help}
 .deal-zeile{font-size:12px;color:var(--text-muted);margin-bottom:8px}
+
+/* ============================================================
+   Pipeline im Grau-Design (wie Dashboard, Leads und Kunden).
+   Die Spalten bleiben ruhig und hell — die Farbe gehoert den Karten,
+   damit die Bereiche beim Ueberfliegen sofort auffallen.
+   ============================================================ */
+body.crm-dashboard-design .spalte{
+  background:linear-gradient(158deg,#FFFFFF 0%,#F4F3F0 55%,#EAE9E4 100%);
+  border:1px solid rgba(43,42,40,.09);border-radius:16px;border-top:0;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.8), 0 1px 2px rgba(43,42,40,.05), 0 14px 34px -16px rgba(43,42,40,.22)}
+body.crm-dashboard-design .spalte-kopf{
+  padding-bottom:11px;margin-bottom:12px;border-bottom:1px solid rgba(43,42,40,.1)}
+body.crm-dashboard-design .spalte-titel{letter-spacing:-.01em}
+body.crm-dashboard-design .spalte-zahl{
+  background:var(--surface-3);color:var(--foreground);border-radius:99px;padding:1px 9px;
+  font-variant-numeric:tabular-nums;box-shadow:inset 0 1px 0 rgba(255,255,255,.5)}
+body.crm-dashboard-design .spalte.ziel{
+  background:linear-gradient(158deg,#FFFFFF 0%,#EDECE8 100%);
+  border-color:var(--blau-500);box-shadow:0 0 0 3px rgba(114,111,104,.14), var(--s2)}
+body.crm-dashboard-design .spalte-leer{
+  border-color:rgba(43,42,40,.16);color:var(--text-muted);background:rgba(255,255,255,.35)}
+/* Ziehen: die Karte hebt leicht ab statt einfach blass zu werden */
+body.crm-dashboard-design .deal.zieht{opacity:.5;transform:scale(.98)}
+body.crm-dashboard-design .deal{cursor:pointer}
+body.crm-dashboard-design .deal[draggable="true"] .deal-griff{cursor:grab}
+/* "Neuer Deal" und der Hinweisbalken passen sich dem Grau an */
+body.crm-dashboard-design .hinweis.info{
+  background:linear-gradient(158deg,#FFFFFF 0%,#F2F1ED 100%);
+  border:1px solid rgba(43,42,40,.1);border-left:0;border-radius:14px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.8), var(--s1)}
+body.crm-dashboard-design .hinweis.info svg{color:var(--blau-600)}
+/* Kurze Rueckmeldung, wenn ein Zug nicht moeglich war */
+.zug-hinweis{position:fixed;left:50%;bottom:28px;transform:translate(-50%,14px);
+  background:linear-gradient(158deg,#3B3A37 0%,#26251F 100%);color:#F6F4F0;
+  padding:11px 18px;border-radius:12px;font-size:13.5px;font-weight:550;
+  box-shadow:0 18px 44px -14px rgba(18,17,14,.6);z-index:60;
+  opacity:0;pointer-events:none;transition:opacity var(--tempo),transform var(--tempo)}
+.zug-hinweis.sichtbar{opacity:1;transform:translate(-50%,0)}
+/* Karte, die nicht abgelegt werden konnte, blinkt kurz rot auf */
+.deal.abgelehnt{animation:zug-abgelehnt 1.4s ease-out}
+@keyframes zug-abgelehnt{
+  0%,60%{box-shadow:0 0 0 2px var(--danger), var(--s2)}
+  100%{box-shadow:none}
+}
+
+/* Farbe je Bereich — die ganze Karte traegt die Farbe, damit man beim Ueberfliegen
+   sofort sieht, aus welchem Bereich ein Deal kommt.
+   --deal-farbe = kraeftiger Ton fuer Betrag und Rand,
+   --deal-hell/--deal-tief = Verlauf der Kartenflaeche,
+   --deal-kante = Rahmen, --deal-marke = Flaeche der Bereichs-Marke. */
+.deal.sparte-webdesign{--deal-farbe:#1F3A63;--deal-hell:#F4F8FD;--deal-tief:#DCE7F5;
+  --deal-kante:#B7CCE8;--deal-marke:#CBDCF1}
+.deal.sparte-performance{--deal-farbe:#A8501A;--deal-hell:#FFF7F0;--deal-tief:#FAE2CD;
+  --deal-kante:#EEC49E;--deal-marke:#F7D7BB}
+.deal.sparte-ki{--deal-farbe:#7B2233;--deal-hell:#FDF4F6;--deal-tief:#F5DDE2;
+  --deal-kante:#E5BCC5;--deal-marke:#EFCDD4}
+.deal[class*="sparte-"]{
+  background:linear-gradient(158deg,var(--deal-hell) 0%,var(--deal-tief) 100%);
+  border:1px solid var(--deal-kante);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.7), var(--s1)}
+.deal[class*="sparte-"]:hover{
+  background:linear-gradient(158deg,#FFFFFF 0%,var(--deal-tief) 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.85), var(--s2)}
+.deal[class*="sparte-"] .deal-punkt{background:var(--deal-farbe)}
+.deal[class*="sparte-"] .deal-name{color:#1E1D1B}
+.deal[class*="sparte-"] .deal-person{color:rgba(30,29,27,.6)}
+.deal[class*="sparte-"] .deal-fuss{border-top-color:var(--deal-kante);color:rgba(30,29,27,.72)}
+.deal[class*="sparte-"] .deal-griff{color:var(--deal-kante)}
+.deal[class*="sparte-"] .badge{background:rgba(255,255,255,.7);color:rgba(30,29,27,.7)}
+.deal-sparte{background:var(--deal-marke)!important;color:var(--deal-farbe)!important;font-weight:650}
 .deal-marken{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:9px}
 .deal-fuss{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);
   padding-top:9px;border-top:1px solid var(--border)}
 .deal-fuss svg{width:13px;height:13px;color:var(--text-muted)}
 .spalte-leer{border:1.5px dashed var(--border-stark);border-radius:var(--r-md);padding:16px 10px;
   text-align:center;font-size:12px;color:var(--text-muted)}
+
+/* ---------- Bereichs-Punkte im Spaltenkopf (nur Gesamtsicht) ----------
+   Sagen auf einen Blick, welche Bereiche diese Phase ueberhaupt haben —
+   nur deren Karten lassen sich hier ablegen. */
+.stufe-punkte{display:inline-flex;align-items:center;gap:4px;margin-right:auto;padding-left:2px}
+.stufe-punkt{width:9px;height:9px;border-radius:3px;flex-shrink:0;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45), 0 1px 2px rgba(43,42,40,.2)}
+.stufe-punkt.sparte-webdesign{background:#1F3A63}
+.stufe-punkt.sparte-performance{background:#C4671F}
+.stufe-punkt.sparte-ki{background:#7B2233}
+/* Projektabwicklung, Gesamtsicht: unter "Phase N" steht je Bereich der Name, den
+   die Phase dort traegt. Feste Mindesthoehe fuer drei Zeilen, damit die Karten
+   aller Spalten auf gleicher Hoehe beginnen. */
+.stufe-namen{display:flex;flex-direction:column;gap:3px;margin-top:5px;min-height:52px}
+.stufe-namen span{display:flex;align-items:center;gap:6px;font-size:11.5px;
+  color:var(--text-secondary);line-height:1.3}
+.stufe-namen i{width:7px;height:7px;border-radius:2px;flex-shrink:0}
+/* Spalte, in der die gezogene Karte nichts verloren hat */
+.spalte.gesperrt{background:var(--surface-2);border-color:var(--border);opacity:.5}
+.spalte.gesperrt .spalte-karten{pointer-events:none}
+
+/* ---------- Termin auf der Karte ----------
+   Im Erstgespraech das Gespraechsdatum, danach die Frist. */
+.deal-termin{display:flex;align-items:center;gap:6px;margin:0 0 9px;font-size:11.5px;
+  color:rgba(30,29,27,.68);line-height:1.3}
+.deal-termin svg{width:13px;height:13px;flex-shrink:0;opacity:.75}
+.deal-termin b{font-weight:650}
+.deal-termin.offen{color:rgba(30,29,27,.4)}
+.deal-termin.spaet{color:var(--danger);font-weight:600}
+.deal-termin.spaet svg{opacity:1}
+
+/* ---------- Dringlichkeit ----------
+   Steht als Wort unten in der Fusszeile, rechts neben dem Verantwortlichen —
+   keine Marke, kein Farbstreifen. Die Karten sind ohnehin danach sortiert. */
+.deal-fuss{justify-content:space-between;gap:8px}
+.deal-wer{display:flex;align-items:center;gap:6px;min-width:0}
+/* Auswahlfeld, das nicht wie eines aussieht: erst beim Ueberfahren zeigt es den
+   Rahmen. So bleibt die Karte ruhig, laesst sich aber ohne Umweg ueber die Akte
+   einstufen. */
+.deal-dring{font-size:11.5px;font-weight:650;letter-spacing:.01em;white-space:nowrap;flex-shrink:0;
+  appearance:none;-webkit-appearance:none;background:transparent;border:1px solid transparent;
+  border-radius:7px;padding:2px 6px;margin:0;width:auto;min-width:0;cursor:pointer;
+  text-align:right;text-align-last:right;
+  transition:background var(--tempo),border-color var(--tempo)}
+.deal-dring:hover,.deal-dring:focus{background:rgba(255,255,255,.75);border-color:var(--deal-kante,var(--border-stark));outline:none}
+.deal-dring.dr-rot{color:#A32B22}
+.deal-dring.dr-bernstein{color:#8A5210}
+.deal-dring.dr-blau{color:#2E5C9A}
+.deal-dring.dr-still{color:rgba(30,29,27,.45)}
+.deal-dring.dr-leer{color:rgba(30,29,27,.34);font-weight:550}
+.deal-dring option{color:var(--foreground);font-weight:500}
+
+/* Verlust-Spalte: klar abgesetzt, damit man nicht versehentlich hineinzieht */
+.spalte-verlust .spalte-titel{color:var(--danger)}
+.spalte-verlust .spalte-quote{color:rgba(163,43,34,.7)}
+.spalte-verlust.ziel{background:#FCEDEC;border-color:#E7B4AF}
+.badge.d-rot{background:#FBDDDD;color:#8C2020}
+.badge.d-bernstein{background:#FBE7CB;color:#8A5210}
+.badge.d-blau{background:#DCE7F5;color:#26456F}
+.badge.d-still{background:var(--surface-2);color:var(--text-muted)}
+
+/* ---------- Aufforderung nach einem gebuchten Erstgespraech ----------
+   Bleibt stehen, bis man sie wegklickt — das Gespraechsdatum darf nicht untergehen. */
+/* Sitzt ueber der Zeituhr unten rechts, damit sich beide nicht verdecken. */
+.akte-ruf{position:fixed;right:22px;bottom:110px;z-index:70;width:370px;
+  padding:16px 18px 16px;border-radius:16px;
+  background:linear-gradient(158deg,#FFFFFF 0%,#F1EFEA 100%);border:1px solid var(--border-stark);
+  box-shadow:0 24px 54px -18px rgba(18,17,14,.42);
+  opacity:0;transform:translateY(12px);transition:opacity var(--tempo),transform var(--tempo)}
+.akte-ruf.sichtbar{opacity:1;transform:translateY(0)}
+.akte-ruf-text{display:flex;flex-direction:column;gap:5px;font-size:12.5px;line-height:1.45;
+  padding-right:24px}
+.akte-ruf-text b{font-size:14px;font-weight:650}
+.akte-ruf-text span{color:var(--text-secondary)}
+.akte-ruf-knoepfe{margin-top:13px}
+.akte-ruf-knoepfe .knopf{white-space:nowrap;font-size:12.5px;padding:9px 15px}
+.akte-ruf-knoepfe button.still{position:absolute;top:10px;right:10px;padding:4px 7px;
+  font-size:13px;line-height:1;color:var(--text-muted)}
+
+/* Datumsfelder im To-Do-Formular der Akte tragen ihre Bedeutung sichtbar */
+.akte-todo-datum{display:flex;flex-direction:column;gap:3px;font-size:10.5px;
+  color:var(--text-muted);letter-spacing:.02em}
+.akte-todo-datum input{margin:0}
 
 /* ---------- Handlungsliste ---------- */
 .signal{display:flex;align-items:center;gap:13px;background:var(--akzent-flaeche);border-radius:var(--r-md);
