@@ -1947,3 +1947,44 @@ body.crm-dashboard-design .reiter a.aktiv{
    Schriftfuellung bliebe aber bestehen und wuerde sie ueberdecken. */
 :root[data-weiss="1"] body.crm-dashboard-design .karte-mitte .kachel-zahl{
   background:none;-webkit-text-fill-color:var(--foreground);color:var(--foreground)}
+
+/* ---------- Content: Videoakte und Vergleichszahlen ----------
+   Die Akte steht ueber den Zahlen: was war im Video zu sehen, wie lang war es,
+   wo laeuft es. Ohne diesen Kopf sind die Tabellen darunter nicht deutbar. */
+.ct-akte-marken{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.ct-akte-raster{display:grid;grid-template-columns:1fr 260px;gap:26px;align-items:start}
+.ct-akte-inhalt h3{font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px}
+.ct-inhalt-text{font-size:14px;line-height:1.6;white-space:pre-wrap}
+.ct-akte-fakten{display:grid;gap:1px;background:var(--border);border:1px solid var(--border);
+  border-radius:var(--r-md);overflow:hidden}
+.ct-fakt{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  padding:11px 14px;background:var(--surface)}
+.ct-fakt span{font-size:12.5px;color:var(--text-secondary)}
+.ct-fakt b{font-size:14px;font-weight:650;white-space:nowrap}
+/* Ein Link je Kanal — dasselbe Kurzvideo hat auf jeder Plattform eine eigene URL. */
+.ct-akte-links{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;padding-top:16px;
+  border-top:1px solid var(--border)}
+.ct-linkzeile{display:flex;align-items:center;gap:9px;padding:7px 13px;
+  background:var(--surface-2);border-radius:99px;font-size:13px}
+.ct-linkkanal{font-weight:650;color:var(--text-secondary)}
+.ct-kanal-tasten{display:flex;gap:8px;flex-shrink:0}
+
+/* Der Wert gross, der Vergleich klein daneben — nicht andersherum. Die Zahl ist
+   die Tatsache, der Prozentwert nur ihre Einordnung. */
+.ct-analyse-tab td .ct-wert{font-variant-numeric:tabular-nums}
+.ct-vgl{display:inline-block;margin-left:8px;font-style:normal;font-size:11px;
+  font-weight:700;padding:2px 7px;border-radius:99px;white-space:nowrap;vertical-align:1px}
+.ct-vgl.auf{background:var(--success-flaeche);color:var(--success)}
+.ct-vgl.ab{background:var(--danger-flaeche);color:var(--danger)}
+.ct-vgl.gleich{background:var(--surface-2);color:var(--text-muted)}
+/* Die Ø-Spalte steht optisch zurueck: sie ist Bezugsgroesse, nicht Messwert. */
+.ct-spalte-schnitt{color:var(--text-secondary);
+  border-left:1px solid var(--border);background:var(--surface-2)}
+th.ct-spalte-schnitt{font-weight:600}
+.ct-vgl-basis{display:block;font-size:10.5px;color:var(--text-muted);font-weight:400;margin-top:1px}
+/* Kennzeichnet Zeilen, die wir selbst rechnen und die keine Plattform liefert. */
+.ct-berechnet{display:inline-block;margin-left:7px;font-size:9.5px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.05em;padding:2px 6px;border-radius:5px;
+  background:var(--surface-2);color:var(--text-muted);vertical-align:1px}
+@media (max-width:900px){ .ct-akte-raster{grid-template-columns:1fr} }
