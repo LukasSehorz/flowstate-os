@@ -25,7 +25,17 @@
 --                → Angebot → Gewonnen
 --
 -- Auf (sparte, art, position) liegt eine Eindeutigkeitsregel, darum parken wir
--- jede Pipeline erst bei +100 und setzen danach die Zielpositionen.
+-- jede Pipeline erst hoch und setzen danach die Zielpositionen.
+--
+-- Der Parkplatz ist +1000, nicht +100 (korrigiert 26.07.2026): Beim Einspielen
+-- auf dem Server brach genau diese Datei ab —
+--   duplicate key value violates unique constraint pipeline_stages_sparte_art_position_key
+-- Grund: Nach 0014 standen im KI-Bereich bereits Positionen ueber 100 (102 bis
+-- 110). Rechnet man darauf nochmal +100, trifft eine Zeile unterwegs auf eine
+-- belegte Position (6 + 100 = 106, und 106 war schon da). Postgres prueft die
+-- Eindeutigkeit sofort nach jeder Zeile, nicht erst am Ende der Anweisung —
+-- also reicht schon die Zwischenkollision. Mit +1000 liegt der Parkplatz
+-- garantiert ausserhalb, egal was vorher passiert ist.
 -- =====================================================================
 
 -- ---------- KI: Umbenennen ----------
@@ -43,7 +53,7 @@ select s.sparte, 'vertrieb', 900, 'Follow-up nach Erstgespräch', false
                       and x.name = 'Follow-up nach Erstgespräch');
 
 -- ---------- Webdesign ----------
-update public.pipeline_stages set position = position + 100 where sparte='webdesign' and art='vertrieb';
+update public.pipeline_stages set position = position + 1000 where sparte='webdesign' and art='vertrieb';
 update public.pipeline_stages set position = 1 where sparte='webdesign' and art='vertrieb' and name='Neu';
 update public.pipeline_stages set position = 2 where sparte='webdesign' and art='vertrieb' and name='Follow-up';
 update public.pipeline_stages set position = 3 where sparte='webdesign' and art='vertrieb' and name='Erstgespräch';
@@ -52,7 +62,7 @@ update public.pipeline_stages set position = 5 where sparte='webdesign' and art=
 update public.pipeline_stages set position = 6 where sparte='webdesign' and art='vertrieb' and name='Gewonnen';
 
 -- ---------- Performance Marketing ----------
-update public.pipeline_stages set position = position + 100 where sparte='performance' and art='vertrieb';
+update public.pipeline_stages set position = position + 1000 where sparte='performance' and art='vertrieb';
 update public.pipeline_stages set position = 1 where sparte='performance' and art='vertrieb' and name='Neu';
 update public.pipeline_stages set position = 2 where sparte='performance' and art='vertrieb' and name='Follow-up';
 update public.pipeline_stages set position = 3 where sparte='performance' and art='vertrieb' and name='Analyse & Strategie';
@@ -62,7 +72,7 @@ update public.pipeline_stages set position = 6 where sparte='performance' and ar
 update public.pipeline_stages set position = 7 where sparte='performance' and art='vertrieb' and name='Gewonnen';
 
 -- ---------- KI ----------
-update public.pipeline_stages set position = position + 100 where sparte='ki' and art='vertrieb';
+update public.pipeline_stages set position = position + 1000 where sparte='ki' and art='vertrieb';
 update public.pipeline_stages set position = 1 where sparte='ki' and art='vertrieb' and name='Neu';
 update public.pipeline_stages set position = 2 where sparte='ki' and art='vertrieb' and name='Follow-up';
 update public.pipeline_stages set position = 3 where sparte='ki' and art='vertrieb' and name='Readiness-Check gebucht';
