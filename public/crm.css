@@ -937,6 +937,72 @@ body.crm-dashboard-design .quote-kachel>em.schlechter{color:#F0A79E}
   background:linear-gradient(90deg,#D98A80,#A32B22)}
 .gz-zahl{font-size:12.5px;font-weight:650;text-align:right}
 
+/* ---------- Buchhaltung ---------- */
+.bh-tasten{display:flex;gap:8px;flex-wrap:wrap}
+.bh-reihe{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:1000px){.bh-reihe{grid-template-columns:1fr}}
+.bh-reihe .karte{margin-bottom:0}
+/* Zeitraum-Umschalter als Verweise (kein JS nötig, die Seite laedt neu) */
+.zeit-schalter a{flex:1 1 auto;text-align:center;background:transparent;color:var(--text-secondary);
+  border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;white-space:nowrap;
+  text-decoration:none;transition:background var(--tempo),color var(--tempo)}
+.zeit-schalter a:hover{background:rgba(255,255,255,.6);color:var(--foreground);text-decoration:none}
+.zeit-schalter a.an{background:var(--surface);color:var(--foreground);box-shadow:var(--s1)}
+/* Zwei Balken je Monat: Einnahmen und Ausgaben direkt nebeneinander */
+.bh-verlauf{display:flex;align-items:flex-end;gap:10px;height:190px;padding-top:8px}
+.bh-monat{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;height:100%;min-width:0}
+.bh-paar{flex:1;display:flex;align-items:flex-end;justify-content:center;gap:3px;width:100%}
+.bh-paar span{flex:0 0 auto;width:11px;max-width:42%;border-radius:5px 5px 0 0;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
+.bh-ein{background:linear-gradient(180deg,#7FB894 0%,#3E7A57 100%)}
+.bh-aus{background:linear-gradient(180deg,#D99B92 0%,#A03A2E 100%)}
+.bh-monat-label{font-size:10.5px;color:var(--text-muted);white-space:nowrap}
+.bh-legende{display:flex;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);
+  font-size:11.5px;color:var(--text-secondary)}
+.bh-legende span{display:flex;align-items:center;gap:6px}
+.bh-punkt{width:9px;height:9px;border-radius:3px}
+.bh-punkt.ein{background:#3E7A57}
+.bh-punkt.aus{background:#A03A2E}
+/* Betrag in der Buchungsliste: Richtung an der Farbe erkennbar, aber nie nur daran —
+   das Vorzeichen steht immer davor. */
+.bh-betrag{font-weight:650;white-space:nowrap}
+.bh-betrag.einnahme{color:#2F6B47}
+.bh-betrag.ausgabe{color:#A03A2E}
+/* Zustandspunkt in Belegliste und Lexware-Schritten */
+.lz-punkt.offen{background:var(--warn,#C98A2B)}
+.lz-punkt.fertig{background:var(--success)}
+.lz-tat{flex-shrink:0;display:flex}
+.lz-tat button{padding:5px 8px}
+.lz-text i .spaet{color:var(--danger);font-weight:650}
+.lz-punkt.fehler{background:var(--danger)}
+
+/* ---------- Belegeingang mit Prüfschritt ---------- */
+.beleg-liste{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.beleg{border:1px solid var(--border);border-radius:13px;padding:12px 13px;
+  background:linear-gradient(158deg,#FFFFFF 0%,var(--surface-2) 100%)}
+.beleg.gebucht{opacity:.72}
+.beleg.fehler{border-color:#E7B4AF}
+.beleg-kopf{display:flex;align-items:center;gap:9px}
+.beleg-name{flex:1;min-width:0;font-size:13px;font-weight:600;line-height:1.3;
+  overflow-wrap:anywhere}
+.beleg-name i{display:block;font-size:10.5px;font-style:normal;color:var(--text-muted);font-weight:400}
+.beleg-fehler{display:flex;align-items:flex-start;gap:7px;margin-top:9px;padding:8px 10px;
+  border-radius:9px;background:#FCEDEC;color:#8C2020;font-size:11.5px;line-height:1.4}
+.beleg-fehler svg{width:14px;height:14px;flex-shrink:0;margin-top:1px}
+/* Prüfmaske: Felder in zwei Spalten, damit der Kasten nicht in die Länge wächst */
+.beleg-pruefen{margin-top:11px;padding-top:11px;border-top:1px solid var(--border)}
+.beleg-felder{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px}
+.beleg-felder label{display:flex;flex-direction:column;gap:3px;font-size:10.5px;
+  color:var(--text-muted);letter-spacing:.02em;min-width:0}
+.beleg-felder input,.beleg-felder select{margin:0;font-size:12.5px;padding:7px 9px;min-width:0}
+.beleg-fuss{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:11px}
+.beleg-fuss button{font-size:12.5px;padding:8px 14px}
+.beleg-fertig{margin-top:9px;padding-top:9px;border-top:1px solid var(--border);
+  font-size:12px;color:var(--text-secondary);line-height:1.4}
+/* Ablage im Zustand "Datei schwebt darüber" */
+.ablage.bereit{border-color:var(--blau-500);background:var(--blau-50)}
+.grund-zeile .gz-text i{display:block;font-size:10.5px;font-style:normal;color:var(--text-muted)}
+
 /* ---------- Kanban ---------- */
 .kanban{display:flex;gap:14px;overflow-x:auto;padding:2px 2px 18px;align-items:flex-start}
 .spalte{flex:0 0 286px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);

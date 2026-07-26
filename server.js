@@ -38,6 +38,8 @@ app.use(
 if (process.env.DATABASE_URL) {
   try { require("./lib/crm-routes.js")(app); console.log("CRM-Modul geladen"); }
   catch (e) { console.error("CRM-Modul konnte nicht geladen werden:", e.message); }
+  try { require("./lib/buchhaltung-routes.js")(app); console.log("Buchhaltungs-Modul geladen"); }
+  catch (e) { console.error("Buchhaltungs-Modul konnte nicht geladen werden:", e.message); }
 }
 
 // ---------- Auth ----------
@@ -870,7 +872,7 @@ app.get("/api/agent/entscheidungen", (req, res) => {
 const PLACEHOLDERS = {
   kunden: ["Kunden (CRM)", "Der Eigenbau nach Bereich E: eigene Datenbank, Row-Level-Security, 5 Logins, Pipeline, Call-Listen. Größter Pain Point — kommt als eigenes Bauprojekt."],
   angebote: ["Angebote & Rechnungen", "Templates mit euren Preisen (1-€-Webseite, PM-Pakete, KI-Projekte), einheitliches Format, Status offen/bezahlt. Ablauf: Erstgespräch → Zuruf an Alexandra → Entwurf → Freigabe → raus."],
-  buchhaltung: ["Buchhaltung", "Einnahmen & Ausgaben auf einen Blick, Lexware-Anbindung, Beleg-Eingang. Pain Point Nr. 2 aus dem Onboarding."],
+  // buchhaltung ist kein Platzhalter mehr — siehe lib/buchhaltung-routes.js
   marketing: ["Marketing & Content", "Redaktionsplan, Social-Posts (Masse schlägt Qualität), Kampagnen-Zahlen, Funnel-Übersicht (Zahnärzte, Physios)."],
   projekte: ["Projekte", "Laufende Kundenprojekte mit Status, nächsten Schritten und Verantwortlichen. Entsteht automatisch bei Deal = gewonnen."],
 };
