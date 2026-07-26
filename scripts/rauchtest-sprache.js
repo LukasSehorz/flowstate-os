@@ -49,7 +49,11 @@ const FAELLE = [
   { frage: "was kostet bei uns die Betreuung", erwartet: [], verboten: ["gehirn_suchen", "recherchieren", "lange_arbeit"],
     sagt: /1\.?500/, warum: "Preise stehen im STAND — kein Umweg ueber die Suche." },
   { frage: "bau mir eine PowerPoint ueber Performance Marketing", erwartet: ["lange_arbeit"], verboten: [] },
-  { frage: "setz das Angebot fuer Krotzer auf die Liste", erwartet: ["aufgabe_anlegen"], verboten: ["lange_arbeit"] },
+  // Bewusst etwas, das NICHT im STAND steht. Der erste Entwurf dieses Falls
+  // hiess "setz das Angebot fuer Krotzer auf die Liste" — das stand oben aber
+  // schon als offene Aufgabe, und das Modell antwortete voellig richtig
+  // "steht schon drauf". Der Test war falsch, nicht die Antwort.
+  { frage: "setz Steuerunterlagen sortieren auf die Liste", erwartet: ["aufgabe_anlegen"], verboten: ["lange_arbeit"] },
   { frage: "notier bei Krotzer dass sie erst im September Budget haben", erwartet: ["crm_notiz"], verboten: [] },
 ];
 
