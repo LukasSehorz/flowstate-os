@@ -137,6 +137,32 @@ Kaputtes beim anderen landet.
 
 ---
 
+## Was ist angebunden? (bitte vor dem Bauen lesen)
+
+**Fehlende Zugangsdaten in deiner lokalen `.env` bedeuten NICHT, dass eine
+Anbindung fehlt.** Die Zugänge liegen auf dem Server, lokal fehlen sie
+absichtlich. Wer daraus „nicht verbunden" schließt, baut etwas nach, das es
+längst gibt — genau das ist am 26.07. passiert.
+
+```bash
+node scripts/status.js                                   # dieser Rechner
+docker exec flowstate-dashboard node scripts/status.js   # der Server = die Wahrheit
+```
+
+Dieselbe Übersicht steht im Dashboard unter **Einstellungen**. Angezeigt wird
+nur, *ob* ein Zugang da ist — nie der Wert.
+
+Stand 26.07.2026 **auf dem Server verbunden**: CRM-Datenbank (Supabase) ·
+Google Kalender & Gmail · **Meta Ads** · **Lexware Office** · WhatsApp ·
+Telegram-Bot · ElevenLabs · Sprachmodell (Anthropic) · Hermes-Agent ·
+Websuche (Serper) · Vault.
+
+Wenn dir für deinen Bereich Daten aus einem dieser Systeme fehlen: **erst
+fragen, nicht neu anbinden.** Die Module dafür liegen unter `lib/zufluss-*.js`
+und schreiben ihre Zahlen in den Zustand (`lib/zustand.js`).
+
+---
+
 ## Datenbank: Migrationen
 
 Neue Tabellen oder Spalten kommen als SQL-Datei nach `supabase/`, fortlaufend

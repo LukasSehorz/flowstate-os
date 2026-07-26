@@ -911,10 +911,30 @@ app.get("/einstellungen", (req, res) => {
         }catch(e){ s.textContent='Fehler beim Speichern.'; }
       }
     </script>` : "";
+  // Anbindungen sichtbar machen (26.07.): Bisher stand nur in der .env auf dem
+  // Server, was verbunden ist — im Code unsichtbar. Jannik fragte, ob Meta-Ads
+  // angebunden sei, sein Assistent fand lokal keine Zugangsdaten und sagte
+  // "nein", obwohl es laengst laeuft. Genau so baut jemand etwas zum zweiten
+  // Mal. Hier stehen nur JA/NEIN, nie ein Wert — die Seite darf man zeigen.
+  const anb = require("./lib/anbindungen.js").stand();
+  const anbZeilen = anb.map((a) =>
+    `<div class="row"><span>${esc(a.name)}<br><span class="muted small">${esc(a.zweck)}</span></span>
+     <span>${a.eingerichtet
+       ? '<strong style="color:var(--success,#1a7f37)">verbunden</strong>'
+       : '<span class="muted">nicht eingerichtet</span>'}</span></div>`).join("");
+  const anzahl = anb.filter((a) => a.eingerichtet).length;
+
   res.send(layout("Einstellungen", "einstellungen", `
     <div class="card"><h2>Angemeldet als</h2>${konto}
       <p class="muted small" style="margin-top:12px"><a class="btn-link" href="/logout">Abmelden</a></p></div>
     ${pwForm}
+    <div class="card"><h2>Anbindungen (${anzahl} von ${anb.length} verbunden)</h2>
+      <p class="muted small">Was dieses Operating System erreichen kann. Zugangsdaten selbst
+        werden nie angezeigt — nur ob sie da sind.</p>
+      ${anbZeilen}
+      <p class="muted small" style="margin-top:12px">Dies ist der Stand <strong>dieser Instanz</strong>.
+        Auf einem Entwicklungsrechner fehlen die meisten Zugänge absichtlich — maßgeblich ist der Server.
+        Im Terminal: <code>node scripts/status.js</code></p></div>
     <div class="card placeholder"><h2>🔜 Weitere Einstellungen in Vorbereitung</h2>
       <p>Benutzer &amp; Zugänge, Instanzen (Alexandra/Jarvis), Modell-Routing, Kostenübersicht.</p></div>`, req));
 });
