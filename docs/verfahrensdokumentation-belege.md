@@ -52,10 +52,27 @@ Richtung:
 - **Ausgaben** — Quittungen, Tankbelege, Eingangsrechnungen
 - **Einnahmen** — unsere Rechnungen an Kunden
 
-Zugelassene Formate: PDF, JPG, PNG, WEBP, GIF. Höchstgröße 10 MB je Datei.
+Zugelassene Formate: PDF, JPG, PNG, WEBP, GIF. Höchstgröße 20 MB je Datei.
 Papierbelege werden abfotografiert oder gescannt; das Papieroriginal ist danach
 nicht mehr aufbewahrungspflichtig, sofern die Wiedergabe bildlich und inhaltlich
 mit dem Original übereinstimmt.
+
+**Verkleinerung großer Fotos.** Fotos über 3,4 MB werden vor dem Hochladen im
+Browser auf 2.400 Pixel an der längsten Kante verkleinert und als JPEG mit
+Qualitätsstufe 0,9 gespeichert. Archiviert wird diese verkleinerte Fassung; sie
+ist damit nicht byteidentisch mit der Kameradatei.
+
+Der Grund ist praktischer Natur: Handyfotos sind häufig 4 bis 8 MB groß und
+lassen sich in dieser Größe maschinell nicht mehr auslesen. Ohne die
+Verkleinerung müssten alle Werte von Hand erfasst werden.
+
+Zur Wiedergabetreue: Eine Quittung ist typischerweise 8 cm breit. 2.400 Pixel
+auf dieser Breite entsprechen über 700 dpi und liegen damit weit über dem, was
+für eine bildliche Übereinstimmung mit dem Original erforderlich ist — übliche
+Belegscans arbeiten mit 200 bis 300 dpi. Inhalt, Anordnung und Lesbarkeit
+bleiben unverändert.
+
+PDFs und Bilder unter 3,4 MB werden **unverändert** übernommen.
 
 **Beim Eingang geschieht automatisch und ohne Zutun des Benutzers:**
 
