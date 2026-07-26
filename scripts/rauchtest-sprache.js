@@ -46,8 +46,12 @@ const FAELLE = [
   { frage: "schreib Jannik dass ich mich morgen melde", erwartet: ["whatsapp_senden"], verboten: [] },
   { frage: "wann hab ich morgen Zeit", erwartet: [], verboten: ["lange_arbeit", "gehirn_suchen"],
     sagt: /elf|11|frei|zwischen/i, warum: "Luecken liest das Modell selbst aus dem STAND ab." },
+  // Zahlen duerfen ausgeschrieben sein ("eintausendfuenfhundert") — fuer eine
+  // Stimme ist das sogar besser als "1.500", weil die Sprachausgabe daran
+  // nicht stolpert. Der erste Entwurf pruefte nur auf Ziffern und hat genau
+  // dieses gute Verhalten als Fehler gezaehlt.
   { frage: "was kostet bei uns die Betreuung", erwartet: [], verboten: ["gehirn_suchen", "recherchieren", "lange_arbeit"],
-    sagt: /1\.?500/, warum: "Preise stehen im STAND — kein Umweg ueber die Suche." },
+    sagt: /1\.?500|tausendf/i, warum: "Preise stehen im STAND — kein Umweg ueber die Suche." },
   { frage: "bau mir eine PowerPoint ueber Performance Marketing", erwartet: ["lange_arbeit"], verboten: [] },
   // Bewusst etwas, das NICHT im STAND steht. Der erste Entwurf dieses Falls
   // hiess "setz das Angebot fuer Krotzer auf die Liste" — das stand oben aber
