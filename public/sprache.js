@@ -42,7 +42,8 @@
   let stilleTimer = null;         // wartet nach dem Reden auf echte Stille
   let letzteAktivitaet = 0;       // wann zuletzt gesprochen/geantwortet wurde
   let lausche = false;            // laeuft gerade eine Zuhoer-Erkennung? (verhindert Doppelstart)
-  let offeneArbeit = 0;           // wie viele Hintergrundauftraege gerade laufen
+  // (offeneArbeit ist mit A2 entfallen: Der Browser verfolgt keine langen
+  //  Auftraege mehr, also gibt es nichts mehr offenzuhalten.)
   let pausiert = false;           // Mikro auf Pause — Gespraech bleibt aber offen
   // Tempo-Wuensche Lukas 22.07.: ausreden lassen, aber nicht ewig nachlaufen.
   const ENDE_STILLE_MS = 1400;    // so lange Pause NACH Sprache = fertig geredet
@@ -286,7 +287,7 @@
   function geduld() {
     if (!imGespraech) { setzeZustand("ruhe"); return; }
     if (pausiert) { setzeZustand("pause"); return; }   // Pause laeuft nicht ab
-    if (!offeneArbeit && Date.now() - letzteAktivitaet > GEDULD_MS) { gespraechBeenden(); return; }
+    if (Date.now() - letzteAktivitaet > GEDULD_MS)
     setTimeout(() => { if (imGespraech && !pausiert) hoeren(); }, 250);
   }
 
@@ -330,9 +331,7 @@
 
   // Verabschiedung auf einen klaren Schlusssatz ("passt, das war's").
   async function verabschieden() {
-    const s = offeneArbeit
-      ? "Alles klar — ich arbeite im Hintergrund weiter und meld mich, sobald es steht."
-      : "Alles klar, bis später.";
+    const s = "Alles klar, bis später.";
     zeile("sie", s);
     await sprich(s).catch(() => {});
     gespraechBeenden();
@@ -537,17 +536,20 @@
     }
     if (meine !== gespraechsId) return;   // waehrend des Sprechens unterbrochen -> abbrechen
 
-    // Mehrere Aktionen laufen parallel (Multi-Action). Jede ist entweder "kurz"
-    // (Wetter, Mail, Recherche — im Gespraech, spricht sobald fertig) oder "lang"
-    // (Hermes — Hintergrund, meldet sich spaeter). Faellt eine alte Antwort mit
-    // nur auftragId rein, bauen wir sie in dieselbe Form um.
+    // Mehrere Aktionen laufen parallel (Multi-Action), in zwei Sorten:
+    //   kurz — Wetter, Mail, Recherche, WhatsApp lesen. Sekunden. Wird hier im
+    //          Gespraech abgewartet und das Ergebnis gesprochen.
+    //   lang — Hermes. Minuten. Laeuft auf dem SERVER weiter und stellt sich
+    //          ueber Telegram zu (A2); hier wird nur noch Bescheid gesagt.
+    // Faellt eine alte Antwort mit nur auftragId rein, bauen wir sie um.
     const auftraege = Array.isArray(d.auftraege) && d.auftraege.length
       ? d.auftraege
       : (d.auftragId ? [{ id: d.auftragId, art: d.quelle === "hermes" ? "lang" : "kurz" }] : []);
     const lang = auftraege.filter((a) => a.art === "lang");
     const kurz = auftraege.filter((a) => a.art !== "lang");
 
-    lang.forEach((a) => hintergrundAuftrag(a.id));   // laufen im Hintergrund weiter
+    // Lange Arbeit laeuft auf dem SERVER weiter und meldet sich ueber
+    // Telegram (A2, 26.07.). Der Browser verfolgt sie nicht mehr.
 
     if (kurz.length) {
       // Alle kurzen Aktionen parallel verfolgen; jede spricht ihr Ergebnis,
@@ -559,11 +561,10 @@
     }
 
     if (lang.length) {
-      // Lange Arbeit laeuft im Hintergrund — das Gespraech bleibt trotzdem OFFEN
-      // (Lukas 24.07.). Vorher schloss es hier, und er musste erst wieder
-      // "Hey Alexandra" sagen, um nachzufragen. Jetzt hoert sie einfach weiter
-      // zu: "wie schaut's aus?" beantwortet sie aus dem laufenden Stand.
-      if (!d.sprich) await sprich("Alles klar — das dauert einen Moment, ich bleib dran.");
+      // Ein Satz, dann ist die Sache aus dem Gespraech heraus. Frueher hiess
+      // es hier "ich bleib dran" und der Browser pollte zehn Minuten — schloss
+      // Lukas die Seite, war das Ergebnis weg. Jetzt sagt sie, WO es ankommt.
+      if (!d.sprich) await sprich("Mach ich — ich schick's dir per Telegram, sobald es steht.");
       return weiter();
     }
 
@@ -591,32 +592,6 @@
       if (warte) warte.textContent = "…einen Moment (" + sek + " s)";
     }
     if (warte) warte.textContent = "Hat länger gedauert — frag gleich nochmal.";
-  }
-
-  // Langer Auftrag (Hermes) — laeuft im Hintergrund weiter, auch nachdem das
-  // Gespraech pausiert ist. Meldet das Ergebnis, sobald es da ist: aus der Ruhe
-  // heraus, ohne dass Lukas erneut fragen muss.
-  async function hintergrundAuftrag(id) {
-    offeneArbeit++;                 // solange das laeuft, schliesst das Gespraech nicht
-    try {
-      for (let i = 0; i < 400; i++) {
-        await new Promise((r) => setTimeout(r, 1500));
-
-        const d = await fetch("/api/sprache/auftrag/" + id).then((r) => r.json()).catch(() => null);
-        if (!d) continue;              // Netzhusten: weiter versuchen
-        if (!d.ok) return;
-        if (d.fertig) {
-          const text = d.reply ||
-            ("Ich hab's versucht, aber es hat nicht ganz geklappt" + (d.hint ? " — " + d.hint : "") + ".");
-          zeile("sie", text);
-          await sprich(text);         // stoppt Wake/Lauschen, spricht, seriell
-          // Laeuft das Gespraech noch, gleich weiterhoeren — Lukas kann direkt
-          // nachfassen, ohne neu zu wecken.
-          if (imGespraech) weiter(); else setzeZustand("ruhe");
-          return;
-        }
-      }
-    } finally { offeneArbeit = Math.max(0, offeneArbeit - 1); }
   }
 
   // ---------------------------------------------------------------- Sprechen
