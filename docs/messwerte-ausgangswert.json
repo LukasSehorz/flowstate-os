@@ -1,0 +1,37 @@
+{
+  "stand": "2026-07-26",
+  "ordner": "C:\\tmp\\sprachlog",
+  "eintraege": 393,
+  "werte": {
+    "runden": 60,
+    "sprechakte": {
+      "n": 60,
+      "median": 3,
+      "p90": 5,
+      "max": 13
+    },
+    "ersterTonMs": {
+      "n": 60,
+      "median": 260,
+      "p90": 1496,
+      "max": 20414
+    },
+    "bisInhaltMs": {
+      "n": 59,
+      "median": 4890,
+      "p90": 11169,
+      "max": 22991
+    },
+    "verstehenMs": {
+      "n": 60,
+      "median": 4753,
+      "p90": 10251,
+      "max": 22853
+    },
+    "nichtVerstandenAnteil": 0.1,
+    "nichtVerstandenZahl": 6,
+    "reserve": 6,
+    "parseFehler": 6
+  },
+  "hinweis": "Ausgangswert VOR dem Umbau der Gespraechsschicht (Stufe A). Nicht ueberschreiben."
+}
