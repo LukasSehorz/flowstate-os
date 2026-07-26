@@ -1697,3 +1697,17 @@ body.crm-dashboard-design .karte:not(.karte-mitte):not(.karte-dunkel){
 /* Markenkuerzel vor der Zeile, wenn alle Marken zusammen angezeigt werden. */
 .ct-marke-tag{color:var(--foreground);font-weight:650}
 @media (max-width:560px){ .ct-marken a{flex:1;min-width:0} }
+
+/* Zweite Filterebene: Kanal innerhalb der Marke. Flacher als der Marken-
+   Umschalter, damit die Rangfolge sichtbar bleibt — erst Marke, dann Kanal. */
+.ct-kanaele{display:flex;gap:6px;flex-wrap:wrap;margin:-8px 0 16px}
+.ct-kanaele a{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;
+  border:1px solid var(--border);border-radius:99px;background:var(--surface);
+  color:var(--text-secondary);text-decoration:none;font-size:12.5px;
+  transition:border-color var(--tempo),color var(--tempo),background var(--tempo)}
+.ct-kanaele a:hover{border-color:var(--border-stark);color:var(--foreground);text-decoration:none}
+.ct-kanaele a.an{background:var(--blau-800);border-color:var(--blau-800);color:#fff;font-weight:600}
+.ct-kanal-zahl{font-size:10.5px;font-weight:650;padding:1px 5px;border-radius:99px;
+  background:var(--surface-2);color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.ct-kanaele a.an .ct-kanal-zahl{background:rgba(255,255,255,.22);color:#fff}
+.ct-kanal-zahl.spaet{background:#FCEDEC;color:#8C2020}
