@@ -1711,3 +1711,19 @@ body.crm-dashboard-design .karte:not(.karte-mitte):not(.karte-dunkel){
   background:var(--surface-2);color:var(--text-secondary);font-variant-numeric:tabular-nums}
 .ct-kanaele a.an .ct-kanal-zahl{background:rgba(255,255,255,.22);color:#fff}
 .ct-kanal-zahl.spaet{background:#FCEDEC;color:#8C2020}
+
+/* Kanalauswahl im Post-Dialog: mehrere Haken, weil ein Stück auf mehreren
+   Kanälen läuft. Kästchen statt Auswahlliste — man sieht alle vier auf einen
+   Blick und was angehakt ist. */
+.ct-kanalwahl{display:flex;gap:8px;flex-wrap:wrap}
+.ct-kanalwahl-feld{display:inline-flex;align-items:center;gap:7px;cursor:pointer;
+  padding:7px 12px;border:1px solid var(--border-stark);border-radius:9px;
+  background:var(--surface);font-size:13px;user-select:none}
+.ct-kanalwahl-feld:hover{border-color:var(--primary)}
+.ct-kanalwahl-feld input{width:auto;margin:0;accent-color:var(--blau-800)}
+.ct-kanalwahl-feld:has(input:checked){border-color:var(--blau-800);
+  background:var(--blau-50);font-weight:600}
+/* Ziel erreicht — grün statt neutral, damit man es im Vorbeigehen sieht. */
+.ct-kanal-zahl.voll{background:var(--success-flaeche,#E6F4EA);color:#146C43}
+.ct-kanaele a.an .ct-kanal-zahl.voll{background:rgba(255,255,255,.28);color:#fff}
+.ct-ziel-knopf{border-style:dashed !important;color:var(--text-muted) !important}
