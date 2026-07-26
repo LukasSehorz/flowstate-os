@@ -26,8 +26,11 @@ const hat = (...teile) => teile.every((t) => p.toLowerCase().includes(t.toLowerC
 
 // --- Diese Regeln MUESSEN drinbleiben (jede aus einem echten Vorfall) ------
 pruefe("Werkzeug-Verbot (sonst 50 s statt 3)", hat("RUFE KEINE WERKZEUGE AUF"));
-pruefe("JSON-Vertrag mit allen sieben Feldern",
-  hat("zusage", "text", "mail", "whatsapp", "termin", "aktionen", "zeige"));
+// "zusage" ist am 26.07. entfallen (A1) — das Feld war einer von drei
+// unabhaengigen Muendern und der Grund fuers Dreifach-Sagen.
+pruefe("JSON-Vertrag mit allen sechs Feldern",
+  hat("text", "mail", "whatsapp", "termin", "aktionen", "zeige"));
+pruefe("Kein zusage-Feld mehr im Vertrag", !hat("\"zusage\""));
 pruefe("Kalender geht direkt, nicht mehr an hermes",
   hat("Kalender aendern", "NIE ueber hermes"));
 pruefe("Alle drei Kalender-Faelle beschrieben",
@@ -56,7 +59,7 @@ pruefe("Keine erfundenen Termine aus eigener Ankuendigung", hat("Erfinde NIE Ter
 pruefe("[LAEUFT NOCH]-Marker wird beachtet", hat("LAEUFT NOCH"));
 pruefe("Zwischenfragen aus 'DEINE LAUFENDE ARBEIT'", hat("DEINE LAUFENDE ARBEIT"));
 
-pruefe("Zusage zuerst, dann Inhalt (Entscheidung 21.07.)", hat("ZUSAGE ZUERST"));
+pruefe("Sag es einmal, keine Ankuendigung davor (A1, 26.07.)", hat("SAG ES EINMAL"));
 pruefe("Keine internen Begriffe aussprechen", hat("NIE interne Begriffe", "Haiku"));
 pruefe("Nichts wiederholen (BISHER)", hat("NICHT WIEDERHOLEN", "BISHER"));
 

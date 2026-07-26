@@ -64,9 +64,12 @@ for (const d of geaendert.filter((x) => x.endsWith(".json") && !x.includes("node
 // --- 3. Die Testskripte --------------------------------------------------
 // Ohne Datenbank/Netz lauffaehig — die uebrigen (test-crm.js) bleiben aussen
 // vor, damit die Pruefung schnell und ohne Zugaenge durchlaeuft.
+// test-erzaehlspur, test-erzaehlfilter und test-plan sind am 26.07. mit der
+// Erzaehlspur selbst entfallen (Schritt A1) — sie prueften Verhalten, das es
+// nicht mehr gibt.
 const TESTS = [
   "test-navigation", "test-prompt", "test-sprache", "test-kontakte", "test-gespraech",
-  "test-kalender", "test-erzaehlspur", "test-erzaehlfilter", "test-plan",
+  "test-kalender",
   "test-suche", "test-termin", "test-wa-lesen", "test-crm-sprache", "test-zufluss-telegram",
 ];
 for (const t of TESTS) {

@@ -508,21 +508,12 @@
       body: JSON.stringify({ text }),
     }).then((r) => r.json()).catch(() => null);
 
-    // … und PARALLEL eine blitzschnelle, ZUR AUFGABE passende Zusage (Haiku),
-    // die sofort gesprochen wird — kein totes Warten, keine Konserve (Wunsch
-    // Lukas 22.07.: die Ansage muss zur Aufgabe passen, wie ein echtes Gespraech).
-    let geantwortet = false, geackt = false;
-    const ack = (t) => { if (t && !geantwortet && !geackt && meine === gespraechsId) { geackt = true; sprich(t).catch(() => {}); } };
-    fetch("/api/sprache/zusage", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    }).then((r) => r.json()).then((z) => ack(z && z.zusage)).catch(() => {});
-    // Notfall NUR, falls die passende Zusage ausbleibt (Fehler/leer). Spaet genug,
-    // dass die echte, zur Aufgabe passende Zusage Vorrang hat.
-    setTimeout(() => ack("Moment…"), 2000);
-
+    // Kein Fuellsatz mehr waehrend des Wartens (A1, 26.07.). Die Blitz-Zusage
+    // war ein Pflaster fuer die Wartezeit und hat das Dreifach-Sagen erzeugt:
+    // sie wusste nichts von der eigentlichen Antwort und kuendigte an, was
+    // gleich nochmal gesagt wurde. A4 nimmt die Wartezeit selbst weg.
     const d = await anfrage;
-    geantwortet = true;
+
     if (meine !== gespraechsId) return;
     if (!d) {
       zeile("sie", "⚠️ Verbindung fehlgeschlagen.");
@@ -562,7 +553,7 @@
       // Alle kurzen Aktionen parallel verfolgen; jede spricht ihr Ergebnis,
       // sobald es da ist (das Sprechen selbst ist serialisiert). Bei mehreren
       // keine gesprochenen Zwischenansagen — sonst reden sie durcheinander.
-      await Promise.all(kurz.map((a) => auftragKurz(a.id, kurz.length > 1)));
+      await Promise.all(kurz.map((a) => auftragKurz(a.id)));
       if (meine !== gespraechsId) return;            // unterbrochen -> nicht weiterhoeren
       return weiter();                               // Gespraech bleibt offen
     }
@@ -579,16 +570,12 @@
     weiter();
   }
 
-  // Kurzer Auftrag (Wetter/Mail/Recherche) — im Gespraech, mit einer
-  // Zwischenansage, falls er laenger braucht. leise = keine gesprochene
-  // Ansage (wenn mehrere parallel laufen). Nimmt Lukas mit, statt Stille.
-  async function auftragKurz(id, leise = false) {
+  // Kurzer Auftrag (Wetter, Mail, Recherche) — laeuft im Gespraech. Waehrend er
+  // laeuft, bleibt es still: Die Wartemarke im Verlauf zeigt, dass etwas
+  // passiert, gesprochen wird erst das Ergebnis. Genau ein Sprechakt (A1).
+  async function auftragKurz(id) {
     const warte = zeile("sie", "…einen Moment", true);
     setzeZustand("denken");
-    // Auch hier die Erzaehlspur (Lukas 25.07.): Bei einer Recherche will er
-    // mitgenommen werden, statt einmal "bin gleich so weit" zu hoeren — das
-    // war immer derselbe Satz und sagte nichts ueber die Aufgabe aus.
-    let naechsteErzaehlung = Date.now() + 4000;
     for (let i = 0; i < 45; i++) {
       await new Promise((r) => setTimeout(r, 1200));
       const d = await fetch("/api/sprache/auftrag/" + id).then((r) => r.json()).catch(() => null);
@@ -601,13 +588,6 @@
         return;
       }
       const sek = Math.round(i * 1.2 + 1);
-      // Laufen mehrere Aktionen parallel, bleibt es still — sonst reden sie
-      // durcheinander. Der Server liefert nur echte Vorgehens-Saetze.
-      if (!leise && Date.now() >= naechsteErzaehlung && !redetGerade) {
-        naechsteErzaehlung = Date.now() + 5200;
-        const f = await fetch("/api/sprache/fortschritt/" + id).then((r) => r.json()).catch(() => null);
-        if (f?.satz && !redetGerade) { zeile("sie", f.satz); await sprich(f.satz).catch(() => {}); }
-      }
       if (warte) warte.textContent = "…einen Moment (" + sek + " s)";
     }
     if (warte) warte.textContent = "Hat länger gedauert — frag gleich nochmal.";
@@ -618,35 +598,9 @@
   // heraus, ohne dass Lukas erneut fragen muss.
   async function hintergrundAuftrag(id) {
     offeneArbeit++;                 // solange das laeuft, schliesst das Gespraech nicht
-    // Abstand wird von Satz zu Satz GROESSER (Rueckmeldung Lukas 25.07.: eine
-    // vorformulierte Erzaehlung im starren Takt wirkt kuenstlich, besonders wenn
-    // die Arbeit lange dauert). Ein Mensch erzaehlt am Anfang dicht, wenn er
-    // sich reindenkt, und wird dann ruhiger. 5 s, 8 s, 12 s, 18 s deckt so etwa
-    // 45 Sekunden ab, statt alles in den ersten 20 Sekunden abzuspulen und
-    // danach zu schweigen.
-    let luecke = 5000;
-    let naechsteErzaehlung = Date.now() + luecke;
     try {
       for (let i = 0; i < 400; i++) {
         await new Promise((r) => setTimeout(r, 1500));
-
-        // Erzaehlspur: unterwegs sagen, WORAN sie arbeitet.
-        // Zwei Bedingungen, damit sie begleitet statt dazwischenzufunken:
-        // sie redet gerade nicht — und Lukas hat in den letzten Sekunden nichts
-        // gesagt. (Auf den Zustand "lauschen" zu pruefen waere falsch: waehrend
-        // der Arbeit bleibt das Gespraech offen, sie hoert also DAUERND zu —
-        // damit kaeme nie ein Satz.)
-        const lukasSpricht = Date.now() - letzteAktivitaet < 3000;
-        if (Date.now() >= naechsteErzaehlung && !redetGerade && !lukasSpricht) {
-          luecke = Math.min(Math.round(luecke * 1.5), 20000);
-          naechsteErzaehlung = Date.now() + luecke;
-          const f = await fetch("/api/sprache/fortschritt/" + id).then((r) => r.json()).catch(() => null);
-          if (f?.satz && !redetGerade) {
-            zeile("sie", f.satz);
-            await sprich(f.satz).catch(() => {});
-            if (imGespraech && !pausiert) weiter();
-          }
-        }
 
         const d = await fetch("/api/sprache/auftrag/" + id).then((r) => r.json()).catch(() => null);
         if (!d) continue;              // Netzhusten: weiter versuchen

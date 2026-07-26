@@ -96,6 +96,7 @@ function auswerten(zeilen) {
   let nichtVerstanden = 0;
   let reserve = 0;       // wie oft Sonnet ausfiel und Haiku einsprang
   let parseFehler = 0;   // wie oft die Antwort kein sauberes JSON war
+  let genaueMessungen = 0; // Runden mit "runde"-Eintrag (exakt statt geschaetzt)
 
   for (let k = 0; k < fragen.length; k++) {
     const i = fragen[k];
@@ -130,12 +131,17 @@ function auswerten(zeilen) {
     sprechakte.push(zahl);
 
     // --- 2. Zeit bis zum ersten hoerbaren Ton
-    // t0 ist die Ankunft der Frage am Server. Direkt geloggt wird sie heute
-    // nicht; die Blitz-Zusage feuert unmittelbar danach und ist damit der
-    // beste verfuegbare Anker. Faellt sie weg (A1), traegt der Verteiler
-    // stattdessen einen "runde"-Eintrag mit t0 — dann wird das hier exakt.
-    const t0 = zeilen.find((e) => e.art === "runde" && e.zeit >= (zusageZeit || start) && e.zeit <= start)?.zeit
-      || zusageZeit || start;
+    //
+    // t0 ist die Ankunft der Frage am Server. Seit A1 (26.07.) traegt der
+    // Verteiler dafuer einen "runde"-Eintrag ein — dann ist die Messung exakt.
+    // Aeltere Protokolle haben den nicht; dort ist die Blitz-Zusage der beste
+    // verfuegbare Anker (sie feuerte unmittelbar nach der Ankunft).
+    let t0 = null;
+    for (let j = i - 1; j > vorherigeRunde; j--) {
+      if (zeilen[j].art === "runde") { t0 = zeilen[j].zeit; break; }
+    }
+    const genau = Boolean(t0);                  // exakt oder nur geschaetzt?
+    if (!t0) t0 = zusageZeit ? new Date(new Date(zusageZeit).getTime() - zusageDauer).toISOString() : start;
     for (let j = i - 3 < 0 ? 0 : i - 3; j < zeilen.length; j++) {
       const e = zeilen[j];
       if (e.art !== "stimme") continue;
@@ -147,15 +153,12 @@ function auswerten(zeilen) {
 
     // --- 2b. Zeit bis zur INHALTLICHEN Antwort — die Zahl, auf die es ankommt.
     //
-    // "Erster Ton" oben misst heute nur, wann die Blitz-Zusage hoerbar wird —
+    // "Erster Ton" oben mass vor A1 nur, wann die Blitz-Zusage hoerbar wurde —
     // also eine Floskel. Wer darauf optimiert, optimiert die Floskel. Was Lukas
     // erlebt, ist die Zeit, bis etwas mit Inhalt kommt.
-    //
-    // Ankunft der Frage am Server = Zeitpunkt der Zusage minus ihrer eigenen
-    // Erzeugungsdauer. Fertig ist der Inhalt, wenn der Frage-Eintrag steht.
-    if (zusageZeit) {
-      const ankunft = new Date(zusageZeit).getTime() - zusageDauer;
-      bisInhalt.push(new Date(start).getTime() - ankunft);
+    if (t0 !== start) {
+      bisInhalt.push(ms(t0, start));
+      if (genau) genaueMessungen++;
     }
 
     // --- 3. Hat sie akustisch nichts verstanden?
@@ -178,6 +181,7 @@ function auswerten(zeilen) {
     nichtVerstandenZahl: nichtVerstanden,
     reserve,
     parseFehler,
+    genaueMessungen,
   };
 }
 
@@ -205,6 +209,12 @@ function bericht(e, titel) {
   console.log(zeile("   Verstehen (Modell)", e.verstehenMs, "—", sek));
   console.log(`   3. Nicht verstanden     ${e.nichtVerstandenAnteil === null ? "—" : proz(e.nichtVerstandenAnteil)} (${e.nichtVerstandenZahl} von ${e.runden})   Ziel < 5 %`);
   console.log(`   Haiku-Reserve sprang ein ${e.reserve}×   ·   Antwort war kein JSON: ${e.parseFehler}×`);
+  if (e.bisInhaltMs) {
+    const art = e.genaueMessungen === e.bisInhaltMs.n ? "exakt (runde-Eintrag)"
+      : e.genaueMessungen ? `${e.genaueMessungen} von ${e.bisInhaltMs.n} exakt, Rest geschaetzt`
+      : "geschaetzt (kein runde-Eintrag im Protokoll)";
+    console.log(`   Messart "bis Inhalt":    ${art}`);
+  }
 }
 
 function pfeil(neu, alt, kleinerIstBesser = true) {
