@@ -1371,16 +1371,12 @@ body.crm-dashboard-design .karte-mitte{
   color:#E9EBEF}
 body.crm-dashboard-design .karte-mitte .hero-umsatz-neben-zahl,
 body.crm-dashboard-design .karte-mitte .mini-stat b{color:#FCFDFE}
-/* Die grosse Umsatzzahl bekommt denselben Verlauf wie eine polierte Kante der Blume:
-   oben Licht, unten Grau. @supports, damit die Zahl bei fehlendem background-clip nicht
-   unsichtbar wird, sondern schlicht weiss bleibt. */
+/* Die Umsatzzahl bleibt bewusst deckend weiss. Sie hatte kurz einen Verlauf wie eine
+   polierte Kante der Blume — das sah am Bildschirm kaum anders aus, haette aber drei
+   gekoppelte Regeln gebraucht (@supports-Absicherung und ein Zuruecksetzen im
+   Weiss-Modus). Laeuft eine davon je auseinander, verschwindet ausgerechnet der
+   Monatsumsatz. Der Verlauf traegt hier ohnehin die Karte, nicht die Ziffer. */
 body.crm-dashboard-design .karte-mitte .kachel-zahl{color:#FCFDFE}
-@supports ((-webkit-background-clip:text) or (background-clip:text)){
-  body.crm-dashboard-design .karte-mitte .kachel-zahl{
-    background:linear-gradient(178deg,#FFFFFF 0%,#FFFFFF 42%,#D2D7DF 100%);
-    -webkit-background-clip:text;background-clip:text;
-    -webkit-text-fill-color:transparent;color:transparent}
-}
 body.crm-dashboard-design .karte-mitte .kachel-label,
 body.crm-dashboard-design .karte-mitte .kachel-mini-titel,
 body.crm-dashboard-design .karte-mitte .mini-stat .caption{color:rgba(233,235,239,.74)}
@@ -1942,11 +1938,6 @@ body.crm-dashboard-design .reiter a.aktiv{
   background:var(--blau-800);color:#fff;box-shadow:var(--s1)}
 :root[data-weiss="1"] body.crm-dashboard-design .karte-mitte .orb-deko{
   filter:drop-shadow(0 14px 26px rgba(15,27,45,.18))}
-/* Ohne diesen Block bliebe die Umsatzzahl im Weiss-Modus UNSICHTBAR: die Farbe
-   wird dort zwar schon auf --foreground gesetzt, der Verlauf mit transparenter
-   Schriftfuellung bliebe aber bestehen und wuerde sie ueberdecken. */
-:root[data-weiss="1"] body.crm-dashboard-design .karte-mitte .kachel-zahl{
-  background:none;-webkit-text-fill-color:var(--foreground);color:var(--foreground)}
 
 /* ---------- Content: Videoakte und Vergleichszahlen ----------
    Die Akte steht ueber den Zahlen: was war im Video zu sehen, wie lang war es,
