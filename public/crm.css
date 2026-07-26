@@ -2176,8 +2176,12 @@ th.ct-spalte-schnitt{font-weight:600}
 /* ---------- Fortschritt beim Hochladen ---------- */
 .hl-fortschritt{height:8px;border-radius:99px;background:var(--surface-3);
   overflow:hidden;margin:-6px 0 16px}
-.hl-fortschritt>div{height:100%;width:0;border-radius:99px;background:var(--primary);
-  transition:width .2s linear}
+/* scaleX statt width: der Elternknoten hat overflow:hidden und die Rundung, er
+   schneidet also ohnehin ab — die Breite zu animieren wuerde bei jedem
+   Fortschrittsschritt das Layout neu rechnen lassen, ohne dass es etwas bringt. */
+.hl-fortschritt>div{height:100%;width:100%;background:var(--primary);
+  transform:scaleX(0);transform-origin:left center;
+  transition:transform .2s linear}
 .hl-fortschritt.fertig>div{background:var(--success)}
 .hl-fortschritt.kaputt>div{background:var(--danger)}
 #dlg-hochladen input[type=file]{padding:8px 10px;font-size:13px}
