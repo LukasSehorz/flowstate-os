@@ -1576,3 +1576,12 @@ body.crm-dashboard-design .karte:not(.karte-mitte):not(.karte-dunkel){
 @media (max-width:560px){
   .bh-ordner-tat{width:100%;justify-content:flex-end}
 }
+
+/* Zahltag beim Abhaken einer offenen Rechnung. Schmal gehalten — er steht neben
+   dem Haken und darf die Zeile nicht sprengen. */
+.lz-bezahlt{display:flex;align-items:center;gap:6px}
+.lz-bezahlt input[type="date"]{width:auto;padding:4px 7px;font-size:11.5px}
+/* Merksatz unter der Prüfmaske einer Kundenrechnung. */
+.beleg-merk{display:flex;align-items:flex-start;gap:6px;margin:9px 0 0;
+  font-size:11px;line-height:1.45;color:var(--text-muted)}
+.beleg-merk svg{width:13px;height:13px;flex-shrink:0;margin-top:1px}
