@@ -8,3 +8,6 @@ shots/
 .claude/
 /Bilder/
 /C:/
+
+# Videodateien — 50 bis 200 MB je Short, gehoeren nicht ins Git
+daten/

@@ -42,6 +42,8 @@ if (process.env.DATABASE_URL) {
   catch (e) { console.error("Buchhaltungs-Modul konnte nicht geladen werden:", e.message); }
   try { require("./lib/marketing-routes.js")(app); console.log("Marketing-Modul geladen"); }
   catch (e) { console.error("Marketing-Modul konnte nicht geladen werden:", e.message); }
+  try { require("./lib/content-ideen-routes.js")(app); console.log("Content-Ideen geladen"); }
+  catch (e) { console.error("Content-Ideen:", e.message); }
   try { require("./lib/content-routes.js")(app); console.log("Content-Modul geladen"); }
   catch (e) { console.error("Content-Modul konnte nicht geladen werden:", e.message); }
 }

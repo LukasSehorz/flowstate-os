@@ -1979,3 +1979,205 @@ th.ct-spalte-schnitt{font-weight:600}
   text-transform:uppercase;letter-spacing:.05em;padding:2px 6px;border-radius:5px;
   background:var(--surface-2);color:var(--text-muted);vertical-align:1px}
 @media (max-width:900px){ .ct-akte-raster{grid-template-columns:1fr} }
+
+/* ---------- Content: Ideen-Werkstatt ----------
+   Vom Vorschlag ueber Haken/X zum Skript. Die Funnel-Stufe traegt jede Karte
+   sichtbar, weil das die eigentliche Ordnung ist: eine Idee ohne Stufe ist nur
+   ein Einfall, mit Stufe ist sie ein Werkzeug fuer eine bestimmte Aufgabe. */
+.id-band{display:flex;align-items:center;gap:18px;margin-bottom:16px;
+  text-decoration:none;color:inherit;transition:box-shadow var(--tempo),transform var(--tempo)}
+.id-band:hover{text-decoration:none;transform:translateY(-1px);box-shadow:var(--s2)}
+.id-band-zahl{flex-shrink:0;min-width:52px;height:52px;padding:0 12px;border-radius:14px;
+  display:grid;place-items:center;font-size:24px;font-weight:700;letter-spacing:-.02em;
+  background:var(--blau-800);color:#fff}
+.id-band-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.id-band-text strong{font-size:15px;font-weight:650}
+.id-band-pfeil{flex-shrink:0;font-size:13px;font-weight:650;color:var(--primary)}
+
+.id-markenwahl{display:flex;gap:3px;padding:3px;border-radius:11px;background:var(--surface-2)}
+.id-markenwahl a{padding:6px 14px;border-radius:8px;font-size:13px;font-weight:550;color:var(--text-secondary)}
+.id-markenwahl a:hover{color:var(--foreground);text-decoration:none}
+.id-markenwahl a.aktiv{background:var(--surface);color:var(--foreground);font-weight:650;box-shadow:var(--s1)}
+
+.id-abschnitt{display:flex;align-items:center;gap:10px;margin:26px 0 12px;font-size:15px}
+.id-abschnitt span{font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px;
+  background:var(--surface-3);color:var(--text-secondary)}
+/* Zwei Spalten: eine Idee ist zu lang fuer drei und zu kurz fuer eine. */
+.id-liste{display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:16px;align-items:start}
+.id-karte{display:flex;flex-direction:column;gap:10px}
+.id-karte--ja{border-left:3px solid var(--success)}
+.id-kopf{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.id-marken{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.id-tasten{display:flex;gap:8px;flex-shrink:0}
+.id-form{margin:0}
+/* Haken und X sind die wichtigsten Knoepfe der Seite: gross genug zum sicheren
+   Treffen (44 px), gruen und rot getrennt, damit man sie nicht verwechselt. */
+.id-ja,.id-nein{width:44px;height:44px;padding:0;border-radius:12px;display:grid;place-items:center}
+.id-ja svg,.id-nein svg{width:20px;height:20px}
+.id-ja{background:var(--success);color:#fff}
+.id-ja:hover{background:#0F5F37}
+.id-nein{background:var(--surface-2);color:var(--text-secondary)}
+.id-nein:hover{background:var(--danger-flaeche);color:var(--danger)}
+.id-titel{font-size:15.5px;font-weight:650;line-height:1.4}
+.id-text{font-size:13.5px;line-height:1.6;color:var(--text-secondary)}
+.id-warum{padding:11px 13px;border-radius:var(--r-md);background:var(--surface-2)}
+.id-warum span{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--text-muted);margin-bottom:4px}
+.id-warum p{font-size:13px;line-height:1.55}
+.id-beispiel{font-size:12.5px;color:var(--text-muted);line-height:1.5}
+.id-fuss{margin-top:auto;padding-top:4px}
+
+/* Funnel-Stufe: von hell nach dunkel wie der Trichter selbst — oben breit und
+   hell (Reichweite), unten schmal und dunkel (Entscheidung). */
+.id-stufe{display:inline-flex;align-items:center;padding:3px 9px;border-radius:6px;
+  font-size:11px;font-weight:700;letter-spacing:.02em;color:#fff;white-space:nowrap}
+.id-stufe.id-tofu{background:var(--stage-2)}
+.id-stufe.id-mofu{background:var(--stage-4)}
+.id-stufe.id-bofu{background:var(--stage-6)}
+.id-stufe.id-bindung{background:var(--success)}
+
+.id-holen{display:flex;flex-direction:column;gap:14px}
+.id-holen-form{display:grid;grid-template-columns:1fr 1fr auto;gap:14px;align-items:end}
+.id-holen-form .feld{margin:0}
+.id-holen-fuss{display:flex;gap:8px;align-items:flex-start;line-height:1.55}
+.id-holen-fuss svg{width:15px;height:15px;flex-shrink:0;margin-top:2px}
+@media (max-width:720px){ .id-holen-form{grid-template-columns:1fr} }
+
+.id-laeuft{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+.id-spinner{width:22px;height:22px;flex-shrink:0;border-radius:50%;
+  border:2.5px solid var(--surface-3);border-top-color:var(--primary);
+  animation:id-dreht .8s linear infinite}
+@keyframes id-dreht{to{transform:rotate(360deg)}}
+/* Wer Bewegung abgestellt hat, bekommt statt des Kreisels einen Punkt, der
+   pulst — die Auskunft "es laeuft noch" darf nicht verschwinden. */
+@media (prefers-reduced-motion:reduce){
+  .id-spinner{animation:id-pulst 1.6s ease-in-out infinite;border-top-color:var(--primary)}
+  @keyframes id-pulst{0%,100%{opacity:1}50%{opacity:.35}}
+}
+
+/* Das Skript ist zum Ablesen da: Fliesstext-Breite, echte Zeilenumbrueche,
+   keine Monospace-Optik, die beim Vorlesen stoert. */
+.id-skript{white-space:pre-wrap;font:400 14px/1.72 'Inter',system-ui,sans-serif;
+  max-width:74ch;color:var(--foreground)}
+.id-plan-form{display:grid;grid-template-columns:220px auto;gap:14px;align-items:end}
+.id-plan-form .feld{margin:0}
+.id-verworfen{list-style:none;display:grid;gap:1px}
+.id-verworfen li{display:flex;justify-content:space-between;gap:14px;padding:8px 0;
+  border-bottom:1px solid var(--border);font-size:13px;color:var(--text-secondary)}
+.id-verworfen li:last-child{border-bottom:0}
+.id-verworfen i{font-style:normal;font-size:12px;color:var(--text-muted);white-space:nowrap}
+
+/* ---------- Content: eine Leiste statt vier Kacheln ----------
+   Vier gleich schwere Karten fuer vier Ziffern brauchten eine ganze
+   Bildschirmhoehe, und weil alle gleich aussahen, stach die wichtigste Zahl
+   (das Wochenziel) nicht heraus. Hier gliedern Trennlinien, und nur das erste
+   Feld traegt Farbe. */
+.ct-leiste{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:0;
+  padding:0;overflow:hidden;margin-bottom:16px}
+.ct-leiste-feld{display:flex;flex-direction:column;gap:3px;padding:16px 22px;
+  border-left:1px solid var(--border);min-width:0}
+.ct-leiste-feld:first-child{border-left:0}
+.ct-leiste-titel{font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--text-muted)}
+.ct-leiste-zahl{font-size:27px;font-weight:700;letter-spacing:-.03em;line-height:1.1;
+  display:flex;align-items:baseline;gap:6px}
+.ct-leiste-zahl span{font-size:15px;font-weight:600;color:var(--text-muted);letter-spacing:-.01em}
+/* Nur der Zielwert bekommt einen farbigen Balken — Ampel ohne Ampel-Kitsch. */
+.ct-leiste-haupt{box-shadow:inset 3px 0 0 var(--border-stark)}
+.ct-leiste-haupt.voll{box-shadow:inset 3px 0 0 var(--success)}
+.ct-leiste-haupt.mittel{box-shadow:inset 3px 0 0 var(--warning)}
+.ct-leiste-haupt.knapp{box-shadow:inset 3px 0 0 var(--danger)}
+.ct-leiste-feld.warnt .ct-leiste-zahl{color:var(--danger)}
+@media (max-width:1000px){ .ct-leiste{grid-template-columns:1fr 1fr}
+  .ct-leiste-feld:nth-child(3){border-left:0}
+  .ct-leiste-feld:nth-child(n+3){border-top:1px solid var(--border)} }
+@media (max-width:560px){ .ct-leiste{grid-template-columns:1fr}
+  .ct-leiste-feld{border-left:0;border-top:1px solid var(--border)}
+  .ct-leiste-feld:first-child{border-top:0} }
+
+/* ---------- Ideenwerkstatt: Filter ---------- */
+.id-filter{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:6px}
+.id-filterblock{display:flex;align-items:center;gap:10px;padding:7px 12px;
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--s1)}
+.id-filterkopf{font-size:10.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--text-muted);white-space:nowrap}
+.id-filterblock nav{display:flex;gap:2px;flex-wrap:wrap}
+.id-filterblock nav a{padding:5px 11px;border-radius:8px;font-size:12.5px;
+  font-weight:550;color:var(--text-secondary);white-space:nowrap}
+.id-filterblock nav a:hover{background:var(--surface-2);color:var(--foreground);text-decoration:none}
+.id-filterblock nav a.aktiv{background:var(--blau-800);color:#fff;font-weight:650}
+
+/* ---------- Produktionstafel ----------
+   Fuenf Spalten in Arbeitsrichtung. Waagerecht scrollbar statt umgebrochen: die
+   Reihenfolge IST die Aussage, und ein Umbruch zerstoert sie. */
+.pt-anleitung{display:flex;align-items:center;gap:8px;font-size:12.5px;
+  color:var(--text-muted);margin:0 0 12px}
+.pt-anleitung svg{width:15px;height:15px;flex-shrink:0}
+.pt-tafel{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(250px,1fr);
+  gap:12px;overflow-x:auto;padding-bottom:6px;align-items:start}
+.pt-spalte{background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--r-lg);padding:12px;min-width:0;
+  transition:box-shadow var(--tempo),background var(--tempo)}
+.pt-spalte.pt-ziel{box-shadow:inset 0 0 0 2px var(--primary)}
+.pt-spalte-kopf{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pt-spalte-titel{font-size:13px;font-weight:700}
+.pt-spalte-zahl{font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:99px;
+  background:var(--surface);color:var(--text-secondary)}
+.pt-spalte-hilfe{font-size:11px;line-height:1.4;color:var(--text-muted);margin:5px 0 10px}
+.pt-ablage{display:flex;flex-direction:column;gap:8px;min-height:70px}
+.pt-leer{font-size:12px;color:var(--text-muted);text-align:center;padding:14px 0}
+
+/* Tagestrenner: gibt den Ueberblick beim Vorproduzieren — zwei fuer den 5.,
+   zwei fuer den 6. Rot, wenn ein Tag unter dem Tagesziel liegt. */
+.pt-tagtrenner{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  margin:6px 0 1px;padding-bottom:3px;border-bottom:1px dashed var(--border-stark)}
+.pt-tagtrenner span{font-size:10.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.04em;color:var(--text-secondary)}
+.pt-tagtrenner i{font-style:normal;font-size:10.5px;font-weight:700;color:var(--text-muted)}
+.pt-tagtrenner i.knapp{color:var(--danger)}
+.pt-tagtrenner:first-child{margin-top:0}
+
+.pt-karte{background:var(--surface);border:1px solid var(--border);border-radius:11px;
+  padding:10px 11px;display:flex;flex-direction:column;gap:6px;cursor:grab;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.8), var(--s1);
+  transition:box-shadow var(--tempo),transform var(--tempo)}
+.pt-karte:hover{box-shadow:var(--s2);transform:translateY(-1px)}
+.pt-karte:active{cursor:grabbing}
+.pt-karte.pt-zieht{opacity:.4}
+.pt-karte--spaet{box-shadow:inset 3px 0 0 var(--danger), var(--s1)}
+.pt-karte-kopf{display:flex;align-items:center;justify-content:space-between;gap:8px}
+/* Das geplante Datum steht zuerst und traegt Gewicht: beim Vorproduzieren ist
+   "fuer wann ist das?" die einzige Frage, die zaehlt. */
+.pt-datum{font-size:11.5px;font-weight:700;color:var(--foreground);white-space:nowrap}
+.pt-datum.spaet{color:var(--danger)}
+.pt-titel{font-size:13px;font-weight:600;line-height:1.35}
+.pt-zeile{display:flex;flex-wrap:wrap;gap:4px}
+.pt-chip{font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;
+  background:var(--surface-2);color:var(--text-secondary);white-space:nowrap}
+.pt-chip--kanal{background:var(--surface-3)}
+.pt-termin,.pt-datei{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-secondary)}
+.pt-termin svg,.pt-datei svg{width:12px;height:12px}
+.pt-fuss{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding-top:5px;border-top:1px solid var(--border)}
+.pt-fuss a{font-size:11.5px;font-weight:600}
+.pt-mini{background:var(--surface-2);color:var(--text-secondary);padding:3px 9px;
+  font-size:11px;border-radius:6px;box-shadow:none}
+.pt-mini:hover{background:var(--blau-800);color:#fff;box-shadow:none}
+.pt-liegt{margin-left:auto;font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;
+  background:var(--warning-flaeche);color:var(--warning)}
+
+/* Die Deckungszeile: entscheidet, ob ueberhaupt neue Ideen gebraucht werden. */
+.pt-deckung{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;
+  margin:12px 0 20px;font-size:13px;color:var(--text-secondary)}
+.pt-deckung strong{color:var(--foreground)}
+.pt-deckung-luecke{font-size:12.5px;font-weight:600;color:var(--danger)}
+.pt-deckung-voll{font-size:12.5px;font-weight:600;color:var(--success)}
+
+/* ---------- Fortschritt beim Hochladen ---------- */
+.hl-fortschritt{height:8px;border-radius:99px;background:var(--surface-3);
+  overflow:hidden;margin:-6px 0 16px}
+.hl-fortschritt>div{height:100%;width:0;border-radius:99px;background:var(--primary);
+  transition:width .2s linear}
+.hl-fortschritt.fertig>div{background:var(--success)}
+.hl-fortschritt.kaputt>div{background:var(--danger)}
+#dlg-hochladen input[type=file]{padding:8px 10px;font-size:13px}
