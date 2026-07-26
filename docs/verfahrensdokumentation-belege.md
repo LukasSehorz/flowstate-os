@@ -245,6 +245,38 @@ sich jederzeit über die Monatsordner-Funktion bereitstellen, auch rückwirkend.
 | Datum | Änderung |
 |---|---|
 | 26.07.2026 | Erstfassung. Umstellung von Lexware Office auf eigene Ablage. Belegarchiv mit Laufnummer, Prüfsumme und Unveränderbarkeit eingeführt (Migrationen 0024, 0025). Monatsordner-Export eingeführt. Maschinelles Vorausfüllen der Belegwerte eingeführt. |
+| 26.07.2026 | **Inbetriebnahme, Nullstellung des Archivs** — siehe Abschnitt 8. |
+
+---
+
+## 8. Nullstellung bei Inbetriebnahme (26.07.2026)
+
+Vor der Inbetriebnahme enthielt das System ausschließlich Testdaten aus der
+Entwicklung: 86 zu Vorführzwecken erzeugte Buchungen, 11 Belege aus Probeläufen
+sowie 4 Testexporte. Ein produktiver Beleg war zu keinem Zeitpunkt erfasst.
+
+Diese Daten wurden am 26.07.2026 vollständig entfernt und die Belegnummerierung
+auf 1 zurückgesetzt. **Die laufende Nummerierung des Archivs beginnt damit am
+26.07.2026 bei Nummer 1.** Vor diesem Datum existiert in diesem System keine
+Buchführung; für frühere Zeiträume ist Lexware Office maßgeblich.
+
+Der Zeitpunkt war bewusst gewählt: Solange ausschließlich Testdaten vorlagen,
+war eine Nullstellung folgenlos. Nach Erfassung des ersten echten Belegs wäre
+sie nicht mehr zulässig gewesen, weil sie die Lückenlosigkeit der Nummerierung
+zerstört hätte.
+
+**Durchführung:** Die Löschsperre auf der Tabelle `belege` wurde für diesen einen
+Vorgang innerhalb einer einzelnen Datenbanktransaktion deaktiviert und in
+derselben Transaktion wieder aktiviert. Ein Abbruch hätte den Schutz also nicht
+ungesichert zurückgelassen. Die Wirksamkeit der Sperre wurde unmittelbar danach
+erneut überprüft.
+
+Betroffen waren ausschließlich die Tabellen `buchungen`, `belege` und
+`monats_exporte`. Die übrigen Daten des Systems (Kunden, Projekte, Aufgaben)
+blieben unberührt.
+
+Ein vergleichbarer Eingriff ist im laufenden Betrieb nicht vorgesehen. Sollte er
+je erforderlich werden, ist er hier zu dokumentieren.
 
 **Vor der Umstellung:** Belege wurden bis zum 26.07.2026 zusätzlich an Lexware
 Office übertragen. Die dort abgelegten Belege bleiben dort erhalten und sind
