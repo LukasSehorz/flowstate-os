@@ -54,10 +54,19 @@ const GUTE_ANTWORT = JSON.stringify({
   pruefe("Totalausfall: Hermes-Rueckfall statt Stille", a.aktionen.length === 1 && a.aktionen[0].was === "hermes");
   pruefe("Totalausfall: _diag haelt den Fehler fest", a._diag.parse === "fehler" && Boolean(a._diag.fehler));
 
-  // 4. Kein JSON -> Text trotzdem sprechen
-  schnell.frage = async () => "Morgen hast du nichts im Kalender, mein Lieber.";
-  a = await ausZustand("was steht morgen an", "KALENDER: ...", []);
-  pruefe("Kein JSON: Rohtext wird gesprochen", a.text.includes("nichts im Kalender"));
+  // 4. Kein JSON -> ehrlich nachfragen, NIE die Rohausgabe sprechen
+  //
+  // Geaendert am 26.07. nach einem echten Vorfall (16:01 Uhr): Die Antwort war
+  // an der Token-Grenze abgeschnitten, das Parsen scheiterte, und Lukas bekam
+  // woertlich '{"text": "Kleiner Fakt-Check nebenbei: Jannik steht mit vier…'
+  // vorgelesen. Mit dem JSON gingen auch die Felder verloren — die
+  // vorbereitete WhatsApp existierte nie, Alexandra behauptete aber, sie sei
+  // raus. Rohausgabe sprechen ist damit doppelt gefaehrlich.
+  schnell.frage = async () => '{"text": "Geht raus an Jannik.", "whatsapp": {"an": "Jannik"';
+  a = await ausZustand("schreib jannik", "KALENDER: ...", []);
+  pruefe("Kein JSON: nichts Rohes wird gesprochen", !a.text.includes("{") && !a.text.includes('"'));
+  pruefe("Kein JSON: keine Handlung wird behauptet", !/raus|gesendet|erledigt|steht/i.test(a.text));
+  pruefe("Kein JSON: alle Handlungsfelder leer", a.whatsapp === null && a.termin === null && a.aktionen.length === 0);
   pruefe("Kein JSON: _diag sagt kein-json", a._diag.parse === "kein-json");
 
   // 5. Temperature-Weiche in schnell.js: Sonnet 5 darf KEIN temperature bekommen
