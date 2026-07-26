@@ -382,53 +382,115 @@
 
   // ---------------------------------------------------------------- Zuhoeren
 
-  function hoeren() {
-    if (!SR || lausche) return;     // laeuft schon eine Erkennung -> nicht doppeln
-    if (pausiert) { setzeZustand("pause"); return; }   // Mikro bewusst aus
-    try { wakeErkennung?.stop(); } catch {}
-    let r;
-    try { r = new SR(); } catch { return; }
-    erkennung = r;
-    lausche = true;
-    r.lang = "de-DE";
-    r.interimResults = true;
-    r.continuous = true;            // bleibt an; wir entscheiden SELBST ueber das Ende
-    let letzter = "";
-    let abgeschickt = false;
+  // Zuhoeren laeuft seit A3 (26.07.) ueber den SERVER, nicht mehr im Browser.
+  //
+  // Wir nehmen mit MediaRecorder auf, erkennen das Satzende am Mikrofonpegel
+  // und schicken die Aufnahme an /api/sprache/hoeren (ElevenLabs Scribe).
+  //
+  // Warum der Wechsel:
+  //   - webkitSpeechRecognition verhoerte sich staendig. Aus dem Protokoll vom
+  //     24.07.: "es war mein Job sein", "das kann aus okay ja ich klappte doch
+  //     keine Zeit" — und ein Termin landete real im Kalender als "Ganz
+  //     schlimm gehen".
+  //   - Auf dem iPhone gibt es sie in der installierten App zwar, sie fragt
+  //     aber nie nach dem Mikrofon und liefert weder Ergebnis noch Fehler.
+  //     Genau der Fall "unterwegs" funktionierte also gar nicht. Mit Aufnahme
+  //     + Server-Transkription faellt das weg — MediaRecorder kann iOS.
+  //
+  // Das WECK-Wort laeuft weiter ueber die Browser-Erkennung: Dauerlauschen als
+  // Aufnahme waere teuer und daten-unsauber. Auf dem iPhone gibt es kein
+  // Weckwort — dort tippt man die Kugel an, und genau das geht jetzt.
+  const AUFNAHME_MAX_MS = 30000;   // Reissleine, falls die Stille nie kommt
+  const OHNE_WORT_MS = 9000;       // nichts gesagt -> Gespraech offen halten
+  const PEGEL_SCHWELLE = 12;       // ab hier gilt es als Sprache (0-255, RMS)
 
-    // Erst nach echter Pause absenden — Lukas ausreden lassen, nicht reinplatzen.
-    const absenden = () => {
-      if (abgeschickt) return;
-      const text = letzter.trim();
-      if (!text) return;
-      abgeschickt = true;
-      clearTimeout(stilleTimer);
-      try { r.stop(); } catch {}
-      if (STOPP_RE.test(text)) { hartStop(); return; }   // "Stopp" -> Gespraech aus
-      if (willBeenden(text)) { verabschieden(); return; } // "passt, das war's" -> aus
+  async function hoeren() {
+    if (lausche) return;                                // laeuft schon
+    if (pausiert) { setzeZustand("pause"); return; }    // Mikro bewusst aus
+    if (!window.MediaRecorder || !navigator.mediaDevices) { geduld(); return; }
+    try { wakeErkennung?.stop(); } catch {}
+    lausche = true;
+
+    await pegelStarten();                 // besorgt mikroStrom + analyser
+    if (!mikroStrom) { lausche = false; geduld(); return; }
+
+    let rec;
+    // Der Container haengt am Geraet: Chrome/Android koennen webm/opus, iOS
+    // liefert mp4/aac. Wir nehmen, was der Browser anbietet, und sagen dem
+    // Server im Content-Type, was es geworden ist.
+    const kandidaten = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", ""];
+    const typ = kandidaten.find((t) => !t || (window.MediaRecorder.isTypeSupported?.(t)));
+    try { rec = new MediaRecorder(mikroStrom, typ ? { mimeType: typ } : undefined); }
+    catch { lausche = false; geduld(); return; }
+
+    const stuecke = [];
+    let gestoppt = false, gesprochen = false;
+    const start = Date.now();
+
+    const stoppen = () => { if (!gestoppt) { gestoppt = true; try { rec.stop(); } catch {} } };
+    // Damit hartStop()/pause() weiterhin greifen, ohne dass ich alle
+    // Aufrufstellen anfassen muss: dieselbe Schnittstelle wie die Erkennung.
+    erkennung = { stop: stoppen, abort: () => { gesprochen = false; stoppen(); } };
+
+    rec.ondataavailable = (e) => { if (e.data?.size) stuecke.push(e.data); };
+
+    rec.onstop = async () => {
+      clearInterval(wache);
+      lausche = false;
+      if (!gesprochen || !stuecke.length) { geduld(); return; }
+
+      if (el.hinweis) el.hinweis.textContent = "…";
+      setzeZustand("denken");
+      const blob = new Blob(stuecke, { type: rec.mimeType || "audio/webm" });
+      let d = null;
+      try {
+        d = await fetch("/api/sprache/hoeren", {
+          method: "POST",
+          headers: { "Content-Type": blob.type || "application/octet-stream" },
+          body: blob,
+        }).then((r) => r.json());
+      } catch { /* Netz weg */ }
+
+      const text = (d && d.ok && d.text || "").trim();
+      if (!text) {
+        if (el.hinweis) el.hinweis.textContent = "Nichts verstanden — sag's nochmal.";
+        geduld();
+        return;
+      }
+      if (STOPP_RE.test(text)) { hartStop(); return; }     // "Stopp" -> Gespraech aus
+      if (willBeenden(text)) { verabschieden(); return; }  // "passt, das war's" -> aus
       verarbeiten(text);
     };
 
-    r.onstart = () => { setzeZustand("lauschen"); pegelStarten(); };
-    r.onresult = (ev) => {
-      letzter = Array.from(ev.results).map((x) => x[0].transcript).join("");
-      letzteAktivitaet = Date.now();
-      if (el.hinweis) el.hinweis.textContent = letzter || "…";
-      clearTimeout(stilleTimer);
-      stilleTimer = setTimeout(absenden, ENDE_STILLE_MS);   // 1,4 s Stille = fertig
-    };
-    // 'no-speech'/'aborted' beenden das Gespraech NICHT sofort — Geduld.
-    r.onerror = () => { lausche = false; clearTimeout(stilleTimer); if (!abgeschickt) geduld(); };
-    r.onend = () => {
-      lausche = false;
-      clearTimeout(stilleTimer);
-      if (abgeschickt) return;       // haben wir schon verarbeitet
-      const text = letzter.trim();
-      if (el.hinweis) el.hinweis.textContent = "Klick auf die Kugel oder sag „Hey Alexandra“";
-      if (text) verarbeiten(text);   // Rest, den der Timer nicht mehr erwischt hat
-      else geduld();                 // Stille -> offen halten, nicht beenden
-    };
-    try { r.start(); } catch { lausche = false; geduld(); }
+    // Satzende am Pegel erkennen: erst wenn wirklich gesprochen wurde, zaehlt
+    // die Stille. Sonst wuerde jede Aufnahme sofort nach 1,4 s abbrechen.
+    const daten = new Uint8Array(64);
+    let letzterTon = Date.now();
+    const wache = setInterval(() => {
+      if (!analyser) return;
+      analyser.getByteFrequencyData(daten);
+      let summe = 0;
+      for (const v of daten) summe += v;
+      const pegel = summe / daten.length;
+
+      if (pegel > PEGEL_SCHWELLE) {
+        if (!gesprochen && el.hinweis) el.hinweis.textContent = "…";
+        gesprochen = true;
+        letzterTon = Date.now();
+        letzteAktivitaet = Date.now();
+      }
+      const seitTon = Date.now() - letzterTon;
+      const gesamt = Date.now() - start;
+      if (gesprochen && seitTon >= ENDE_STILLE_MS) stoppen();   // ausgeredet
+      else if (!gesprochen && gesamt >= OHNE_WORT_MS) stoppen(); // gar nichts gesagt
+      else if (gesamt >= AUFNAHME_MAX_MS) stoppen();             // Reissleine
+    }, 100);
+
+    try {
+      rec.start(250);
+      setzeZustand("lauschen");
+      if (el.hinweis) el.hinweis.textContent = "Ich höre …";
+    } catch { clearInterval(wache); lausche = false; geduld(); }
   }
 
   // ---------------------------------------------------------------- Pegel
@@ -782,27 +844,29 @@
     setTimeout(() => { b.textContent = alt; b.disabled = false; }, 2200);
   });
 
-  if (!SR && el.hinweis) {
-    el.hinweis.textContent = "Dieser Browser kann keine Spracherkennung. Nimm Chrome oder Edge.";
+  // Zuhoeren braucht seit A3 nur noch Mikrofon + MediaRecorder — das koennen
+  // alle aktuellen Browser, iPhone eingeschlossen.
+  if ((!window.MediaRecorder || !navigator.mediaDevices) && el.hinweis) {
+    el.hinweis.textContent = "Dieser Browser kann nicht aufnehmen. Nimm Chrome, Edge oder Safari.";
     el.kugel.style.opacity = ".5";
   }
 
-  // iPhone-Falle (Recherche 25.07.): Als vom Homescreen installierte App gibt
-  // es webkitSpeechRecognition auf iOS ZWAR — sie fragt aber nie nach dem
-  // Mikrofon und liefert weder Ergebnis noch Fehler. Der Nutzer tippt also auf
-  // die Kugel und es passiert schlicht nichts, ohne jede Erklaerung. (Seit
-  // Jahren offen bei Apple, nie bestaetigt, nie behoben.) Im Safari-TAB
-  // funktioniert dieselbe Seite.
+  // Die iPhone-Falle ist mit A3 (26.07.) erledigt.
   //
-  // Deshalb hier ehrlich sagen, was los ist, statt den Nutzer raten zu lassen.
-  // Sobald wir Aufnahme + serverseitige Transkription haben, faellt das weg.
+  // Vorher stand hier eine Warnung: In der vom Homescreen installierten App
+  // gibt es webkitSpeechRecognition auf iOS zwar, sie fragt aber nie nach dem
+  // Mikrofon und liefert weder Ergebnis noch Fehler — man tippte die Kugel an
+  // und es passierte schlicht nichts. (Seit Jahren offen bei Apple.) Der
+  // Kommentar von damals endete mit: "Sobald wir Aufnahme + serverseitige
+  // Transkription haben, faellt das weg." Genau das ist jetzt der Fall.
+  //
+  // Was auf dem iPhone weiterhin fehlt, ist das WECKWORT — dafuer braeuchte es
+  // Dauererkennung im Browser. Dort tippt man die Kugel an. Deshalb hier nur
+  // noch ein Hinweis auf die Bedienung, keine Fehlermeldung mehr.
   const istIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const alsApp = window.navigator.standalone === true ||
-    (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
-  if (SR && istIOS && alsApp && el.hinweis) {
-    el.hinweis.textContent = "In der App hört das iPhone leider nicht zu — öffne die Seite in Safari.";
-    el.kugel.style.opacity = ".55";
+  if (istIOS && !SR && el.hinweis) {
+    el.hinweis.textContent = "Tipp die Kugel an und sprich.";
   }
 
   setzeZustand("ruhe");
