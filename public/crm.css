@@ -1585,3 +1585,98 @@ body.crm-dashboard-design .karte:not(.karte-mitte):not(.karte-dunkel){
 .beleg-merk{display:flex;align-items:flex-start;gap:6px;margin:9px 0 0;
   font-size:11px;line-height:1.45;color:var(--text-muted)}
 .beleg-merk svg{width:13px;height:13px;flex-shrink:0;margin-top:1px}
+
+/* ---------- Marketing & Content ---------- */
+
+.kachel-von{font-size:16px;font-weight:500;color:var(--text-muted)}
+
+/* Ausstoß: acht Wochensäulen mit Ziellinie. Die Höhe ist die Aussage —
+   sie wird nicht animiert, damit beim Laden nichts wackelt. */
+/* stretch, nicht flex-end: sonst schrumpft jede Spalte auf ihre Inhaltshöhe und
+   die Säulen stehen auf verschiedenen Grundlinien. Das Ausrichten nach unten
+   macht die Spalte selbst (justify-content in .mk-saeule). */
+.mk-wochen{display:flex;align-items:stretch;gap:9px;height:150px;padding-top:16px}
+/* Grid statt Flex: zwei feste Zeilen — Säule (nimmt den Rest) und Datum.
+   Damit stehen alle Säulen garantiert auf derselben Grundlinie, unabhängig
+   davon, wie hoch ihr Balken ist. */
+.mk-woche{flex:1;min-width:0;display:grid;grid-template-rows:1fr auto;gap:6px;justify-items:center}
+/* Spalte von unten gestapelt: Zahl oben auf dem Balken, Balken auf dem Boden. */
+.mk-saeule{position:relative;width:100%;min-height:0;display:flex;flex-direction:column;
+  justify-content:flex-end;align-items:center;gap:3px}
+.mk-balken{flex:0 0 auto;width:100%;max-width:34px;border-radius:6px 6px 0 0;
+  background:linear-gradient(180deg,var(--blau-300),var(--blau-700))}
+.mk-balken.erreicht{background:linear-gradient(180deg,#7FB98B,#2F6B41)}
+/* Die laufende Woche ist noch nicht vorbei — gestreift, damit niemand sie
+   mit einer abgeschlossenen Woche verwechselt. */
+.mk-balken.laufend{opacity:.75;
+  background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.28) 0 4px,transparent 4px 8px),
+    linear-gradient(180deg,var(--blau-300),var(--blau-700))}
+.mk-ziellinie{position:absolute;left:-2px;right:-2px;height:0;
+  border-top:1.5px dashed var(--text-muted);opacity:.6}
+/* Ganz normal im Fluss — dadurch sitzt die Zahl immer auf ihrem Balken,
+   auch wenn der null hoch ist. */
+.mk-wert{flex:0 0 auto;font-size:11px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1}
+/* Eigener Name mit Bereichs-Präfix. Ein blosses ".leer" gibt es hier schon —
+   das ist der leere Zustand einer Karte mit padding:52px 24px, und genau das hat
+   die Zahl auf 115px aufgeblaeht, statt sie 11px hoch zu lassen. */
+.mk-wert-null{color:var(--text-muted);font-weight:400}
+.mk-woche-tag{font-size:10px;color:var(--text-muted);white-space:nowrap}
+.mk-legende{display:flex;align-items:flex-start;gap:6px;margin-top:12px;font-size:11px;line-height:1.5}
+.mk-legende svg{width:13px;height:13px;flex-shrink:0;margin-top:2px}
+
+.mk-trenner{height:1px;background:var(--border);margin:16px 0 13px}
+.mk-unter{font-size:12.5px;font-weight:650;margin:0 0 9px;color:var(--text-secondary)}
+
+/* Kanalanteile des Monats */
+.mk-kanaele{display:grid;gap:7px}
+.mk-kanal{display:grid;grid-template-columns:104px 1fr 28px;align-items:center;gap:10px;font-size:12px}
+.mk-kanal-name{color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mk-kanal-spur{height:7px;border-radius:4px;background:var(--surface-2);overflow:hidden}
+.mk-kanal-spur>span{display:block;height:100%;border-radius:4px;
+  background:linear-gradient(90deg,var(--blau-400),var(--blau-700))}
+.mk-kanal b{text-align:right;font-variant-numeric:tabular-nums}
+
+/* Redaktionsplan */
+.mk-posts{display:grid;gap:8px;max-height:520px;overflow-y:auto}
+.mk-post{border:1px solid var(--border);border-radius:12px;padding:10px 12px;
+  background:linear-gradient(158deg,#FFFFFF 0%,var(--surface-2) 100%)}
+.mk-post.spaet{border-color:#E7B4AF}
+.mk-post-kopf{display:flex;align-items:flex-start;gap:9px}
+.mk-post-titel{flex:1;min-width:0;font-size:13px;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
+.mk-post-titel i{display:block;font-size:10.5px;font-style:normal;font-weight:400;color:var(--text-muted);margin-top:2px}
+.mk-post-tag{font-size:11px;color:var(--text-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.mk-post-tag.spaet{color:#A4243D;font-weight:650}
+.mk-post-notiz{margin:7px 0 0;font-size:11.5px;line-height:1.45;color:var(--text-secondary)}
+.mk-post-tat{display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:9px}
+
+/* Zuletzt veröffentlicht */
+.mk-raus{display:grid;gap:6px}
+.mk-raus-zeile{display:flex;align-items:baseline;gap:9px;padding:7px 2px;
+  border-bottom:1px solid var(--border)}
+.mk-raus-zeile:last-child{border-bottom:0}
+.mk-raus-titel{flex:1;min-width:0;font-size:12.5px;font-weight:600}
+.mk-raus-titel i{display:block;font-size:10.5px;font-style:normal;font-weight:400;color:var(--text-muted)}
+.mk-raus-tag{font-size:11px;color:var(--text-muted);font-variant-numeric:tabular-nums}
+
+.mk-kampagne-tat{white-space:nowrap;display:flex;gap:5px;justify-content:flex-end}
+.tabelle tr.matt{opacity:.6}
+.tabelle td.teuer{color:#A4243D;font-weight:650}
+
+/* Funnel: drei ineinandergeschobene Balken — breit = alle Leads,
+   schmal = gewonnene Kunden. */
+.mk-funnel{display:grid;gap:14px}
+.mk-funnel-zeile{display:grid;gap:6px}
+.mk-funnel-kopf{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.mk-funnel-kopf b{font-size:13px}
+.mk-funnel-spur{position:relative;height:26px;border-radius:7px;background:var(--surface-2);overflow:hidden}
+.mk-funnel-spur>span{position:absolute;left:0;top:0;bottom:0;border-radius:7px}
+.mk-f-leads{background:var(--blau-200)}
+.mk-f-eg{background:var(--blau-500)}
+.mk-f-kunde{background:var(--blau-800)}
+.mk-funnel-quoten{display:flex;gap:18px;flex-wrap:wrap;font-size:11px;color:var(--text-muted)}
+.mk-funnel-quoten b{color:var(--foreground);font-variant-numeric:tabular-nums}
+
+@media (max-width:700px){
+  .mk-kanal{grid-template-columns:80px 1fr 26px}
+  .mk-wochen{gap:5px}
+}
