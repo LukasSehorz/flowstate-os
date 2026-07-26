@@ -100,19 +100,24 @@ ein Standard-Icon zurück, statt die Rail zu zerlegen.
 
 ---
 
-## Design: neue Bereiche sehen aus wie das CRM
+## Design
 
-Damit nicht in drei Wochen vier Bereiche in vier Handschriften dastehen:
+**In deinen eigenen Bereichen gestaltest du frei.** Keine Vorgaben zu Farben,
+Aufbau oder Stil — du kennst deine Seiten am besten.
 
-- **Farben und Abstände nur über die Tokens** aus `public/crm.css`
-  (`var(--primary)`, `var(--surface)`, `var(--foreground)`, …). Keine
-  Hex-Werte direkt im Code — sonst bricht der Dunkel- und der Weiß-Modus.
-- **Vorhandene Klassen wiederverwenden** (`.karte`, `.tabelle`, `.btn`,
-  `.chip`, …). Erst schauen, was das CRM schon nutzt.
-- **Eigene Klassen mit Bereichs-Präfix** (`.marketing-…`), damit sie niemandem
-  sonst in die Quere kommen.
-- **Bestehende Klassen nicht umschreiben** — das trifft sofort alle Seiten.
-  Wenn etwas fehlt: kurz absprechen.
+Zwei Dinge, die nichts mit Geschmack zu tun haben, sondern damit, dass wir uns
+nicht gegenseitig die Seiten kaputt machen:
+
+- **Bestehende Klassen in `public/crm.css` nicht umschreiben.** Was dort schon
+  steht, nutzen CRM und die OS-Seiten gemeinsam — eine Änderung an `.karte`
+  trifft sofort alles. Eigene Klassen anlegen statt vorhandene anpassen; wenn
+  dir an einer bestehenden etwas fehlt, kurz Bescheid sagen.
+- **Eigene Klassen mit Bereichs-Präfix** (`.marketing-…`). Sonst kollidiert
+  irgendwann ein `.karte-gross` mit einem anderen `.karte-gross`.
+
+Wer sein Bereichs-CSS lieber in einer eigenen Datei hat statt in `crm.css`:
+`public/marketing.css` anlegen und in der eigenen Seite einbinden — dann gibt es
+dort nie einen Konflikt.
 
 ---
 
