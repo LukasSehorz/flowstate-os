@@ -1098,4 +1098,12 @@ function layout(title, active, content, req) {
   </script></body></html>`;
 }
 
-app.listen(PORT, () => console.log(`flowstate-dashboard läuft auf Port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`flowstate-dashboard läuft auf Port ${PORT}`);
+  // Nachsehen, ob Datenbank und Code zusammenpassen (26.07.). Am 26.07. lagen
+  // 14 Migrationen im Code, in Supabase fehlten die meisten — im Betrieb sieht
+  // das aus wie kaputter Code ("Spalte gibt es nicht"), und man sucht im
+  // falschen Code. Hier wird nur GEWARNT: Struktur-Aenderungen an einer
+  // Datenbank mit echten Kundendaten passieren nie nebenbei beim Hochfahren.
+  require("./lib/migrationen.js").warnen().catch(() => {});
+});

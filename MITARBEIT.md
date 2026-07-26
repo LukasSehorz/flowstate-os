@@ -1,94 +1,155 @@
 # Mitarbeit am flowstateOS
 
-Kurzanleitung für die gemeinsame Entwicklung von Lukas & Jannik.
-Jannik arbeitet vor allem am **CRM**, Lukas am **Operating System** drumherum.
-Beides ist dieselbe Anwendung (`flowstate-dashboard`), deshalb ein paar einfache Regeln.
+Kurzanleitung für Lukas & Jannik. Alles ist **eine** Anwendung
+(`flowstate-dashboard`) — deshalb ein paar einfache Regeln.
 
 ---
 
-## Einmal einrichten (Jannik)
+## Einmal einrichten
 
-Voraussetzung: [Node.js](https://nodejs.org) (Version 22) und [Git](https://git-scm.com) installiert.
+Voraussetzung: [Node.js](https://nodejs.org) (Version 22) und [Git](https://git-scm.com).
 
 ```bash
-# 1. Repo klonen (du bist schon als Collaborator eingeladen)
 git clone https://github.com/LukasSehorz/flowstate-dashboard.git
 cd flowstate-dashboard
-
-# 2. Pakete installieren
 npm install
 
-# 3. Zugangsdaten einrichten
-#    Vorlage kopieren und die echten Werte von Lukas eintragen (bekommst du separat)
-copy .env.beispiel .env
-#    -> .env in einem Editor oeffnen und die Werte einsetzen
+copy .env.beispiel .env      # Werte bekommst du separat von Lukas
+git config core.hooksPath .githooks   # aktiviert die Prüfung vor dem Push
 
-# 4. Starten
-npm start
-#    Laeuft dann auf http://localhost:3000
+npm start                    # läuft auf http://localhost:3000
 ```
 
-Anmelden mit deinem persönlichen Konto (E-Mail + Passwort, das Lukas dir gibt).
+Anmelden mit deinem persönlichen Konto (E-Mail + Passwort).
 
-> Der **Vault** (`flowstate-vault`) ist Alexandras Wissen und für die CRM-Arbeit
-> kaum nötig. Wenn du ihn trotzdem willst, klon ihn daneben und setz `VAULT_PATH`
-> in der `.env` auf den Ordner.
-
----
-
-## Wo was liegt
-
-| Bereich | Dateien |
-|---|---|
-| **CRM** (Janniks Baustelle) | `lib/crm.js`, `lib/crm-routes.js`, `public/crm.css` |
-| **Operating System** (Lukas) | `server.js`, `lib/sprache-routes.js`, `lib/zustand.js`, die OS-Seiten |
-| **Gemeinsam** (Absprache nötig!) | `lib/schale.js` (Hülle), `public/crm.css` (Design für beides), `server.js` (verdrahtet alles) |
-| Datenbank-Struktur | `supabase/*.sql` |
+> Der **Vault** (`flowstate-vault`) ist Alexandras Wissen und für die
+> Bereichsarbeit kaum nötig. Wenn du ihn willst: daneben klonen und `VAULT_PATH`
+> in der `.env` daraufsetzen.
 
 ---
 
-## So arbeiten wir zusammen — ohne uns zu überschreiben
+## So arbeiten wir (neu ab 26.07.2026)
 
-**`main` ist heilig.** Das ist die Version, die auf dem Server läuft. Da wird nie
-direkt drin gebastelt — nur fertige, getestete Sachen landen dort.
+**Wir arbeiten beide direkt auf `main`.** Keine eigenen Branches, keine Pull
+Requests. Wenn einer pusht, sieht der andere es sofort.
 
-Jeder arbeitet in seiner eigenen Spur (Branch):
-- Jannik → `crm`
-- Lukas → `os`
+Das geht, weil wir uns die **Bereiche** aufteilen: Wer einen Bereich hat, hat
+ihn allein. Zwei Leute in getrennten Dateien behindern sich nie — Git führt das
+von selbst zusammen.
 
-### Der Ablauf im Alltag
+### Der Ablauf
 
 ```bash
-# Morgens, bevor du anfängst: den neuesten Stand holen
-git checkout main
-git pull
-git checkout crm        # (Lukas: os)
-git merge main          # deinen Branch auf den neuesten Stand bringen
-
+git pull                     # morgens und zwischendurch
 # ... arbeiten ...
-
-# Kleine Häppchen, oft speichern:
 git add -A
-git commit -m "kurz was du geändert hast"
-git push
+git commit -m "kurz, was du gemacht hast"
+git pull --rebase            # falls der andere zwischendurch gepusht hat
+git push                     # sofort beim anderen sichtbar
 ```
 
-### Wenn ein Stück fertig und getestet ist → in `main`
+**Mehrmals am Tag pushen, nicht einmal am Ende.** Das ist die wichtigste Regel.
+Grund: Am 26.07. war ein Branch nur zwei Commits alt — und hätte beim
+Zusammenführen beinahe stillschweigend den Weiß-Modus gelöscht. Je länger man
+getrennt arbeitet, desto größer der Knall.
 
-Am einfachsten über GitHub:
-1. Auf github.com beim Repo erscheint „Compare & pull request" — draufklicken.
-2. Der andere schaut kurz drüber, dann **Merge**.
-3. Danach spielt **Lukas** es auf den Server (siehe unten).
+### Wer macht was
 
-### Vier Regeln, die 90 % der Probleme lösen
+| Bereich | Zuständig |
+|---|---|
+| CRM, Marketing, Buchhaltung, Angebote, Projekte | **Jannik** |
+| Alexandra (Sprache, Chat), Zustand, Zufluss ins Gehirn | **Lukas** |
 
-1. **Morgens immer zuerst `git pull`** — dann hast du den Stand des anderen.
-2. **Klein und oft pushen**, nicht tagelang sammeln. Je kleiner die Häppchen, desto seltener kollidiert etwas.
-3. **Bei den geteilten Dateien** (`schale.js`, `crm.css`, `server.js`) kurz im Raum Bescheid sagen, wer sie gerade anfasst.
-4. **Nur Lukas deployt auf den Server.** Jannik entwickelt lokal und pusht zu GitHub.
+Wer einen Bereich hat, arbeitet allein darin — der andere fasst die Dateien
+nicht an, auch nicht „mal eben".
 
-Wenn Git beim `merge` oder `pull` „conflict" meldet: nicht raten — kurz zusammensetzen.
-Das passiert nur, wenn beide dieselbe Zeile geändert haben, und ist schnell gelöst.
+### Die drei geteilten Dateien
+
+Nur hier können wir uns treffen. Vorher kurz im Raum Bescheid sagen:
+
+- `lib/schale.js` — die Hülle (Rail, Kopfzeile)
+- `public/crm.css` — das Design für alles
+- `server.js` — verdrahtet die Bereiche
+
+**Neuen Bereich anlegen? Dann brauchst du `schale.js` NICHT anzufassen.**
+Dein Modul trägt sich selbst in die Navigation ein:
+
+```js
+// in lib/marketing-routes.js
+const { schale, eintragen } = require("./schale.js");
+
+eintragen({
+  id: "marketing", titel: "Marketing & Content",
+  icon: "marketing", href: "/marketing",
+  nach: "buchhaltung",                    // optional: Platz in der Rail
+  unter: [                                // optional: Unterpunkte
+    { id: "marketing-kampagnen", titel: "Kampagnen", icon: "megafon", href: "/marketing/kampagnen" },
+  ],
+});
+
+module.exports = function (app) {
+  app.get("/marketing", (req, res) => {
+    res.send(schale({ titel: "Marketing", aktiv: "marketing", inhalt: "<p>…</p>", nutzer: req.session.crm }));
+  });
+};
+```
+
+In `server.js` kommt dann **eine** Zeile dazu (Muster wie beim CRM-Modul).
+Icons: Namen aus `ICON` in `schale.js` — ein unbekannter Name fällt still auf
+ein Standard-Icon zurück, statt die Rail zu zerlegen.
+
+---
+
+## Design: neue Bereiche sehen aus wie das CRM
+
+Damit nicht in drei Wochen vier Bereiche in vier Handschriften dastehen:
+
+- **Farben und Abstände nur über die Tokens** aus `public/crm.css`
+  (`var(--primary)`, `var(--surface)`, `var(--foreground)`, …). Keine
+  Hex-Werte direkt im Code — sonst bricht der Dunkel- und der Weiß-Modus.
+- **Vorhandene Klassen wiederverwenden** (`.karte`, `.tabelle`, `.btn`,
+  `.chip`, …). Erst schauen, was das CRM schon nutzt.
+- **Eigene Klassen mit Bereichs-Präfix** (`.marketing-…`), damit sie niemandem
+  sonst in die Quere kommen.
+- **Bestehende Klassen nicht umschreiben** — das trifft sofort alle Seiten.
+  Wenn etwas fehlt: kurz absprechen.
+
+---
+
+## Vor dem Push: die Prüfung
+
+Weil wir direkt auf `main` arbeiten, bremst kaputter Code den anderen sofort.
+Deshalb läuft vor jedem Push automatisch ein Selbsttest (wenige Sekunden):
+Syntax der geänderten Dateien plus alle Testskripte.
+
+```bash
+node scripts/pruefen.js      # kann man auch von Hand starten
+git push --no-verify         # Notausgang — dann bitte Bescheid sagen
+```
+
+Das ersetzt kein Ausprobieren im Browser. Es verhindert nur, dass offensichtlich
+Kaputtes beim anderen landet.
+
+---
+
+## Datenbank: Migrationen
+
+Neue Tabellen oder Spalten kommen als SQL-Datei nach `supabase/`, fortlaufend
+nummeriert (`0019_…sql`). **Wichtig: `git pull` bringt sie NICHT in die
+Datenbank** — die liegt bei Supabase und muss getrennt aktualisiert werden.
+
+```bash
+node scripts/migrieren.js                # zeigt, was fehlt
+node scripts/migrieren.js --einspielen   # spielt die offenen ein
+```
+
+Der Server warnt beim Start, wenn Code und Datenbank auseinanderlaufen. Am
+26.07. fehlten 14 Migrationen in Supabase, während der Code sie erwartete —
+das sieht im Betrieb aus wie kaputter Code („Spalte gibt es nicht"), und man
+sucht an der falschen Stelle.
+
+Migrationen bitte **wiederholbar** schreiben (`if not exists`,
+`where not exists`), damit ein zweiter Lauf nichts anrichtet.
 
 ---
 
@@ -97,29 +158,27 @@ Das passiert nur, wenn beide dieselbe Zeile geändert haben, und ist schnell gel
 ```bash
 cd /opt/flowstate-dashboard
 git pull
+docker exec flowstate-dashboard node scripts/migrieren.js   # erst schauen
 docker compose up -d --build
 ```
-Danach im Browser **Strg+F5**.
+
+Danach im Browser **Strg+F5** (nur nötig, wenn sich am Aussehen etwas ändert —
+CSS und JS tragen einen Cache-Stempel).
 
 ---
 
 ## Testen
 
 ```bash
-node scripts/test-crm.js      # CRM-Logik + Rechtetrennung (räumt seine Testdaten selbst weg)
-node scripts/test-kalender.js # Kalender-Auswertung
-node scripts/test-sprache.js  # Sprach-Verstehen (Sonnet + Haiku-Reserve, ohne echte API)
-node scripts/test-kontakte.js # WhatsApp-Kontaktaufloesung (LID vs. echte Nummer) + Gruppen-Freigabe
-node scripts/test-gespraech.js  # Welche Saetze beenden das Gespraech, welche nicht
-node scripts/test-erzaehlspur.js # Streaming-Empfang von Hermes (Zwischenstaende)
-node scripts/test-plan.js     # Vorgehensplan, den sie waehrend der Arbeit erzaehlt
-node scripts/test-prompt.js   # Wacht ueber die Regeln im System-Prompt (Groesse + Inhalt)
-node scripts/test-suche.js    # Schnelles Nachschlagen (--netz fuer den Wikipedia-Teil)
-node scripts/test-termin.js   # Termin eintragen/verschieben/absagen (Zeitzonen!)
-node scripts/test-erzaehlfilter.js # Filter gegen leere und doppelte Zwischensaetze
-node scripts/test-wa-lesen.js # WhatsApp lesen: einzelner Chat + "was ist neu"
-node scripts/test-crm-sprache.js      # CRM per Sprache: Lead, Notiz, Wiedervorlage, Anruf
-node scripts/test-zufluss-telegram.js # Telegram-Fakten ins Gehirn (idempotent)
+node scripts/pruefen.js       # alles Wichtige auf einmal (das läuft auch vor dem Push)
+
+node scripts/test-crm.js      # CRM-Logik + Rechtetrennung (räumt selbst auf, braucht DB)
+node scripts/test-navigation.js  # Rail: Bereiche tragen sich selbst ein
+node scripts/test-prompt.js   # Regeln + Größe des System-Prompts
+node scripts/test-sprache.js  # Sprach-Verstehen (Sonnet + Haiku-Reserve)
+node scripts/test-kontakte.js # WhatsApp-Kontakte (LID vs. Nummer) + Gruppen-Freigabe
+node scripts/test-termin.js   # Termine anlegen/verschieben/absagen (Zeitzonen!)
+node scripts/test-crm-sprache.js # CRM per Sprache: Lead, Notiz, Wiedervorlage, Anruf
 node scripts/shot-alles.js    # Screenshots aller Seiten in hell & dunkel (braucht Chrome)
 ```
 
@@ -127,10 +186,12 @@ node scripts/shot-alles.js    # Screenshots aller Seiten in hell & dunkel (brauc
 
 ## Wichtig: Sicherheit
 
-- Die **`.env`** enthält alle Passwörter und Schlüssel. Sie ist bewusst **nicht** im Repo
-  (steht in `.gitignore`). Niemals committen, niemals über WhatsApp/Mail schicken.
+- Die **`.env`** enthält alle Passwörter und Schlüssel. Sie ist bewusst **nicht**
+  im Repo. Niemals committen, niemals über WhatsApp/Mail schicken — und
+  **niemals als Screenshot verschicken** (ist schon zweimal passiert, danach
+  müssen alle Schlüssel neu erzeugt werden).
 - **Keine Kundendaten** ins Repo. Die gehören nur in die Datenbank.
-- Aktuell hängt die lokale Entwicklung an **derselben echten Datenbank** wie der Server.
-  Solange kaum echte Daten drin sind, ist das ok — beim Ausprobieren mit `test-crm.js`
-  arbeiten, das räumt hinter sich auf. Sobald echte Kundendaten wachsen, richten wir
-  eine getrennte Test-Datenbank ein.
+- Aktuell hängt die lokale Entwicklung an **derselben echten Datenbank** wie der
+  Server. Solange kaum echte Daten drin sind, ist das ok — zum Ausprobieren
+  `test-crm.js` nutzen, das räumt hinter sich auf. Sobald echte Kundendaten
+  wachsen, richten wir eine getrennte Test-Datenbank ein.

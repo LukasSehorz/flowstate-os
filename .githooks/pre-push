@@ -1,0 +1,17 @@
+#!/bin/sh
+# Laeuft automatisch vor jedem "git push".
+#
+# Seit 26.07. arbeiten Lukas und Jannik beide direkt auf main. Was kaputt
+# gepusht wird, bremst den anderen sofort aus — deshalb hier ein kurzer
+# Selbsttest (Syntax der geaenderten Dateien + die Testskripte, wenige
+# Sekunden).
+#
+# Im Notfall ueberspringen:  git push --no-verify
+# Das ist ausdruecklich erlaubt — aber dann bitte dem anderen Bescheid sagen.
+
+echo "Kurze Pruefung vor dem Push …"
+node scripts/pruefen.js || {
+  echo ""
+  echo "Push gestoppt. Beheben und nochmal — oder mit 'git push --no-verify' erzwingen."
+  exit 1
+}
