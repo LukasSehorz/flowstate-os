@@ -26,44 +26,74 @@
    lib/schale.js). Der Rest des Systems (OS-Seiten, Kunden/Pipeline/Team) bleibt beim Blau-Theme.
    "--blau-*" wird hier bewusst mit-ueberschrieben, damit Balken/Kanban-Stufen/Chart-Linie
    automatisch mitfaerben, ohne jede einzelne Stelle im CSS anfassen zu muessen. */
+/* ======================= GRAPHIT =======================
+   Die gesamte Palette ist aus dem Deko-Objekt selbst gemessen (public/bilder/orb-grau.png,
+   Helligkeits-Perzentile ueber alle deckenden Pixel):
+
+     1% #15161B · 15% #303336 · 30% #44474C · 50% #5B5F62 · 70% #7A7E84 · 95% #BFC0C0
+
+   Entscheidend ist der Blaustich: die Blume hat durchgehend B−R ≈ +7, sie ist ein KUEHLES
+   Graphit. Die vorherige Palette war warmes Taupe (#2B2A28 -> B−R = −3). Objekt und Flaeche
+   zogen also farblich in entgegengesetzte Richtungen — deshalb wirkte die Seite huebsch,
+   aber nie wie aus einem Guss. Jetzt liegt jeder Grauton vom hellsten Hintergrund bis zur
+   dunkelsten Karte auf DERSELBEN Achse wie das Objekt: es sitzt nicht mehr auf dem Design,
+   es ist das Design.
+
+   "--blau-*" wird bewusst mit-ueberschrieben, damit Chart-Linie, Balken und Kanban-Stufen
+   automatisch mitfaerben, ohne jede Stelle einzeln anzufassen. */
 body.crm-dashboard-design{
-  --blau-900:#2B2A28;--blau-800:#3A3937;--blau-700:#4A4946;--blau-600:#5A5956;
-  --blau-500:#726F68;--blau-400:#8F8C85;--blau-300:#B2AFA8;--blau-200:#D7D6D2;
-  --blau-100:#E5E4E0;--blau-50:#F5F4F2;
-  /* Echte Verlaeufe statt Flaechenfarbe — surface/surface-2/surface-3/background sind
-     nur je als "background:" im Einsatz (geprueft), Verlaeufe sind hier also gefahrlos.
-     Der Hintergrund ist mehrschichtig: zwei weiche Lichtquellen (oben-links hell, rechts
-     etwas dunkler) ueber einer diagonalen Grau-Rampe — das verbindet die Toene und gibt Tiefe. */
+  --blau-900:#15171B;--blau-800:#1F2227;--blau-700:#2C3037;--blau-600:#3B4048;
+  --blau-500:#5B6069;--blau-400:#7A8087;--blau-300:#A4A9B1;--blau-200:#CBCFD5;
+  --blau-100:#E1E4E9;--blau-50:#F2F4F7;
+  /* Der Hintergrund ist eine Buehne, kein Anstrich: EINE Lichtquelle oben links, echtes
+     Gewicht unten rechts (bis #A2A7B0 statt vorher #C6C4BD). Die dunklen Pole sitzen
+     bewusst im unteren Bilddrittel — dort liegt kein Fliesstext, dort darf es tragen.
+     background-attachment siehe unten: die Lichtquelle bleibt beim Scrollen stehen. */
   --background:
-    radial-gradient(900px 520px at 50% -6%, #FEFDFB 0%, rgba(254,253,251,0) 60%),
-    radial-gradient(1100px 640px at 8% 6%, #FBFAF8 0%, rgba(251,250,248,0) 56%),
-    radial-gradient(1000px 800px at 106% 58%, #D5D3CC 0%, rgba(213,211,204,0) 60%),
-    linear-gradient(158deg, #F0EFEB 0%, #E0DFD9 48%, #C6C4BD 100%);
-  --surface:linear-gradient(158deg,#FFFFFF 0%,#F0EFEB 44%,#DBD9D3 100%);
-  --surface-2:linear-gradient(160deg,#EFEEEA 0%,#D0CEC7 100%);
-  --surface-3:linear-gradient(160deg,#D7D6D2 0%,#AEABA3 100%);
-  --border:#D5D3CD;--border-stark:#AEABA3;
+    radial-gradient(1200px 760px at 14% -20%, #EFF2F6 0%, rgba(239,242,246,0) 52%),
+    radial-gradient(1500px 1000px at 90% 100%, #838894 0%, rgba(131,136,148,0) 62%),
+    radial-gradient(950px 860px at -4% 86%, #939AA5 0%, rgba(147,154,165,0) 56%),
+    linear-gradient(162deg, #DCE0E7 0%, #CBD0D8 30%, #B4B9C3 66%, #989DA9 100%);
+  /* Karten sind aus dem Block geschliffen: eigene Lichtquelle in der oberen linken Ecke,
+     der Verlauf laeuft diagonal bis #D4D8DF aus. Der reine Linear-Verlauf davor
+     verteilte sich ueber die grossen Kartenflaechen so weit, dass am Bildschirm
+     wieder nur flaches Weiss ankam — die Ecklichtquelle macht ihn wieder lesbar. */
+  --surface:
+    radial-gradient(88% 72% at 2% -6%, #FFFFFF 0%, rgba(255,255,255,0) 62%),
+    linear-gradient(160deg,#FDFDFE 0%,#F3F5F8 28%,#E4E7EC 64%,#D2D6DD 100%);
+  --surface-2:linear-gradient(160deg,#F1F3F6 0%,#D2D6DD 100%);
+  --surface-3:linear-gradient(160deg,#DDE0E5 0%,#AFB4BD 100%);
+  --border:#C2C7CF;--border-stark:#9DA2AB;
+  --foreground:#14161A;--text-secondary:#4B5058;--text-muted:#5E646C;
   --primary:var(--blau-600);--primary-hover:var(--blau-700);--primary-soft:var(--blau-50);
-  --akzent:#726F68;--akzent-flaeche:#EAE9E4;--akzent-rand:#D7D6D2;
-  --warning:#6E6B64;--warning-flaeche:#EAE9E4;
-  --info:#5A5956;--info-flaeche:#F1F0EC;
-  --stage-1:#DCDBD7;--stage-2:#C4C4C4;--stage-3:#A8A8A8;--stage-4:#8A8A8A;
-  --stage-5:#6E6E6E;--stage-6:#4A4946;--stage-7:#2B2A28;--stage-8:#157A48;
-  /* Grau getoente, geschichtete Schatten (Versatz + weiche Streuung) statt flacher Halos. */
-  --s1:0 1px 2px rgba(43,42,40,.06), 0 2px 6px rgba(43,42,40,.045);
-  --s2:0 4px 14px -2px rgba(43,42,40,.12), 0 2px 6px rgba(43,42,40,.06);
-  --s3:0 28px 64px -16px rgba(38,37,33,.34), 0 8px 20px -8px rgba(38,37,33,.2);
+  --akzent:#5B6069;--akzent-flaeche:#E7E9ED;--akzent-rand:#CBCFD5;
+  --warning:#5E646C;--warning-flaeche:#E7E9ED;
+  --info:#4B5058;--info-flaeche:#F0F2F5;
+  /* Trichter-Stufen: eine durchgehende Rampe von mittlerem Graphit ins Schwarz der Blume.
+     Frueher begann sie bei #DCDBD7 — weisse Schrift darauf hatte 1,39:1 und war praktisch
+     unlesbar. Jede Stufe liegt jetzt bei mindestens 5,3:1. */
+  --stage-1:#666C75;--stage-2:#5A6069;--stage-3:#4E545C;--stage-4:#42474F;
+  --stage-5:#363B42;--stage-6:#2A2E35;--stage-7:#1A1E23;--stage-8:#157A48;
+  /* Kuehl getoente, geschichtete Schatten — Nahschatten fuer die Kante, Fernschatten
+     fuer das Abheben von der jetzt dunkleren Flaeche. */
+  --s1:0 1px 2px rgba(20,22,26,.07), 0 2px 6px rgba(20,22,26,.05);
+  --s2:0 4px 14px -2px rgba(20,22,26,.14), 0 2px 6px rgba(20,22,26,.07);
+  --s3:0 30px 70px -18px rgba(16,18,22,.42), 0 10px 24px -10px rgba(16,18,22,.26);
 }
-/* Zusaetzliche Verlaeufe fuer innere Bauteile — nur im CRM-Dashboard. Gibt der ganzen
-   Seite mehr Tiefe (wie im mittleren Kasten gewuenscht). Die Forecast-Box bekommt hier
-   ausserdem einen expliziten Verlauf, weil ihr Standard var(--surface) nutzte, das jetzt
-   selbst ein Verlauf ist und als Farb-Stopp ungueltig waere. */
-body.crm-dashboard-design .forecast{background:linear-gradient(135deg,#E4E3DE 0%,#F4F3F0 55%,#FFFFFF 100%)}
-body.crm-dashboard-design .signal{background:linear-gradient(120deg,#E7E6E1 0%,#F4F3F0 100%)}
-body.crm-dashboard-design .signal-icon{background:linear-gradient(160deg,#FFFFFF 0%,#E2E1DC 100%)}
-body.crm-dashboard-design .zeitraum{background:linear-gradient(160deg,#EDECE8 0%,#D5D3CD 100%)}
-body.crm-dashboard-design .segmente{background:linear-gradient(160deg,#EDECE8 0%,#D5D3CD 100%)}
-body.crm-dashboard-design .leer-icon{background:linear-gradient(160deg,#FFFFFF 0%,#E2E1DC 100%)}
+/* Die Lichtquelle gehoert zum Raum, nicht zum Dokument: fest verankert bleibt sie beim
+   Scrollen an ihrem Platz, statt mit dem Inhalt wegzurutschen. Ohne das laegen die
+   dunklen Pole bei einer 3.500 px langen Seite komplett ausserhalb des Sichtbereichs
+   und die ganze Tiefe waere umsonst gerechnet. */
+body.crm-dashboard-design{background-attachment:fixed}
+/* Zusaetzliche Verlaeufe fuer innere Bauteile — nur im CRM-Dashboard. Die Forecast-Box
+   braucht einen eigenen Verlauf, weil ihr Standard var(--surface) nutzte, das selbst ein
+   Verlauf ist und als Farb-Stopp ungueltig waere. */
+body.crm-dashboard-design .forecast{background:linear-gradient(135deg,#D2D7DE 0%,#EDEFF3 48%,#FFFFFF 100%)}
+body.crm-dashboard-design .signal{background:linear-gradient(120deg,#E3E6EB 0%,#F4F6F8 100%)}
+body.crm-dashboard-design .signal-icon{background:linear-gradient(160deg,#FFFFFF 0%,#DEE2E7 100%)}
+body.crm-dashboard-design .zeitraum{background:linear-gradient(160deg,#EDEFF3 0%,#D2D6DD 100%)}
+body.crm-dashboard-design .segmente{background:linear-gradient(160deg,#EDEFF3 0%,#D2D6DD 100%)}
+body.crm-dashboard-design .leer-icon{background:linear-gradient(160deg,#FFFFFF 0%,#DEE2E7 100%)}
 /* Dunkle Fassung — nur die Farbmarken werden getauscht, kein Bauteil kennt sie einzeln.
    Umschalter sitzt in der Topbar, Auswahl liegt in localStorage. */
 :root[data-theme="dark"]{
@@ -1321,52 +1351,88 @@ b.resuemee-prozent{font-size:11px;font-weight:700;padding:1px 7px;border-radius:
    Nachbarkarten links/rechts durch align-items:stretch auf gleiche Hoehe kommen.
    Kraeftigerer Grauverlauf als die uebrigen Karten (mehr Grau reingezogen). */
 .karte-mitte{align-self:start;
-  background:linear-gradient(158deg,#FFFFFF 0%,#EDECE8 42%,#DCDAD5 74%,#C9C7C0 100%)}
-/* Dunkle Charcoal-Hero-Karte in den Grautoenen des Deko-Objekts (der "Blume").
-   Ein entschiedener dunkler Akzent zwischen zwei hellen Nachbarn — der Orb glueht darauf.
-   Nur diese eine Karte ist dunkel, alles andere bleibt hell. */
+  background:linear-gradient(158deg,#FFFFFF 0%,#EFF1F4 42%,#DDE0E5 74%,#C9CDD4 100%)}
+/* Die dunkle Hero-Karte ist ein Stueck aus demselben Block wie die Blume: dieselbe
+   Lichtquelle oben links, derselbe Abfall nach unten, dieselbe Rampe #4A4E55 -> #16181C
+   (gemessene Perzentile 30% -> 1% des Objekts). Unten sitzt ein Bodenlicht, auf dem das
+   Objekt steht — dadurch schwebt es nicht mehr vor der Karte, sondern liegt darin. */
 body.crm-dashboard-design .karte-mitte{
+  position:relative;
   background:
-    radial-gradient(130% 78% at 50% 116%, #565650 0%, rgba(86,86,80,0) 58%),
-    radial-gradient(90% 60% at 50% -10%, rgba(255,255,255,.10) 0%, rgba(255,255,255,0) 55%),
-    linear-gradient(160deg, #46443F 0%, #37352F 46%, #262520 100%);
-  border-color:#26251F;
-  box-shadow:0 26px 60px -18px rgba(30,29,24,.6), 0 6px 18px -8px rgba(30,29,24,.4), inset 0 1px 0 rgba(255,255,255,.07);
-  color:#EDEBE6}
-body.crm-dashboard-design .karte-mitte .kachel-zahl,
+    radial-gradient(150% 92% at 50% 120%, #6E737B 0%, rgba(110,115,123,0) 56%),
+    radial-gradient(120% 78% at 18% -16%, rgba(255,255,255,.22) 0%, rgba(255,255,255,0) 54%),
+    linear-gradient(162deg, #565B64 0%, #3A3F46 28%, #24272D 64%, #0F1115 100%);
+  border-color:#0F1114;
+  box-shadow:
+    0 34px 76px -20px rgba(12,14,18,.62),
+    0 10px 26px -10px rgba(12,14,18,.46),
+    inset 0 1px 0 rgba(255,255,255,.15),
+    inset 0 -1px 0 rgba(0,0,0,.55);
+  color:#E9EBEF}
 body.crm-dashboard-design .karte-mitte .hero-umsatz-neben-zahl,
-body.crm-dashboard-design .karte-mitte .mini-stat b{color:#FCFBF9}
+body.crm-dashboard-design .karte-mitte .mini-stat b{color:#FCFDFE}
+/* Die grosse Umsatzzahl bekommt denselben Verlauf wie eine polierte Kante der Blume:
+   oben Licht, unten Grau. @supports, damit die Zahl bei fehlendem background-clip nicht
+   unsichtbar wird, sondern schlicht weiss bleibt. */
+body.crm-dashboard-design .karte-mitte .kachel-zahl{color:#FCFDFE}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+  body.crm-dashboard-design .karte-mitte .kachel-zahl{
+    background:linear-gradient(178deg,#FFFFFF 0%,#FFFFFF 42%,#D2D7DF 100%);
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent}
+}
 body.crm-dashboard-design .karte-mitte .kachel-label,
 body.crm-dashboard-design .karte-mitte .kachel-mini-titel,
-body.crm-dashboard-design .karte-mitte .mini-stat .caption{color:rgba(237,235,230,.72)}
+body.crm-dashboard-design .karte-mitte .mini-stat .caption{color:rgba(233,235,239,.74)}
 body.crm-dashboard-design .karte-mitte .caption,
-body.crm-dashboard-design .karte-mitte .kachel-mini-ziel{color:rgba(237,235,230,.62)}
-body.crm-dashboard-design .karte-mitte .mini-stat-reihe{border-bottom-color:rgba(255,255,255,.12)}
-body.crm-dashboard-design .karte-mitte .orb-deko{filter:drop-shadow(0 18px 34px rgba(0,0,0,.45))}
+body.crm-dashboard-design .karte-mitte .kachel-mini-ziel{color:rgba(233,235,239,.64)}
+body.crm-dashboard-design .karte-mitte .mini-stat-reihe{border-bottom-color:rgba(255,255,255,.13)}
+/* Kontaktschatten (hart, nah) + kuehler Lichthof (weit) — das Objekt wirft Licht auf die
+   Karte zurueck, statt nur davor zu kleben. */
+body.crm-dashboard-design .karte-mitte .orb-deko{
+  filter:drop-shadow(0 24px 40px rgba(6,7,10,.66)) drop-shadow(0 0 46px rgba(184,196,214,.15))}
 
-/* Zweiter dunkler Charcoal-Anker (Umsatz je Person) — bildet mit der Hero-Karte
-   ein System. Diagonal versetzt: Hero oben-mitte, dieser unten-rechts. Die Balken
-   glimmen hell auf dem Dunkel. Insgesamt bleibt das Dashboard hell (nur 2 dunkle Karten). */
+/* Zweiter dunkler Anker (Umsatz je Person) — gleiche Rampe, diagonal versetzt:
+   Hero oben Mitte, dieser unten rechts. Insgesamt bleibt das Dashboard hell. */
 body.crm-dashboard-design .karte-dunkel{
   background:
-    radial-gradient(100% 70% at 50% -14%, rgba(255,255,255,.09) 0%, rgba(255,255,255,0) 56%),
-    linear-gradient(162deg, #44423D 0%, #34322D 48%, #24231F 100%);
-  border-color:#25241E;
-  box-shadow:0 24px 56px -18px rgba(30,29,24,.55), 0 6px 18px -8px rgba(30,29,24,.4), inset 0 1px 0 rgba(255,255,255,.07);
-  color:#EDEBE6}
-body.crm-dashboard-design .karte-dunkel h2{color:#FCFBF9}
+    radial-gradient(110% 78% at 24% -18%, rgba(255,255,255,.2) 0%, rgba(255,255,255,0) 56%),
+    radial-gradient(140% 82% at 84% 114%, rgba(126,132,142,.55) 0%, rgba(126,132,142,0) 58%),
+    linear-gradient(162deg, #545962 0%, #383D44 34%, #23262C 68%, #0F1115 100%);
+  border-color:#0F1114;
+  box-shadow:
+    0 30px 68px -20px rgba(12,14,18,.58),
+    0 10px 24px -10px rgba(12,14,18,.44),
+    inset 0 1px 0 rgba(255,255,255,.14),
+    inset 0 -1px 0 rgba(0,0,0,.55);
+  color:#E9EBEF}
+body.crm-dashboard-design .karte-dunkel h2{color:#FCFDFE}
 body.crm-dashboard-design .karte-dunkel .sub,
-body.crm-dashboard-design .karte-dunkel .caption{color:rgba(237,235,230,.6)}
-body.crm-dashboard-design .karte-dunkel .karte-kopf a:hover{color:#FCFBF9;text-decoration:none}
-body.crm-dashboard-design .karte-dunkel .balken-label{color:rgba(237,235,230,.74)}
-body.crm-dashboard-design .karte-dunkel .balken-wert{color:#FCFBF9}
-body.crm-dashboard-design .karte-dunkel .balken{background:linear-gradient(180deg,#F3F1EC 0%,#A9A69E 100%)}
+body.crm-dashboard-design .karte-dunkel .caption{color:rgba(233,235,239,.62)}
+body.crm-dashboard-design .karte-dunkel .karte-kopf a:hover{color:#FCFDFE;text-decoration:none}
+body.crm-dashboard-design .karte-dunkel .balken-label{color:rgba(233,235,239,.76)}
+body.crm-dashboard-design .karte-dunkel .balken-wert{color:#FCFDFE}
+/* Die Saeulen sind gewoelbt wie die Falten der Blume: Licht auf der linken Kante,
+   Schatten auf der rechten, Verlauf von poliertem Weiss ins Graphit. */
+body.crm-dashboard-design .karte-dunkel .balken{
+  background:linear-gradient(177deg,#FFFFFF 0%,#EAECF0 20%,#C0C5CD 58%,#8E949D 100%);
+  box-shadow:
+    inset 1px 0 0 rgba(255,255,255,.6),
+    inset -2px 0 4px -1px rgba(10,12,16,.3),
+    inset 0 -14px 20px -14px rgba(10,12,16,.35),
+    0 -3px 14px rgba(200,210,224,.16)}
 
-/* Premium-Lichtkante: helle Karten bekommen eine feine, helle Oberkante (Bevel von
-   oben) + tiefere Schatten -> sie wirken wie angehobenes Papier, nicht flach.
-   Gilt nicht fuer die dunklen Anker. */
-body.crm-dashboard-design .karte:not(.karte-mitte):not(.karte-dunkel){
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.75), 0 1px 2px rgba(43,42,40,.05), 0 10px 28px -12px rgba(43,42,40,.16)}
+/* Premium-Lichtkante: helle Karten bekommen eine helle Oberkante, eine dunkle Unterkante
+   und einen bodenlastigen Fernschatten -> angehobenes Papier ueber einer Flaeche mit
+   Gewicht, nicht flaches Weiss auf flachem Weiss. */
+body.crm-dashboard-design .karte:not(.karte-mitte):not(.karte-dunkel),
+body.crm-dashboard-design .kachel{
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.92),
+    inset 0 -1px 0 rgba(20,22,26,.055),
+    0 1px 2px rgba(20,22,26,.06),
+    0 14px 32px -14px rgba(20,22,26,.2),
+    0 34px 62px -32px rgba(20,22,26,.3)}
 
 /* Trichter-Karte nur so hoch wie ihr Inhalt (nicht auf Nachbarhoehe strecken) —
    sonst bleibt unter der letzten Stufe "Gewonnen" viel leerer Weissraum. */
@@ -1771,3 +1837,113 @@ body.crm-dashboard-design .karte:not(.karte-mitte):not(.karte-dunkel){
 .ct-zurueck:hover{color:var(--foreground)}
 .ct-zurueck svg{width:15px;height:15px}
 @media (max-width:640px){ .ct-messfelder{grid-template-columns:1fr} }
+
+/* =====================================================================
+   GRAPHIT — Licht und Tiefe (nur CRM-Dashboard und Cold-Calling-Liste)
+
+   Das Deko-Objekt lebt von einem einzigen Prinzip: Falten, die Licht fangen.
+   Helle Kante links, Schatten rechts, weicher Abfall nach unten. Genau dieses
+   Prinzip liegt hier auf den Datenelementen — Balken, Segmente, Pillen sind
+   keine flachen Rechtecke mehr, sondern gewoelbte Grate aus demselben Material.
+   Das ist die Klammer, die Objekt und Oberflaeche zu einem Stueck macht.
+
+   Alle Regeln sind mit "body.crm-dashboard-design" eingegrenzt: die OS-Seiten
+   und Lukas' Bereiche bleiben unveraendert beim Blau-Theme.
+   ===================================================================== */
+
+/* ---------- Trichter: jede Stufe ein gewoelbter Grat ----------
+   Die Flaechenfarbe kommt als Inline-Stil (var(--stage-N)) aus crm-routes.js;
+   angefasst wird darum nur der Schatten. Oben Licht, rechts und unten Abfall. */
+body.crm-dashboard-design .trichter-balken{
+  border-radius:9px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.28),
+    inset 0 -14px 22px -12px rgba(6,8,12,.5),
+    inset -16px 0 26px -16px rgba(6,8,12,.42),
+    0 2px 7px -2px rgba(20,22,26,.28);
+  text-shadow:0 1px 2px rgba(6,8,12,.45)}
+body.crm-dashboard-design .legende-farbe{
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35), 0 1px 2px rgba(20,22,26,.22)}
+/* Der Donut bekommt Tiefe, statt als Aufkleber auf der Karte zu liegen. */
+body.crm-dashboard-design .donut svg{filter:drop-shadow(0 8px 16px rgba(20,22,26,.2))}
+
+/* ---------- Saeulen in den hellen Karten: gleiche Woelbung ---------- */
+body.crm-dashboard-design .karte:not(.karte-dunkel) .balken{
+  box-shadow:
+    inset 1px 0 0 rgba(255,255,255,.45),
+    inset -2px 0 5px -1px rgba(6,8,12,.24),
+    0 2px 6px -2px rgba(20,22,26,.24)}
+
+/* ---------- Dunkle Akzente, systematisch statt zufaellig ----------
+   Aktive Pillen und dunkle Knoepfe kommen aus derselben Rampe wie die
+   Anker-Karten. So gibt es im ganzen Dashboard genau EIN Dunkel. */
+body.crm-dashboard-design .zeitraum a.aktiv,
+body.crm-dashboard-design button.dunkel,
+body.crm-dashboard-design .knopf.dunkel{
+  background:linear-gradient(168deg,#454A52 0%,#292D33 52%,#15171B 100%);
+  color:#FCFDFE;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.16), 0 4px 14px -4px rgba(12,14,18,.5)}
+body.crm-dashboard-design button.dunkel:hover,
+body.crm-dashboard-design .knopf.dunkel:hover{
+  background:linear-gradient(168deg,#525862 0%,#33383F 52%,#1C1F24 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.2), 0 8px 22px -6px rgba(12,14,18,.55)}
+
+/* ---------- Eingelassene Flaechen: Forecast, Resuemee, Rang ----------
+   Nach innen versetzte Kante -> die Flaeche liegt IN der Karte, nicht darauf. */
+body.crm-dashboard-design .forecast,
+body.crm-dashboard-design .resuemee{
+  box-shadow:inset 0 1px 2px rgba(20,22,26,.07), inset 0 -1px 0 rgba(255,255,255,.85)}
+
+/* ---------- To-Do-Karten in denselben kuehlen Ton ----------
+   Vorher warmes Papier (#F4F2ED) neben kuehlem Graphit — das war der zweite
+   sichtbare Bruch neben den Ankerkarten. */
+body.crm-dashboard-design .heute-todo{
+  background:linear-gradient(158deg,#FFFFFF 0%,#F4F6F8 50%,#E7EAEF 100%);
+  border-color:rgba(20,22,26,.06);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9), 0 1px 2px rgba(20,22,26,.05), 0 8px 20px -12px rgba(20,22,26,.22)}
+body.crm-dashboard-design .heute-todo:hover{
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9), 0 10px 26px -8px rgba(20,22,26,.26)}
+
+/* ---------- Navigationsleiste und Kopfzeile aus demselben Block ----------
+   Nur im Dashboard-Design umgefaerbt; die uebrigen Seiten behalten ihre Leiste.
+   Ohne das bliebe eine warm-braune Saeule links neben einer kuehlen Seite stehen. */
+body.crm-dashboard-design .rail{
+  border-color:#0E1013;
+  background:linear-gradient(180deg,#41464D 0%,#2A2E34 56%,#15171B 100%);
+  box-shadow:0 24px 54px -14px rgba(10,12,16,.55), inset 0 1px 0 rgba(255,255,255,.08);
+  color:rgba(233,235,239,.84)}
+body.crm-dashboard-design .rail:hover{
+  box-shadow:0 32px 72px -14px rgba(10,12,16,.66), inset 0 1px 0 rgba(255,255,255,.1)}
+body.crm-dashboard-design .rail-logo{
+  background:linear-gradient(158deg,#F8F9FB 0%,#C2C7CF 100%);color:#15171B}
+body.crm-dashboard-design .rail-avatar{
+  background:linear-gradient(160deg,#F2F4F7,#ADB2BA);color:#15171B}
+body.crm-dashboard-design .topbar{
+  box-shadow:0 18px 38px -22px rgba(14,16,20,.4), inset 0 1px 0 rgba(255,255,255,.85)}
+body.crm-dashboard-design .reiter a.aktiv{
+  box-shadow:0 6px 18px -8px rgba(14,16,20,.4), inset 0 1px 0 rgba(255,255,255,.9)}
+
+/* =====================================================================
+   Weiss-Modus (Lukas): alles oben Ergaenzte wieder flach und weiss.
+   Muss NACH den Graphit-Regeln stehen, sonst greift es nicht.
+   ===================================================================== */
+:root[data-weiss="1"] body.crm-dashboard-design .trichter-balken{box-shadow:none;text-shadow:none}
+:root[data-weiss="1"] body.crm-dashboard-design .donut svg{filter:none}
+:root[data-weiss="1"] body.crm-dashboard-design .karte:not(.karte-dunkel) .balken{box-shadow:none}
+:root[data-weiss="1"] body.crm-dashboard-design .karte:not(.karte-mitte):not(.karte-dunkel),
+:root[data-weiss="1"] body.crm-dashboard-design .kachel{box-shadow:var(--s1)}
+:root[data-weiss="1"] body.crm-dashboard-design .forecast,
+:root[data-weiss="1"] body.crm-dashboard-design .resuemee{box-shadow:none}
+:root[data-weiss="1"] body.crm-dashboard-design .heute-todo{
+  background:#FFFFFF;border-color:var(--border);box-shadow:var(--s1)}
+:root[data-weiss="1"] body.crm-dashboard-design .zeitraum a.aktiv,
+:root[data-weiss="1"] body.crm-dashboard-design button.dunkel,
+:root[data-weiss="1"] body.crm-dashboard-design .knopf.dunkel{
+  background:var(--blau-800);color:#fff;box-shadow:var(--s1)}
+:root[data-weiss="1"] body.crm-dashboard-design .karte-mitte .orb-deko{
+  filter:drop-shadow(0 14px 26px rgba(15,27,45,.18))}
+/* Ohne diesen Block bliebe die Umsatzzahl im Weiss-Modus UNSICHTBAR: die Farbe
+   wird dort zwar schon auf --foreground gesetzt, der Verlauf mit transparenter
+   Schriftfuellung bliebe aber bestehen und wuerde sie ueberdecken. */
+:root[data-weiss="1"] body.crm-dashboard-design .karte-mitte .kachel-zahl{
+  background:none;-webkit-text-fill-color:var(--foreground);color:var(--foreground)}
