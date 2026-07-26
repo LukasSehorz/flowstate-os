@@ -1680,3 +1680,20 @@ body.crm-dashboard-design .karte:not(.karte-mitte):not(.karte-dunkel){
   .mk-kanal{grid-template-columns:80px 1fr 26px}
   .mk-wochen{gap:5px}
 }
+
+/* ---------- Content: Umschalter zwischen den Personal-Brands ---------- */
+/* Filtert die ganze Seite, darum bewusst prominenter als eine Reiterleiste. */
+.ct-marken{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.ct-marken a{display:flex;flex-direction:column;gap:2px;min-width:150px;
+  padding:9px 14px;border:1px solid var(--border);border-radius:11px;
+  background:var(--surface);color:var(--text-secondary);text-decoration:none;
+  transition:border-color var(--tempo),box-shadow var(--tempo),color var(--tempo)}
+.ct-marken a:hover{border-color:var(--border-stark);text-decoration:none;box-shadow:var(--s1)}
+.ct-marken a.an{border-color:var(--blau-800);color:var(--foreground);box-shadow:var(--s1);
+  background:linear-gradient(158deg,#FFFFFF 0%,var(--surface-2) 100%)}
+.ct-marke-name{font-size:13.5px;font-weight:650;line-height:1.25}
+.ct-marke-zahl{font-size:11px;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.ct-marke-zahl .spaet{color:#A4243D}
+/* Markenkuerzel vor der Zeile, wenn alle Marken zusammen angezeigt werden. */
+.ct-marke-tag{color:var(--foreground);font-weight:650}
+@media (max-width:560px){ .ct-marken a{flex:1;min-width:0} }
