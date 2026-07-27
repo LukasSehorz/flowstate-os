@@ -28,7 +28,7 @@ fs.writeFileSync(path.join(TMP, "verlauf.jsonl"), [
   { jid: "491700006888@s.whatsapp.net", richtung: "sie", von: "Jannik", ts: jetzt - 300, text: "Brauchst du was vom Bäcker?" },
   { jid: "491700003333@s.whatsapp.net", richtung: "sie", von: "Mama", ts: jetzt - 1800, text: "Ruf mal an." },
   { jid: "111111@g.us", richtung: "sie", von: "Ioannis", ts: jetzt - 900, text: "Termin verschoben auf zehn." },
-  { jid: "491700006888@s.whatsapp.net", richtung: "ich", von: "Lukas", ts: jetzt - 120, text: "Ne danke." },
+  { jid: "491700006888@s.whatsapp.net", richtung: "ich", von: "Lukas", ts: jetzt - 700, text: "Ne danke." },
   { jid: "491700003333@s.whatsapp.net", richtung: "sie", von: "Mama", ts: jetzt - 200000, text: "Uraltes Zeug." },
 ].map((o) => JSON.stringify(o)).join("\n") + "\n");
 
@@ -121,6 +121,64 @@ function pruefe(name, wahr) {
 
   // Fixture zurueck fuer die folgenden Faelle.
   fs.writeFileSync(path.join(TMP, "verlauf.jsonl"), [
+    { jid: "491700006888@s.whatsapp.net", richtung: "sie", von: "Jannik", ts: jetzt - 600, text: "Bin gleich im Büro." },
+    { jid: "491700006888@s.whatsapp.net", richtung: "sie", von: "Jannik", ts: jetzt - 300, text: "Brauchst du was vom Bäcker?" },
+    { jid: "491700003333@s.whatsapp.net", richtung: "sie", von: "Mama", ts: jetzt - 1800, text: "Ruf mal an." },
+    { jid: "111111@g.us", richtung: "sie", von: "Ioannis", ts: jetzt - 900, text: "Termin verschoben auf zehn." },
+  ].map((o) => JSON.stringify(o)).join("\n") + "\n");
+
+  // --- "Ungelesen" ohne Gelesen-Status (Lukas, 27.07.) -------------------
+  //
+  // Er fragte "gibt es noch ungelesene Nachrichten" und bekam zwoelf Stunden
+  // Verlauf — darunter Chats, in denen er laengst geantwortet hatte. Die
+  // Bruecke liefert keinen Gelesen-Status (in /wa gibt es keine Chatliste mit
+  // unreadCount), also wird das beste vorhandene Signal genutzt: seine EIGENEN
+  // Nachrichten. Wer gerade selbst geschrieben hat, hat den Chat auch gelesen.
+  //
+  // Aufbau unten: In Jannis Chat hat Lukas zuletzt geantwortet, DANACH kam
+  // eine neue Nachricht — die zaehlt. Bei Mama liegt seine Antwort NACH ihrer
+  // Nachricht — die zaehlt nicht mehr. In der Arbeitsgruppe hat er nie
+  // geschrieben, da greift das Zeitfenster als Boden.
+  fs.writeFileSync(path.join(TMP, "verlauf.jsonl"), [
+    { jid: "491700006888@s.whatsapp.net", richtung: "sie", von: "Jannik", ts: jetzt - 3000, text: "Alte Frage, schon beantwortet." },
+    { jid: "491700006888@s.whatsapp.net", richtung: "ich", von: "Lukas", ts: jetzt - 2000, text: "Ja passt." },
+    { jid: "491700006888@s.whatsapp.net", richtung: "sie", von: "Jannik", ts: jetzt - 900, text: "Und noch was Neues." },
+    { jid: "491700003333@s.whatsapp.net", richtung: "sie", von: "Mama", ts: jetzt - 4000, text: "Ruf mal an." },
+    { jid: "491700003333@s.whatsapp.net", richtung: "ich", von: "Lukas", ts: jetzt - 1000, text: "Mach ich." },
+    { jid: "111111@g.us", richtung: "sie", von: "Ioannis", ts: jetzt - 600, text: "Termin steht." },
+  ].map((o) => JSON.stringify(o)).join("\n") + "\n");
+
+  const unge = await whatsapp.leseChat("gibt es noch ungelesene Nachrichten");
+  console.log("   →", unge.reply);
+  pruefe("Ungelesen: sagt worauf es sich bezieht", /Seit du zuletzt geschrieben hast/.test(unge.reply));
+  pruefe("Ungelesen: was NACH seiner Antwort kam, zaehlt", /Und noch was Neues/.test(unge.reply));
+  pruefe("Ungelesen: was er schon beantwortet hat, faellt weg", !/Alte Frage/.test(unge.reply));
+  pruefe("Ungelesen: Chat, in dem ER zuletzt schrieb, faellt ganz weg", !/Mama/.test(unge.reply));
+  pruefe("Ungelesen: Gruppe ohne eigene Nachricht bleibt drin", /Team Flowstate/.test(unge.reply));
+
+  // Hat er ueberall zuletzt geschrieben, ist ehrlich nichts da.
+  fs.writeFileSync(path.join(TMP, "verlauf.jsonl"), [
+    { jid: "491700006888@s.whatsapp.net", richtung: "sie", von: "Jannik", ts: jetzt - 3000, text: "Frage." },
+    { jid: "491700006888@s.whatsapp.net", richtung: "ich", von: "Lukas", ts: jetzt - 100, text: "Antwort." },
+  ].map((o) => JSON.stringify(o)).join("\n") + "\n");
+  const nix = await whatsapp.leseChat("neue Nachrichten");
+  pruefe("Ungelesen: alles beantwortet -> ehrlich 'nichts Neues'",
+    /nichts Neues gekommen/.test(nix.reply));
+  console.log("   →", nix.reply);
+
+  // Die Frage nach EINEM Chat darf davon unberuehrt bleiben — dort will Lukas
+  // den Verlauf sehen, nicht nur das Unbeantwortete.
+  fs.writeFileSync(path.join(TMP, "verlauf.jsonl"), [
+    { jid: "491700006888@s.whatsapp.net", richtung: "sie", von: "Jannik", ts: jetzt - 3000, text: "Bin gleich im Büro." },
+    { jid: "491700006888@s.whatsapp.net", richtung: "ich", von: "Lukas", ts: jetzt - 100, text: "Ok." },
+  ].map((o) => JSON.stringify(o)).join("\n") + "\n");
+  const einer = await whatsapp.leseChat("Jannik");
+  pruefe("Bestimmter Chat zeigt weiter den Verlauf, nicht nur Unbeantwortetes",
+    /Büro/.test(einer.reply));
+
+  // Ausgangsvorlage zurueck fuer die folgenden Faelle.
+  fs.writeFileSync(path.join(TMP, "verlauf.jsonl"), [
+    { jid: "491700006888@s.whatsapp.net", richtung: "ich", von: "Lukas", ts: jetzt - 700, text: "Ne danke." },
     { jid: "491700006888@s.whatsapp.net", richtung: "sie", von: "Jannik", ts: jetzt - 600, text: "Bin gleich im Büro." },
     { jid: "491700006888@s.whatsapp.net", richtung: "sie", von: "Jannik", ts: jetzt - 300, text: "Brauchst du was vom Bäcker?" },
     { jid: "491700003333@s.whatsapp.net", richtung: "sie", von: "Mama", ts: jetzt - 1800, text: "Ruf mal an." },
