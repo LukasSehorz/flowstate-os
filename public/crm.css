@@ -2193,3 +2193,28 @@ th.ct-spalte-schnitt{font-weight:600}
 .hl-fortschritt.fertig>div{background:var(--success)}
 .hl-fortschritt.kaputt>div{background:var(--danger)}
 #dlg-hochladen input[type=file]{padding:8px 10px;font-size:13px}
+
+/* ---------- Content: Sortierung des Upload-Kastens ----------
+   Der eigene Kasten "Zuletzt veroeffentlicht" ist hierin aufgegangen — er war
+   nur eine von vier moeglichen Reihenfolgen derselben Liste. */
+.ct-sortieren{display:flex;flex-wrap:wrap;gap:2px;margin:0 0 14px;padding:3px;
+  border-radius:11px;background:var(--surface-2);border:1px solid var(--border)}
+.ct-sortieren a{flex:1 1 auto;text-align:center;padding:6px 11px;border-radius:8px;
+  font-size:12px;font-weight:600;color:var(--text-secondary);white-space:nowrap}
+.ct-sortieren a:hover{color:var(--foreground);background:rgba(255,255,255,.55);text-decoration:none}
+.ct-sortieren a.aktiv{background:var(--blau-800);color:#fff;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14), var(--s1)}
+/* Der Abstand zum Kanaldurchschnitt. Klein und rechts — die absolute Zahl
+   bleibt die Tatsache, das hier ist nur ihre Einordnung. */
+.ct-leistung{margin-left:8px;font-size:11px;font-weight:700;padding:2px 7px;
+  border-radius:99px;white-space:nowrap}
+.ct-leistung.auf{background:var(--success-flaeche);color:var(--success)}
+.ct-leistung.ab{background:var(--danger-flaeche);color:var(--danger)}
+.ct-leistung.gleich{background:var(--surface-2);color:var(--text-muted)}
+.ct-sort-fuss{display:flex;gap:8px;align-items:flex-start;line-height:1.5;margin-top:12px}
+.ct-sort-fuss svg{width:15px;height:15px;flex-shrink:0;margin-top:2px}
+/* Der Bezug MUSS am Chip stehen: die grosse Zahl in der Zeile ist der neueste
+   Stand (oft "nach 7 Tagen"), der Prozentwert aber der Abstand zum
+   24-Stunden-Schnitt. Ohne die Beschriftung liest man ihn auf die falsche Zahl. */
+.ct-leistung i{font-style:normal;font-weight:600;opacity:.62;margin-left:5px;font-size:9.5px;
+  text-transform:uppercase;letter-spacing:.03em}
