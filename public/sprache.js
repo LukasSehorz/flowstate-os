@@ -256,6 +256,18 @@
   async function gespraechStarten(mitGruss) {
     imGespraech = true;
     letzteAktivitaet = Date.now();
+    // Den Wake-Lauscher fuer die Dauer des Gespraechs wirklich abschalten.
+    //
+    // Er wurde bisher nur gestoppt, wenn er das Wake-Wort selbst gehoert hat —
+    // beim Antippen der Kugel lief er weiter. Dann greifen ZWEI Dinge
+    // gleichzeitig aufs Mikro zu: die Dauererkennung (die ihren Ton laufend an
+    // Google schickt) und unsere eigene Aufnahme. Android handelt die
+    // Tonsitzung dabei neu aus, und jede Neuaushandlung ist ein Aussetzer in
+    // der Ausgabe. Genau deshalb lief es bei Lukas fluessig, sobald er den
+    // Wake-Modus ausschaltete, und ruckelte wieder, sobald er ihn anschaltete.
+    try { wakeErkennung?.stop(); } catch {}
+    wakeLaeuft = false;
+    wakePunktSetzen();
     if (mitGruss) await begruessung();
     hoeren();
   }
@@ -501,6 +513,8 @@
     return audioCtx;
   }
 
+  let mikroQuelle = null;
+
   async function pegelStarten() {
     if (analyser) return;
     try {
@@ -510,11 +524,31 @@
       mikroStrom ||= await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
-      const q = ctx.createMediaStreamSource(mikroStrom);
+      mikroQuelle = ctx.createMediaStreamSource(mikroStrom);
       analyser = ctx.createAnalyser();
       analyser.fftSize = 128;
-      q.connect(analyser);
+      mikroQuelle.connect(analyser);
     } catch { /* ohne Mikro-Pegel laeuft alles weiter */ }
+  }
+
+  // Mikrofon WIRKLICH freigeben, sobald nicht zugehoert wird.
+  //
+  // Vorher wurde es einmal geoeffnet und nie geschlossen — getTracks().stop()
+  // kam im ganzen Browsercode nicht vor. Ein offenes Mikro ist auf Android
+  // aber kein passiver Zustand: Das Geraet schaltet die Tonausgabe in den
+  // Gespraechsmodus, und die Echounterdrueckung tut genau ihre Aufgabe — sie
+  // entfernt aus dem Signal, was gleichzeitig aus dem Lautsprecher kommt.
+  // Das ist Alexandras eigene Stimme. Deshalb fielen Woerter aus.
+  //
+  // Halbduplex ist hier das Richtige: Entweder sie spricht, oder wir hoeren
+  // zu. Das Wiederoeffnen kostet 100-300 ms und faellt nicht auf; die
+  // Freigabe ist schon erteilt, es wird nicht neu gefragt.
+  function pegelStoppen() {
+    try { mikroQuelle?.disconnect(); } catch {}
+    try { mikroStrom?.getTracks().forEach((t) => t.stop()); } catch {}
+    mikroQuelle = null;
+    analyser = null;
+    mikroStrom = null;
   }
 
   // Alexandras Sprachausgabe an einen Analyser haengen, damit die Kugel beim
@@ -668,8 +702,13 @@
     redeText = norm(istUrl ? (anzeige || "") : quelle);
     try { wakeErkennung?.stop(); } catch {}
     try { erkennung?.stop(); } catch {}
+    // Das Mikro WIRKLICH freigeben, bevor der Lautsprecher losgeht. Solange es
+    // offen ist, laeuft die Tonausgabe auf Android im Gespraechsmodus und die
+    // Echounterdrueckung schneidet Alexandras eigene Stimme heraus. hoeren()
+    // oeffnet es danach wieder — das kostet 100-300 ms und faellt nicht auf.
+    pegelStoppen();
     setzeZustand("sprechen");
-    bargeStart();   // waehrend des Sprechens auf Unterbrechung lauschen
+    bargeStart();   // nur wenn ausdruecklich eingeschaltet (siehe dort)
     try {
       if (istUrl) { await abspielen(quelle, false); return; }
       if (konfig.elevenlabs) {
@@ -693,8 +732,30 @@
   // sprechen, hoert sie sofort auf und lauscht frisch. Damit sie sich nicht
   // selbst unterbricht (ihre Stimme leckt trotz Echo-Unterdrueckung ins Mikro),
   // wird ignoriert, was in ihrem gerade gesprochenen Satz (redeText) vorkommt.
+  // Standardmaessig AUS (27.07.). Der Grund ist gemessen am Verhalten, nicht
+  // vermutet: Lukas' Handy gab die Sprache irgendwann so aus, "als wuerde man
+  // ein Video schauen, das die ganze Zeit haengt" — Woerter fielen aus, der
+  // Rest kam stockend. Und es verschwand, sobald er den Wake-Modus ausschaltete.
+  //
+  // Diese Funktion oeffnete waehrend JEDES gesprochenen Satzes eine
+  // Dauererkennung — die schickt auf Android laufend Ton an Google — und
+  // startete sie in onend sofort wieder, wenn Chrome sie beendet. Bei einer
+  // langen Antwort sind das mehrere Mikrofonzugriffe hintereinander, waehrend
+  // der Lautsprecher laeuft. Android handelt die Tonsitzung bei jedem Zugriff
+  // neu aus, und jede Neuaushandlung ist ein Aussetzer in der Ausgabe. Dazu
+  // entfernt die Echounterdrueckung genau das, was gleichzeitig aus dem
+  // Lautsprecher kommt: ihre eigene Stimme.
+  //
+  // WAS DAS KOSTET, ehrlich: Sie laesst sich mitten im Satz nicht mehr per
+  // "Stopp" unterbrechen. Der Stopp-Knopf und ein Tippen auf die Kugel gehen
+  // weiter, und sobald sie fertig ist, hoert sie ohnehin wieder zu. Wer den
+  // Zuruf zurueckwill, setzt im Browser localStorage flowstate-barge auf "an"
+  // — dann ist der Ton wieder unruhig. Erst messen, dann entscheiden.
+  const BARGE_SPEICHER = "flowstate-barge";
+  const bargeErlaubt = () => localStorage.getItem(BARGE_SPEICHER) === "an";
+
   function bargeStart() {
-    if (!SR) return;
+    if (!SR || !bargeErlaubt()) return;
     bargeStop();
     let b;
     try { b = new SR(); } catch { return; }
@@ -710,8 +771,11 @@
       if (STOPP_RE.test(roh) && !(redeText && redeText.includes(norm(roh)))) hartStop();
     };
     b.onerror = () => {};
-    // Chrome beendet die Erkennung frueh -> neu starten, solange sie noch redet.
-    b.onend = () => { if (redetGerade && bargeSR === b) { try { b.start(); } catch {} } };
+    // Frueher wurde hier neu gestartet, sobald Chrome die Erkennung beendet —
+    // also mitten im Sprechen ein weiterer Mikrofonzugriff. Genau diese Kette
+    // hat die Ausgabe zerhackt. Eine Sitzung je Aeusserung muss reichen; endet
+    // sie vorzeitig, entfaellt der Zuruf fuer den Rest des Satzes.
+    b.onend = () => {};
     try { b.start(); } catch {}
   }
 
@@ -737,15 +801,48 @@
     stoppen();
   }
 
+  // EIN Abspielelement fuer die ganze Sitzung — nicht eines pro Satz.
+  //
+  // Der Fehler, den das behebt (Lukas am Handy, 27.07.): "Nach einer Zeit
+  // hoert sich das an, als wuerde man ein Video schauen, das die ganze Zeit
+  // haengt." Vorher entstand fuer JEDEN gesprochenen Satz ein neues
+  // Audio-Element, das verbindePlayback() ueber createMediaElementSource in
+  // den Web-Audio-Graphen haengte — und dort blieb es. Nichts wurde je
+  // getrennt. Nach zwanzig Saetzen hingen zwanzig Quellknoten dauerhaft am
+  // Ausgang, alle wurden bei jedem Ton mitgerechnet. Der Ton wurde nicht
+  // langsam geladen, er wurde langsam VERARBEITET — deshalb klang es wie ein
+  // ruckelndes Video und wurde mit der Gespraechsdauer schlimmer.
+  //
+  // Ein Element, ein Quellknoten, einmal verbunden. createMediaElementSource
+  // darf ohnehin nur einmal je Element aufgerufen werden.
+  let stimmAudio = null;
+  function stimmElement() {
+    if (!stimmAudio) {
+      stimmAudio = new Audio();
+      stimmAudio.preload = "auto";
+      verbindePlayback(stimmAudio);   // genau EINMAL, nicht pro Satz
+    }
+    return stimmAudio;
+  }
+
   function abspielen(url, freigeben) {
     return new Promise((fertig) => {
-      audio = new Audio(url);
-      verbindePlayback(audio);   // Kugel tanzt zu Alexandras Stimme
-      const ende = () => { if (freigeben) URL.revokeObjectURL(url); aktuellerStop = null; fertig(); };
-      audio.onended = audio.onerror = ende;
+      const a = stimmElement();
+      audio = a;
+      let fertigGemeldet = false;
+      const ende = () => {
+        if (fertigGemeldet) return;      // onended UND onerror koennen feuern
+        fertigGemeldet = true;
+        a.onended = a.onerror = null;
+        if (freigeben) URL.revokeObjectURL(url);
+        aktuellerStop = null;
+        fertig();
+      };
+      a.onended = a.onerror = ende;
       // Barge-in kann die Ausgabe sofort abwuergen.
-      aktuellerStop = () => { try { audio.pause(); } catch {} ende(); };
-      audio.play().catch(() => ende());
+      aktuellerStop = () => { try { a.pause(); } catch {} ende(); };
+      a.src = url;
+      a.play().catch(() => ende());
     });
   }
 
