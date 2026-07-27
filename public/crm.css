@@ -2218,3 +2218,80 @@ th.ct-spalte-schnitt{font-weight:600}
    24-Stunden-Schnitt. Ohne die Beschriftung liest man ihn auf die falsche Zahl. */
 .ct-leistung i{font-style:normal;font-weight:600;opacity:.62;margin-left:5px;font-size:9.5px;
   text-transform:uppercase;letter-spacing:.03em}
+
+/* ---------- Ideenwerkstatt: drei Funnel-Spalten ----------
+   Eine Spalte je Stufe statt einer gemischten Liste. Nebeneinander sieht man
+   sofort, wo nichts nachkommt: drei TOFU-Ideen und eine leere BOFU-Spalte
+   heisst, dass Reichweite entsteht und unten nichts ankommt. In einer
+   Mischliste faellt genau das nicht auf. */
+.id-stufen-raster{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+@media (max-width:1150px){ .id-stufen-raster{grid-template-columns:1fr} }
+.id-stufe-spalte{display:flex;flex-direction:column;gap:12px;min-width:0}
+.id-stufe-kopf{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:11px 14px;border-radius:var(--r-md);color:#fff}
+.id-stufe-kopf>div{display:flex;align-items:baseline;gap:9px;min-width:0}
+.id-stufe-kurz{font-size:12px;font-weight:800;letter-spacing:.06em}
+.id-stufe-name{font-size:13px;font-weight:600;opacity:.85}
+.id-stufe-zahl{font-size:12px;font-weight:700;padding:1px 9px;border-radius:99px;
+  background:rgba(255,255,255,.2)}
+/* Von hell nach dunkel wie der Trichter selbst: oben breit (Reichweite),
+   unten schmal und schwer (Entscheidung). */
+.id-kopf-tofu{background:linear-gradient(160deg,var(--stage-2),var(--stage-3))}
+.id-kopf-mofu{background:linear-gradient(160deg,var(--stage-4),var(--stage-5))}
+.id-kopf-bofu{background:linear-gradient(160deg,var(--stage-6),var(--stage-7))}
+.id-stufe-frage{font-size:12px;color:var(--text-muted);line-height:1.45;margin:-4px 2px 0}
+.id-stufe-leer{font-size:12.5px;color:var(--text-muted);text-align:center;
+  padding:22px 10px;border:1px dashed var(--border-stark);border-radius:var(--r-md)}
+.id-stufe-spalte .id-karte{margin:0}
+/* Stand des Skripts direkt auf der angenommenen Karte. */
+.id-skriptstand{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding-top:10px;border-top:1px solid var(--border)}
+.id-spinner.klein{width:15px;height:15px;border-width:2px}
+.id-tagfilter{font-size:12.5px;font-weight:500;color:var(--text-muted)}
+
+/* ---------- Die Tagesleiste ----------
+   Die Tafel ist nach ARBEIT sortiert, hier stehen dieselben Kaertchen nach
+   TAGEN. Beim Vorproduzieren ist das die eigentliche Frage: was geht am 27.
+   raus, und wo steckt es gerade? Ein Klick filtert die Tafel darunter. */
+.tp-leiste{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(116px,1fr);
+  gap:8px;overflow-x:auto;padding:0 0 8px;margin-bottom:14px}
+.tp-tag{display:flex;flex-direction:column;gap:3px;padding:10px 11px;min-width:0;
+  border-radius:var(--r-md);text-decoration:none;color:inherit;
+  background:var(--surface);border:1px solid var(--border);box-shadow:var(--s1);
+  transition:box-shadow var(--tempo),transform var(--tempo)}
+.tp-tag:hover{text-decoration:none;transform:translateY(-1px);box-shadow:var(--s2)}
+.tp-wochentag{font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--text-muted);white-space:nowrap}
+.tp-datum{font-size:13px;font-weight:650}
+.tp-zahl{font-size:20px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.tp-zahl i{font-style:normal;font-size:12px;font-weight:600;color:var(--text-muted)}
+.tp-stufen{display:flex;flex-wrap:wrap;gap:3px;margin-top:2px}
+.tp-stufe{font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:4px;white-space:nowrap}
+/* Dieselbe Rampe wie die Tafelspalten — die Farbe sagt, wie weit es ist. */
+.tp-s-aufnehmen{background:var(--stage-2);color:#fff}
+.tp-s-schneiden{background:var(--stage-4);color:#fff}
+.tp-s-hochladen{background:var(--stage-6);color:#fff}
+.tp-s-geplant{background:var(--success-flaeche);color:var(--success)}
+.tp-s-raus{background:var(--surface-3);color:var(--text-secondary)}
+.tp-s-leer{background:transparent;color:var(--text-muted);font-weight:500;padding-left:0}
+/* Der Zustand des Tages traegt eine Kante links — Luecken sollen auffallen,
+   ohne dass man Zahlen vergleichen muss. */
+.tp-leer{box-shadow:inset 3px 0 0 var(--danger), var(--s1)}
+.tp-leer .tp-zahl{color:var(--danger)}
+.tp-knapp{box-shadow:inset 3px 0 0 var(--warning), var(--s1)}
+.tp-voll{box-shadow:inset 3px 0 0 var(--success), var(--s1)}
+.tp-heute{border-color:var(--border-stark)}
+.tp-heute .tp-wochentag{color:var(--foreground)}
+.tp-gewaehlt{outline:2px solid var(--blau-700);outline-offset:1px}
+
+/* Headline auf dem Kaertchen: der erste Satz, woertlich. */
+.pt-headline{font-size:11.5px;line-height:1.45;color:var(--text-secondary);
+  padding-left:8px;border-left:2px solid var(--border-stark)}
+.pt-plus{width:24px;height:24px;padding:0;margin-left:auto;margin-right:6px;
+  border-radius:7px;font-size:17px;line-height:1;display:grid;place-items:center;
+  background:var(--surface);color:var(--text-secondary);box-shadow:var(--s1)}
+.pt-plus:hover{background:var(--blau-800);color:#fff;box-shadow:var(--s1)}
+/* Ueberfaelliges steht vor "heute" — es ist das Dringendste, nicht das Aelteste. */
+.tp-spaet{box-shadow:inset 3px 0 0 var(--danger), var(--s1);background:var(--danger-flaeche)}
+.tp-spaet .tp-zahl,.tp-spaet .tp-datum{color:var(--danger)}
+.tp-s-spaet{background:var(--danger);color:#fff}
