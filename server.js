@@ -122,6 +122,11 @@ app.use((req, res, next) => {
 try { require("./lib/sprache-routes.js")(app, { layout }); console.log("Sprach-Modul geladen"); }
 catch (e) { console.error("Sprach-Modul konnte nicht geladen werden:", e.message); }
 
+// Kalender (/kalender) — der Google Kalender zum Ansehen und Eintragen.
+// Steht hinter dem Auth-Gate: die Routen schreiben in ein echtes Google-Konto.
+try { require("./lib/kalender-routes.js")(app); console.log("Kalender-Modul geladen"); }
+catch (e) { console.error("Kalender-Modul konnte nicht geladen werden:", e.message); }
+
 // WhatsApp-Koppelseite (/whatsapp). Die Bruecke laeuft als eigener Container;
 // faellt sie aus, zeigt die Seite nur "nicht verbunden" — das Dashboard bleibt heil.
 try { require("./lib/whatsapp.js")(app, { layout }); console.log("WhatsApp-Modul geladen"); }
@@ -318,7 +323,10 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
 // ---------- Zentrale ----------
 app.get("/", async (req, res) => {
   const heute = new Date().toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  res.send(layout("Zentrale", "zentrale", `
+  // aktiv = "zentrale-start" (nicht "zentrale"): Seit der Kalender als
+  // Unterpunkt darunter haengt, hat die Zentrale selbst einen eigenen
+  // Untereintrag — sonst waere in der Rail kein Kind markiert.
+  res.send(layout("Zentrale", "zentrale-start", `
     <div class="head-row">
       <div><p class="muted">${heute}</p></div>
       <div class="qa">

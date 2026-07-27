@@ -69,7 +69,9 @@ for (const d of geaendert.filter((x) => x.endsWith(".json") && !x.includes("node
 // nicht mehr gibt.
 const TESTS = [
   "test-navigation", "test-prompt", "test-sprache", "test-kontakte", "test-gespraech",
-  "test-kalender",
+  // test-kalender prueft das LESEN der gws-cli-Antwort, test-kalender-seite die
+  // Rechnerei der Kalenderseite (Monatsraster, Googles ganztaegiges Ende).
+  "test-kalender", "test-kalender-seite",
   "test-suche", "test-termin", "test-wa-lesen", "test-crm-sprache", "test-zufluss-telegram",
 ];
 for (const t of TESTS) {

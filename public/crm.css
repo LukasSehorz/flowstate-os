@@ -2309,130 +2309,246 @@ th.ct-spalte-schnitt{font-weight:600}
   margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
 .id-faellig-fuss svg{width:15px;height:15px;flex-shrink:0;margin-top:2px;color:var(--warning)}
 
-/* ---------- Kalender (/kalender) ----------
-   Der Google Kalender im OS. Zwei Raster aus einer Datei: Monat als reines
-   Grid, Woche als Stundengitter mit absolut gesetzten Terminen. Beide nutzen
-   dieselben Chips, damit ein Termin beim Umschalten gleich aussieht. */
-.kal-navi{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.kal-navi .kal-titel{font-size:19px;font-weight:680;margin:0 0 0 8px;letter-spacing:-.01em}
-.kal-pfeil{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;
-  border-radius:var(--r-sm);border:1px solid var(--border);background:var(--surface);
-  color:var(--text-secondary);box-shadow:var(--s1)}
-.kal-pfeil:hover{background:var(--surface-2);color:var(--foreground);text-decoration:none}
-.kal-pfeil svg{width:16px;height:16px}
-.kal-heute{display:inline-flex;align-items:center;height:32px;padding:0 13px;border-radius:var(--r-sm);
-  border:1px solid var(--border);background:var(--surface);box-shadow:var(--s1);
-  font-size:12.5px;font-weight:620;color:var(--text-secondary)}
-.kal-heute:hover{background:var(--surface-2);color:var(--foreground);text-decoration:none}
-.kal-heute.an{border-color:var(--primary);color:var(--primary)}
-.kal-karte{padding-bottom:10px}
+/* ---------- Kalender (/kalender) — nachgebaut nach Google Kalender ----------
+   Links die schmale Spalte (Erstellen, Mini-Monat, Kalenderliste), rechts die
+   Buehne mit Leiste und Raster. Die Farben kommen aus dem Designsystem, nicht
+   aus Googles Palette: --primary (#2563EB) und Googles Blau (#1a73e8) liegen
+   so nah beieinander, dass es niemand sieht — dafuer dreht der Kalender im
+   Dunkel- und im Weiss-Modus korrekt mit. */
+.gk{display:grid;grid-template-columns:248px minmax(0,1fr);gap:20px;align-items:start}
+.gk-stoerung{margin-bottom:14px}
 
-/* --- Monat --- */
-.kal-kopfzeile,.kal-gitter{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
-.kal-kopfzeile{gap:1px;margin-bottom:6px}
-.kal-kopfzeile>div{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
-  color:var(--text-muted);padding:0 6px 4px;text-align:left}
-.kal-gitter{gap:1px;background:var(--border);border:1px solid var(--border);
-  border-radius:var(--r-md);overflow:hidden}
-.kal-zelle{background:var(--surface);min-height:104px;padding:4px 5px 6px;display:flex;flex-direction:column;gap:3px}
-.kal-zelle.fremd{background:var(--surface-2)}
-.kal-zelle.fremd .kal-tagzahl{color:var(--text-muted);opacity:.65}
-.kal-tagkopf{align-self:flex-start;background:transparent;box-shadow:none;border:0;padding:0;
-  border-radius:99px;min-width:24px;height:24px}
-.kal-tagkopf:hover{background:var(--surface-3);box-shadow:none}
-.kal-tagzahl{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;
-  padding:0 6px;border-radius:99px;font-size:12.5px;font-weight:640;color:var(--text-secondary);
+/* --- linke Spalte --- */
+.gk-seite{display:flex;flex-direction:column;gap:18px;position:sticky;top:0}
+/* Googles "Erstellen" ist eine hohe Pille mit Schatten — das auffaelligste
+   Element der Seite, weil es die einzige Aktion ist, die man wirklich braucht. */
+.gk-erstellen{display:inline-flex;align-items:center;gap:10px;align-self:flex-start;
+  height:48px;padding:0 22px 0 16px;border-radius:99px;
+  background:var(--surface);color:var(--foreground);border:1px solid var(--border);
+  box-shadow:var(--s2);font-size:14px;font-weight:620}
+.gk-erstellen:hover{background:var(--surface-2);box-shadow:var(--s3);transform:none}
+.gk-erstellen svg{width:19px;height:19px;color:var(--primary)}
+
+.gk-mini{user-select:none}
+.gk-mini-kopf{display:flex;align-items:center;justify-content:space-between;
+  padding:0 2px 6px;font-size:13px;font-weight:640}
+.gk-mini-kopf span{display:flex;gap:2px}
+.gk-mini-kopf a{display:inline-flex;align-items:center;justify-content:center;
+  width:24px;height:24px;border-radius:99px;color:var(--text-muted)}
+.gk-mini-kopf a:hover{background:var(--surface-2);color:var(--foreground);text-decoration:none}
+.gk-mini-kopf svg{width:14px;height:14px}
+.gk-mini-wt,.gk-mini-tage{display:grid;grid-template-columns:repeat(7,1fr);gap:1px}
+.gk-mini-wt span{text-align:center;font-size:10px;font-weight:600;color:var(--text-muted);padding:2px 0 4px}
+.gk-mini-tage a{display:flex;align-items:center;justify-content:center;
+  aspect-ratio:1;border-radius:99px;font-size:11.5px;font-weight:550;
+  color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.gk-mini-tage a:hover{background:var(--surface-3);text-decoration:none}
+.gk-mini-tage a.fremd{color:var(--text-muted);opacity:.5}
+/* Wie bei Google: hervorgehoben wird NUR der gewaehlte Tag (heller Kreis) und
+   heute (voller Kreis). Ein Band ueber die ganze angezeigte Woche hatte ich
+   zuerst drin — Google macht das nicht, und es soll 1:1 aussehen. */
+.gk-mini-tage a.gewaehlt{background:var(--primary-soft);color:var(--primary);font-weight:700}
+.gk-mini-tage a.heute{background:var(--primary);color:#fff;font-weight:700}
+
+.gk-liste{border-top:1px solid var(--border);padding-top:14px}
+.gk-liste-titel{font-size:12.5px;font-weight:640;color:var(--text-secondary);margin-bottom:8px}
+.gk-liste-titel2{margin-top:16px}
+.gk-liste-zeile{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--foreground)}
+.gk-liste-zeile input{width:15px;height:15px;padding:0;margin:0;accent-color:var(--primary)}
+.gk-liste-fuss{font-size:11px;line-height:1.45;color:var(--text-muted);margin:8px 0 0}
+
+/* --- Leiste ueber der Buehne --- */
+.gk-haupt{min-width:0}
+.gk-leiste{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+.gk-luecke{flex:1 1 auto}
+.gk-heute{display:inline-flex;align-items:center;height:34px;padding:0 15px;border-radius:var(--r-sm);
+  border:1px solid var(--border-stark);background:var(--surface);
+  font-size:13px;font-weight:600;color:var(--text-secondary)}
+.gk-heute:hover{background:var(--surface-2);color:var(--foreground);text-decoration:none}
+.gk-pfeil{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
+  border-radius:99px;color:var(--text-secondary)}
+.gk-pfeil:hover{background:var(--surface-2);color:var(--foreground);text-decoration:none}
+.gk-pfeil svg{width:17px;height:17px}
+.gk-titel{font-size:20px;font-weight:600;margin:0 0 0 8px;letter-spacing:-.015em;white-space:nowrap}
+.gk-kw{font-size:11.5px;font-weight:600;color:var(--text-muted);
+  background:var(--surface-2);border-radius:99px;padding:3px 9px;margin-left:2px}
+.gk-umschalter{display:flex;gap:2px;padding:3px;border-radius:99px;
+  background:var(--surface-2);border:1px solid var(--border)}
+.gk-umschalter a{padding:5px 15px;border-radius:99px;font-size:12.5px;font-weight:600;
+  color:var(--text-secondary)}
+.gk-umschalter a:hover{color:var(--foreground);text-decoration:none}
+.gk-umschalter a.an{background:var(--surface);color:var(--foreground);box-shadow:var(--s1)}
+
+.gk-buehne{border:1px solid var(--border);border-radius:var(--r-md);
+  background:var(--surface);overflow:hidden}
+
+/* --- Monatsraster ---
+   Googles Kniff: ganztaegige Termine sind gefuellte Balken, Termine MIT
+   Uhrzeit nur ein farbiger Punkt plus Zeit und Titel auf dem Zellengrund.
+   Dadurch wirkt ein voller Monat nicht wie eine Wand aus Farbe. */
+.gk-m-kopf{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));
+  border-bottom:1px solid var(--border)}
+.gk-m-kopf>div{text-align:center;padding:8px 4px;font-size:10.5px;font-weight:650;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
+.gk-m-gitter{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));
+  grid-auto-rows:minmax(112px,1fr)}
+.gk-m-zelle{border-right:1px solid var(--border);border-bottom:1px solid var(--border);
+  padding:2px 3px 5px;display:flex;flex-direction:column;gap:2px;min-width:0;cursor:pointer}
+.gk-m-zelle:nth-child(7n){border-right:0}
+.gk-m-gitter>.gk-m-zelle:nth-last-child(-n+7){border-bottom:0}
+.gk-m-zelle:hover{background:var(--surface-2)}
+.gk-m-zelle.fremd{background:var(--background)}
+.gk-m-zelle.fremd .gk-m-zahl{color:var(--text-muted);opacity:.6}
+.gk-m-zellkopf{display:flex;justify-content:center;padding-top:2px}
+.gk-m-zahl{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;
+  padding:0 7px;border-radius:99px;font-size:12px;font-weight:600;color:var(--text-secondary);
   font-variant-numeric:tabular-nums}
-.kal-zelle.heute .kal-tagzahl{background:var(--primary);color:#fff}
-.kal-chips{display:flex;flex-direction:column;gap:2px;min-width:0}
-/* Der Chip ist ein Knopf, sieht aber wie ein Eintrag aus — die Grundregeln fuer
-   button (blau, Polster, Schatten) muessen darum alle zurueckgenommen werden. */
-/* Farben NICHT ueber --blau-50/--blau-800: im Dunkelmodus sind beide
-   dunkles Marineblau (#132840 auf #0F2540) — der Chip waere unlesbar
-   gewesen. --primary-soft und --foreground drehen mit dem Thema mit. */
-.kal-chip{display:flex;align-items:baseline;gap:5px;width:100%;text-align:left;
-  background:var(--primary-soft);color:var(--foreground);border:0;
-  border-left:3px solid var(--primary);
-  border-radius:4px;padding:2px 6px;font-size:11.5px;font-weight:560;box-shadow:none;
-  min-width:0;overflow:hidden}
-.kal-chip:hover{background:var(--surface-3);box-shadow:none;transform:none}
-.kal-chip.ganztags{background:var(--primary);border-left-color:var(--blau-800);color:#fff}
-.kal-chip-zeit{font-size:10.5px;font-weight:700;opacity:.75;font-variant-numeric:tabular-nums;flex-shrink:0}
-.kal-chip-titel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.kal-mehr{font-size:10.5px;font-weight:640;color:var(--text-muted);padding:1px 6px}
-.kal-mehr:hover{color:var(--primary)}
+.gk-m-zahl:hover{background:var(--surface-3);text-decoration:none;color:var(--foreground)}
+.gk-m-zahl.heute{background:var(--primary);color:#fff}
+.gk-m-zahl.heute:hover{background:var(--primary-hover);color:#fff}
+.gk-m-liste{display:flex;flex-direction:column;gap:1px;min-width:0;overflow:hidden}
+/* Beide Termin-Formen sind Knoepfe, sollen aber nicht wie Knoepfe aussehen —
+   die Grundregeln fuer button (blau, Polster, Schatten) muessen weg. */
+.gk-m-balken,.gk-m-zeile{display:flex;align-items:center;gap:5px;width:100%;text-align:left;
+  border:0;border-radius:4px;padding:2px 6px;font-size:11.5px;box-shadow:none;
+  min-width:0;overflow:hidden;line-height:1.4}
+.gk-m-balken{background:var(--primary);color:#fff;font-weight:600}
+.gk-m-balken:hover{background:var(--primary-hover);box-shadow:none;transform:none}
+.gk-m-balken span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gk-m-zeile{background:transparent;color:var(--foreground);font-weight:500}
+.gk-m-zeile:hover{background:var(--surface-3);box-shadow:none;transform:none}
+.gk-punkt{width:7px;height:7px;border-radius:99px;background:var(--primary);flex-shrink:0}
+.gk-m-zeit{color:var(--text-muted);font-variant-numeric:tabular-nums;flex-shrink:0;font-size:11px}
+.gk-m-titel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;font-weight:560}
+.gk-mehr{font-size:10.5px;font-weight:640;color:var(--text-muted);padding:1px 7px}
+.gk-mehr:hover{color:var(--primary)}
 
-/* --- Woche --- */
-.kal-woche{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
-.kal-w-kopf{display:grid;grid-template-columns:56px repeat(7,minmax(0,1fr));
-  border-bottom:1px solid var(--border);background:var(--surface)}
-.kal-w-ecke{border-right:1px solid var(--border)}
-.kal-w-tag{display:flex;flex-direction:column;align-items:center;gap:1px;padding:7px 2px;
+/* --- Tages- und Wochenraster --- */
+.gk-zeit{display:flex;flex-direction:column}
+.gk-z-kopf,.gk-gz,.gk-gitter{display:grid;grid-template-columns:60px repeat(var(--spalten),minmax(0,1fr))}
+.gk-z-kopf{border-bottom:1px solid var(--border)}
+.gk-z-ecke{display:flex;align-items:flex-end;justify-content:flex-end;padding:0 8px 5px;
   border-right:1px solid var(--border)}
-.kal-w-tag:last-child{border-right:0}
-.kal-w-tag:hover{background:var(--surface-2);text-decoration:none}
-.kal-w-wt{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
-.kal-w-zahl{display:inline-flex;align-items:center;justify-content:center;width:27px;height:27px;
-  border-radius:99px;font-size:13.5px;font-weight:650;color:var(--foreground);font-variant-numeric:tabular-nums}
-.kal-w-tag.heute .kal-w-zahl{background:var(--primary);color:#fff}
-.kal-gz{display:grid;grid-template-columns:56px repeat(7,minmax(0,1fr));
-  border-bottom:1px solid var(--border);background:var(--surface-2);min-height:30px}
-/* "ganztaegig" ausgeschrieben passt in 56px nur klein und ohne Versalien —
-   in Grossbuchstaben mit Sperrung lief es unter die erste Terminspalte. */
-.kal-gz-label{font-size:9.5px;font-weight:650;letter-spacing:0;line-height:1.2;
-  color:var(--text-muted);padding:8px 6px 0;border-right:1px solid var(--border);
-  text-align:right;overflow:hidden}
-.kal-gz-zelle{display:flex;flex-direction:column;gap:2px;padding:4px 3px;
-  border-right:1px solid var(--border);min-width:0}
-.kal-gz-zelle:last-child{border-right:0}
-/* Das Stundengitter rollt fuer sich — die Seite soll nicht 1000px lang werden,
-   nur weil der Tag 24 Stunden hat. */
-.kal-w-rollen{max-height:min(62vh,640px);overflow-y:auto;background:var(--surface)}
-.kal-w-gitter{display:grid;grid-template-columns:56px repeat(7,minmax(0,1fr));position:relative}
-.kal-w-zeiten{border-right:1px solid var(--border)}
-.kal-w-zeit{height:var(--stunde);position:relative}
-.kal-w-zeit span{position:absolute;top:-7px;right:7px;font-size:10.5px;font-weight:600;
+.gk-z-ecke span{font-size:9.5px;font-weight:600;color:var(--text-muted)}
+.gk-z-tag{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 2px 5px;
+  border-right:1px solid var(--border)}
+.gk-z-tag:last-of-type{border-right:0}
+.gk-z-tag:hover{background:var(--surface-2);text-decoration:none}
+.gk-z-wt{font-size:10.5px;font-weight:640;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
+.gk-z-wt.heute{color:var(--primary)}
+.gk-z-zahl{display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:42px;
+  border-radius:99px;font-size:25px;font-weight:400;color:var(--foreground);font-variant-numeric:tabular-nums;
+  letter-spacing:-.02em}
+.gk-z-zahl.heute{background:var(--primary);color:#fff;font-weight:520}
+/* Ganztaegig-Streifen: nur so hoch wie noetig, aber nie ganz weg — sonst
+   springt die Kopfzeile, sobald ein ganztaegiger Termin dazukommt. */
+.gk-gz{border-bottom:1px solid var(--border);min-height:28px;background:var(--surface)}
+.gk-gz-rand{border-right:1px solid var(--border)}
+.gk-gz-zelle{display:flex;flex-direction:column;gap:2px;padding:3px;
+  border-right:1px solid var(--border);min-width:0;cursor:pointer}
+.gk-gz-zelle:last-child{border-right:0}
+.gk-gz-balken{display:block;width:100%;text-align:left;background:var(--primary);color:#fff;
+  border:0;border-radius:4px;padding:2px 7px;font-size:11.5px;font-weight:600;
+  box-shadow:none;overflow:hidden}
+.gk-gz-balken:hover{background:var(--primary-hover);box-shadow:none;transform:none}
+.gk-gz-balken span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Das Stundengitter rollt fuer sich — die Seite soll nicht 1200px lang
+   werden, nur weil der Tag 24 Stunden hat. */
+.gk-rollen{max-height:min(64vh,660px);overflow-y:auto;background:var(--surface)}
+.gk-gitter{position:relative}
+.gk-stunden{border-right:1px solid var(--border)}
+.gk-stundenlabel{height:var(--stunde);position:relative}
+/* Die Beschriftung sitzt UEBER ihrer Linie, wie bei Google. Die 0-Uhr-Zeile
+   bleibt leer — dort waere die Zahl halb abgeschnitten. */
+.gk-stundenlabel span{position:absolute;top:-7px;right:9px;font-size:10.5px;font-weight:500;
   color:var(--text-muted);font-variant-numeric:tabular-nums;background:var(--surface);padding:0 2px}
-.kal-w-zeit:first-child span{top:2px}
-.kal-w-spalte{position:relative;border-right:1px solid var(--border)}
-.kal-w-spalte:last-child{border-right:0}
-.kal-w-spalte.heute{background:var(--primary-soft)}
-.kal-w-stunde{display:block;width:100%;height:var(--stunde);background:transparent;box-shadow:none;
+.gk-spalte{position:relative;border-right:1px solid var(--border)}
+.gk-spalte:last-of-type{border-right:0}
+.gk-stunde{display:block;width:100%;height:var(--stunde);background:transparent;box-shadow:none;
   border:0;border-top:1px solid var(--border);border-radius:0;padding:0}
-.kal-w-stunde:hover{background:var(--surface-2);box-shadow:none;transform:none}
-.kal-w-termin{position:absolute;left:2px;right:2px;display:flex;flex-direction:column;gap:1px;
+.gk-stunde:first-child{border-top:0}
+.gk-stunde:hover{background:var(--surface-3);box-shadow:none;transform:none}
+.gk-termin{position:absolute;display:flex;flex-direction:column;gap:1px;
   align-items:flex-start;text-align:left;overflow:hidden;
-  background:var(--primary);color:#fff;border:0;border-left:3px solid var(--blau-800);
-  border-radius:5px;padding:3px 6px;box-shadow:var(--s1);font-size:11.5px;line-height:1.25}
-.kal-w-termin:hover{background:var(--primary-hover);box-shadow:var(--s2);transform:none}
-.kal-w-termin b{font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.kal-w-termin span{font-size:10.5px;opacity:.82;white-space:nowrap;overflow:hidden;
+  background:var(--primary);color:#fff;border:0;
+  border-radius:4px;padding:3px 7px;box-shadow:none;font-size:11.5px;line-height:1.25}
+.gk-termin:hover{background:var(--primary-hover);box-shadow:var(--s2);transform:none;z-index:3}
+.gk-termin b{font-weight:640;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.gk-termin span{font-size:10.5px;opacity:.85;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;max-width:100%}
-/* Kurze Termine: Titel und Zeit nebeneinander statt uebereinander. */
-.kal-w-termin.kurz{flex-direction:row;align-items:baseline;gap:5px;padding:2px 6px;line-height:1.15}
-.kal-w-termin.kurz b{font-size:11px;flex:0 1 auto;min-width:0}
-.kal-w-termin.kurz span{font-size:10px;flex:0 0 auto}
+/* Kurze Termine: Titel und Zeit nebeneinander statt uebereinander — bei einem
+   Viertelstundentermin (20px hoch) ragten sie sonst aus ihrem Kasten heraus. */
+.gk-termin.kurz{flex-direction:row;align-items:baseline;gap:5px;padding:1px 7px;line-height:1.1}
+.gk-termin.kurz b{font-size:11px;flex:0 1 auto;min-width:0}
+.gk-termin.kurz span{font-size:10px;flex:0 0 auto}
+/* Die rote Jetzt-Linie — das eine Element, an dem man einen Kalender sofort
+   erkennt. Sitzt ueber der Spalte des heutigen Tages. */
+.gk-jetzt{position:absolute;height:0;border-top:2px solid #EA4335;z-index:4;pointer-events:none;
+  left:calc(60px + var(--spalte) * ((100% - 60px) / var(--spalten)));
+  width:calc((100% - 60px) / var(--spalten))}
+.gk-jetzt i{position:absolute;left:-5px;top:-6px;width:11px;height:11px;
+  border-radius:99px;background:#EA4335}
 
 /* --- Dialoge --- */
-.kal-schalter{display:flex;align-items:center;gap:8px;margin:-4px 0 14px;
+.gk-schalter{display:flex;align-items:center;gap:8px;margin:-4px 0 14px;
   font-size:13px;font-weight:600;color:var(--text-secondary);cursor:pointer}
-.kal-schalter input{width:16px;height:16px;padding:0;margin:0}
-.kal-fuss{display:flex;align-items:center;gap:8px}
+.gk-schalter input{width:16px;height:16px;padding:0;margin:0;accent-color:var(--primary)}
+.gk-fuss{display:flex;align-items:center;gap:8px}
 button.still.gefahr{color:var(--danger)}
 button.still.gefahr:hover{background:var(--danger-flaeche)}
 button.still.gefahr svg{width:15px;height:15px;margin-right:4px;vertical-align:-2px}
 
+@media (max-width:1100px){
+  /* Unter 1100px wandert die linke Spalte ueber die Buehne: nebeneinander
+     bliebe fuer sieben Tagesspalten kein brauchbarer Platz mehr. */
+  .gk{grid-template-columns:minmax(0,1fr)}
+  .gk-seite{position:static;flex-direction:row;align-items:flex-start;gap:24px;flex-wrap:wrap}
+  .gk-mini{width:230px}
+  .gk-liste{border-top:0;padding-top:0;flex:1 1 200px}
+}
 @media (max-width:760px){
-  /* Der Monat bleibt lesbar, wenn die Chips zu Punkten werden — sieben Spalten
-     auf einem Telefon lassen fuer Text ohnehin keinen Platz. */
-  .kal-zelle{min-height:66px}
-  .kal-chip-zeit{display:none}
-  .kal-chip{font-size:10.5px;padding:1px 4px}
-  .kal-navi .kal-titel{font-size:16px;width:100%;margin:4px 0 0}
-  .kal-w-kopf,.kal-gz,.kal-w-gitter{grid-template-columns:40px repeat(7,minmax(0,1fr))}
-  .kal-gz-label{font-size:0;padding:7px 4px}
+  .gk-seite{display:none}
+  .gk-titel{font-size:17px;margin-left:4px}
+  .gk-m-gitter{grid-auto-rows:minmax(74px,1fr)}
+  .gk-m-zeit{display:none}
+  .gk-z-kopf,.gk-gz,.gk-gitter{grid-template-columns:44px repeat(var(--spalten),minmax(0,1fr))}
+  .gk-jetzt{left:calc(44px + var(--spalte) * ((100% - 44px) / var(--spalten)));
+    width:calc((100% - 44px) / var(--spalten))}
+  .gk-z-zahl{font-size:16px;min-width:28px;height:28px}
 }
 /* Das Etikett: 3 bis 6 Wörter zum Wiedererkennen. Steht ÜBER dem Hook, weil man
    auf einer Tafel mit zwanzig Kärtchen sucht und nicht liest. */
 .id-etikett{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;
   text-transform:uppercase;color:var(--text-muted);margin-bottom:-4px}
+/* ---------- Ideenkarte: der Rest klappt auf ----------
+   Zugeklappt reicht Etikett + Hook zum Entscheiden. Ausgeschrieben waren die
+   Kästen so hoch, dass in eine Spalte kaum zwei Vorschläge passten. */
+.id-karte .id-titel{margin-bottom:2px}
+.id-mehr{border-top:1px solid var(--border);padding-top:9px;margin-top:2px}
+.id-mehr>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px;
+  font-size:12px;font-weight:650;color:var(--text-secondary);
+  padding:2px 0;user-select:none;transition:color var(--tempo)}
+.id-mehr>summary::-webkit-details-marker{display:none}
+.id-mehr>summary:hover{color:var(--foreground)}
+/* Eigenes Dreieck statt des Browser-Markers — es dreht sich beim Aufklappen,
+   damit der Zustand ohne Text ablesbar ist. */
+.id-mehr>summary::before{content:"";width:0;height:0;flex-shrink:0;
+  border-left:5px solid currentColor;border-top:4px solid transparent;
+  border-bottom:4px solid transparent;transition:transform var(--tempo)}
+.id-mehr[open]>summary::before{transform:rotate(90deg)}
+.id-mehr[open]>summary{margin-bottom:8px}
+.id-mehr>*:not(summary){margin-top:10px}
+.id-mehr>*:not(summary):first-of-type{margin-top:0}
+/* Tastaturbedienung sichtbar machen — summary ist fokussierbar. */
+.id-mehr>summary:focus-visible{outline:2px solid var(--primary);outline-offset:3px;border-radius:4px}
+/* ---------- Ideen-Archiv ----------
+   Verworfene bleiben stehen UND erreichbar. Sie stehen optisch zurück (blasser,
+   graue Kante), aber als vollwertige Karten — man muss sie lesen können, um zu
+   entscheiden, ob eine zurück in den Plan soll. */
+.id-archiv-hinweis{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;
+  line-height:1.55;color:var(--text-muted);margin:-6px 0 12px}
+.id-archiv-hinweis svg{width:15px;height:15px;flex-shrink:0;margin-top:2px}
+.id-karte--weg{opacity:.72;box-shadow:inset 3px 0 0 var(--border-stark), var(--s1);
+  transition:opacity var(--tempo)}
+.id-karte--weg:hover{opacity:1}
+.id-karte--weg .id-titel{font-weight:600}
