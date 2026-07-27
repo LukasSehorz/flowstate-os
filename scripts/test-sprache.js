@@ -137,6 +137,41 @@ const GUTE_ANTWORT = {
   pruefe("Tageszeit: Mittag nicht aus Nachmittag", tz("heute nachmittag") === "nachmittags");
   pruefe("Tageszeit: ohne Angabe null", tz("wie wird das Wetter") === null);
 
+  // 4d. Satzzerlegung fuers Streaming (A4 zweite Haelfte, 27.07.).
+  //
+  // Beim Streaming geht jeder fertige Satz sofort an die Stimme. Wird an der
+  // falschen Stelle getrennt, klingt das SCHLIMMER als gar kein Streaming:
+  // Der erste Entwurf zerschnitt "Mittwoch, 29.07. um 12:00 Uhr" mitten im
+  // Datum — die Stimme haette "neunundzwanzigster siebter" gesagt, Pause,
+  // "um zwoelf Uhr". Die Faelle unten sind echte Antworten aus dem Sprachlog.
+  const SATZENDE = require("../lib/schnell.js").SATZENDE;
+  const zerlegen = (stuecke) => {
+    const raus = []; let offen = "";
+    const pruef = (schluss) => {
+      let m;
+      while ((m = SATZENDE.exec(offen))) { const s = m[1].trim(); offen = offen.slice(m[0].length); if (s) raus.push(s); }
+      if (schluss && offen.trim()) { raus.push(offen.trim()); offen = ""; }
+    };
+    for (const s of stuecke) { offen += s; pruef(false); }
+    pruef(true); return raus;
+  };
+  pruefe("Satz: normaler Punkt trennt",
+    zerlegen(["Broden Fenster. ", "Danach hast du Luft."]).length === 2);
+  pruefe("Satz: Datum bleibt zusammen (29.07. um 12:00)",
+    zerlegen(["Mittwoch, 29.07. ", "um 12:00 Uhr."]).length === 1);
+  pruefe("Satz: Tausendertrennung bleibt zusammen (1.500)",
+    zerlegen(["Betreuung ab 1.500 Euro im Monat. ", "Passt das?"]).length === 2);
+  pruefe("Satz: Frage- und Ausrufezeichen trennen",
+    zerlegen(["Hey Lukas! ", "Was brauchst du?"]).length === 2);
+  pruefe("Satz: Ziffer am Satzanfang trennt trotzdem",
+    zerlegen(["Morgen 18 bis 28 Grad. ", "2 Termine stehen an."]).length === 2);
+  pruefe("Satz: Zitat wird nicht zerschnitten",
+    zerlegen(["An Mary: „Ich lieb dich“ — ", "soll ich es abschicken?"]).length === 1);
+  pruefe("Satz: Rest ohne Punkt geht am Ende trotzdem raus",
+    zerlegen(["Kein Satzende ohne Punkt"]).length === 1);
+  pruefe("Satz: stueckweise eintreffender Text ergibt dieselben Saetze",
+    zerlegen(["Mo", "rgen ist dicht. ", "Dan", "ach Luft."]).join("|") === "Morgen ist dicht.|Danach Luft.");
+
   // 5. Temperature-Weiche in schnell.js: Sonnet 5 darf KEIN temperature bekommen
   pruefe("Temp-Weiche: sonnet-5 ohne temperature", !/-4-|haiku-4|opus-4/.test("claude-sonnet-5"));
   pruefe("Temp-Weiche: haiku-4-5 mit temperature", /-4-|haiku-4|opus-4/.test("claude-haiku-4-5"));

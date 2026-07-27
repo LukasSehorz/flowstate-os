@@ -587,6 +587,66 @@
     tick();
   }
 
+  // ---------------------------------------------------------------- Fragen
+  //
+  // STROM (A4 zweite Haelfte, 27.07.). Der Server schickt jeden fertigen Satz
+  // sofort, statt auf die ganze Antwort zu warten. Bei einer erzaehlenden
+  // Antwort ("was steht morgen an") spart das die Sekunden, in denen bisher
+  // nichts passierte, obwohl der erste Satz laengst fertig war.
+  //
+  // Das Schlussereignis enthaelt dieselben Felder wie bisher — nur "sprich"
+  // traegt dann nur noch, was der SERVER zusaetzlich sagt (Bestaetigungen wie
+  // "Steht — Sport, Dienstag um elf"). Was schon gesprochen wurde, zieht der
+  // Server selbst ab; hier braucht es dafuer keine Logik.
+  //
+  // Abschaltbar ueber localStorage flowstate-strom = "aus". Faellt irgendetwas
+  // aus (kein ReadableStream, Netz bricht ab, Server antwortet nicht als
+  // Strom), geht es unveraendert auf dem alten Weg weiter — der bleibt.
+  const STROM_SPEICHER = "flowstate-strom";
+  const stromAn = () => localStorage.getItem(STROM_SPEICHER) !== "aus" && Boolean(window.ReadableStream);
+
+  async function frageStellen(text, meine) {
+    const koerper = JSON.stringify({ text });
+    const kopf = { method: "POST", headers: { "Content-Type": "application/json" }, body: koerper };
+
+    if (stromAn()) {
+      try {
+        const r = await fetch("/api/sprache/frage?strom=1", kopf);
+        if (r.ok && (r.headers.get("content-type") || "").includes("event-stream") && r.body) {
+          const leser = r.body.getReader();
+          const dek = new TextDecoder();
+          let puffer = "";
+          while (true) {
+            const { done, value } = await leser.read();
+            if (done) break;
+            puffer += dek.decode(value, { stream: true });
+            const zeilen = puffer.split("\n");
+            puffer = zeilen.pop() || "";
+            for (const z of zeilen) {
+              if (!z.startsWith("data:")) continue;
+              let e;
+              try { e = JSON.parse(z.slice(5).trim()); } catch { continue; }
+              if (e.typ === "satz") {
+                // Wurde die Runde unterbrochen (Stopp, neue Frage), nicht
+                // weitersprechen — sonst redet sie in die naechste hinein.
+                if (meine !== gespraechsId) { try { leser.cancel(); } catch {} return null; }
+                zeile("sie", e.text);
+                await sprich(e.text).catch(() => {});
+              } else if (e.typ === "fertig") {
+                return e;
+              }
+            }
+          }
+          return null;   // Strom endete ohne Schluss — wie ein Verbindungsfehler
+        }
+        // Kein Strom zurueckgekommen: die Antwort ist trotzdem gueltiges JSON.
+        return await r.json().catch(() => null);
+      } catch { /* faellt unten auf den alten Weg zurueck */ }
+    }
+
+    return fetch("/api/sprache/frage", kopf).then((r) => r.json()).catch(() => null);
+  }
+
   // ---------------------------------------------------------------- Verarbeiten
 
   async function verarbeiten(text) {
@@ -597,17 +657,12 @@
     setzeZustand("denken");
     if (el.karten) el.karten.innerHTML = "";
 
-    // Die eigentliche Antwort (Sonnet) losschicken …
-    const anfrage = fetch("/api/sprache/frage", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    }).then((r) => r.json()).catch(() => null);
-
     // Kein Fuellsatz mehr waehrend des Wartens (A1, 26.07.). Die Blitz-Zusage
     // war ein Pflaster fuer die Wartezeit und hat das Dreifach-Sagen erzeugt:
     // sie wusste nichts von der eigentlichen Antwort und kuendigte an, was
-    // gleich nochmal gesagt wurde. A4 nimmt die Wartezeit selbst weg.
-    const d = await anfrage;
+    // gleich nochmal gesagt wurde. Der Strom nimmt die Wartezeit selbst weg,
+    // statt sie zu ueberdecken: Jeder fertige Satz geht sofort an die Stimme.
+    const d = await frageStellen(text, meine);
 
     if (meine !== gespraechsId) return;
     if (!d) {
