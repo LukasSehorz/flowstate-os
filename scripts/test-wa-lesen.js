@@ -44,7 +44,7 @@ function pruefe(name, wahr) {
   // --- Der Kernfall: allgemeine Frage ohne Namen -------------------------
   for (const frage of ["neue Nachrichten", "die neuen WhatsApp-Nachrichten", "was ist neu", "whatsapp", ""]) {
     const r = await whatsapp.leseChat(frage);
-    const ok = r.ok && /neue Nachricht/i.test(r.reply);
+    const ok = r.ok && /von Jannik/i.test(r.reply);
     pruefe(`Allgemein ("${frage || "leer"}") wird zusammengefasst`, ok);
     if (!ok) console.log("      bekommen:", String(r.reply).slice(0, 90));
   }
@@ -54,9 +54,60 @@ function pruefe(name, wahr) {
   pruefe("Alte Nachrichten fallen aus dem Fenster", !/Uraltes/.test(alle.reply));
   pruefe("Der juengste Chat kommt zuerst", alle.reply.indexOf("Jannik") < alle.reply.indexOf("Mama"));
   pruefe("Mehrere aus einem Chat werden gezaehlt", /2 von Jannik/i.test(alle.reply));
-  pruefe("Gruppen werden als Gruppe benannt", /in der Gruppe Team Flowstate/.test(alle.reply));
+  pruefe("Freigegebene Arbeitsgruppe wird genannt", /In Team Flowstate/.test(alle.reply));
   pruefe("Die letzte Nachricht wird zitiert", /Brauchst du was vom Bäcker/.test(alle.reply));
+  pruefe("Personen stehen VOR den Gruppen",
+    alle.reply.indexOf("Jannik") < alle.reply.indexOf("Team Flowstate"));
   console.log("   →", alle.reply.slice(0, 150));
+
+  // --- Die echte Lage vom 27.07. auf Lukas' Handy ------------------------
+  //
+  // Gemessen: 349 eingehende Nachrichten in zwoelf Stunden, 15 Chats — davon
+  // 14 Gruppen und genau EINE Person. Alexandra sagte damals "350 neue
+  // Nachrichten, 168 in der Gruppe 84564" und las 576 Zeichen vor. Alles
+  // richtig, und trotzdem keine Antwort auf die Frage, die er gestellt hat.
+  //
+  // Nachgestellt wird hier auch die kaputte Gruppe: eine, die die Bruecke
+  // nicht kennt. Ihr Name wurde frueher aus dem ABSENDER geraten — daher die
+  // "84564". Sie darf jetzt nicht mehr vorkommen.
+  const viele = [];
+  for (let i = 0; i < 168; i++) {
+    viele.push({ jid: "999999@g.us", richtung: "sie", von: "4917000" + (84564 + i), ts: jetzt - 3000 - i, text: "Gruppengeplauder " + i });
+  }
+  for (let i = 0; i < 60; i++) {
+    viele.push({ jid: "888888@g.us", richtung: "sie", von: "Irgendwer", ts: jetzt - 4000 - i, text: "Urlaubsfoto " + i });
+  }
+  for (let i = 0; i < 63; i++) {
+    viele.push({ jid: "111111@g.us", richtung: "sie", von: "Ioannis", ts: jetzt - 2000 - i, text: "Arbeitskram " + i });
+  }
+  viele.push({ jid: "491700003333@s.whatsapp.net", richtung: "sie", von: "Mama", ts: jetzt - 100, text: "Meldest du dich mal?" });
+  fs.writeFileSync(path.join(TMP, "verlauf.jsonl"), viele.map((o) => JSON.stringify(o)).join("\n") + "\n");
+
+  const echt = await whatsapp.neueNachrichten();
+  console.log("   →", echt.reply);
+  pruefe("Lawine: die Person kommt zuerst", /^Von Mama/.test(echt.reply));
+  pruefe("Lawine: kein erfundener Gruppenname aus einer Nummer", !/84564/.test(echt.reply));
+  pruefe("Lawine: private Gruppen nur als Zahl, ohne Namen",
+    /228 aus privaten Gruppen/.test(echt.reply));
+  pruefe("Lawine: Arbeitsgruppe mit Anzahl statt Zitat",
+    /63 in Team Flowstate/.test(echt.reply) && !/Arbeitskram/.test(echt.reply));
+  pruefe("Lawine: bleibt vorlesbar kurz (war 576 Zeichen)", echt.reply.length < 200);
+
+  // Nur Gruppenrauschen, kein Mensch: ehrlich sagen, dass nichts da ist.
+  fs.writeFileSync(path.join(TMP, "verlauf.jsonl"),
+    viele.filter((m) => m.jid.endsWith("@g.us") && m.jid !== "111111@g.us")
+      .map((o) => JSON.stringify(o)).join("\n") + "\n");
+  const nurLaerm = await whatsapp.neueNachrichten();
+  pruefe("Nur private Gruppen: 'Nichts Persoenliches'", /Nichts Persoenliches/.test(nurLaerm.reply));
+  console.log("   →", nurLaerm.reply);
+
+  // Fixture zurueck fuer die folgenden Faelle.
+  fs.writeFileSync(path.join(TMP, "verlauf.jsonl"), [
+    { jid: "491700006888@s.whatsapp.net", richtung: "sie", von: "Jannik", ts: jetzt - 600, text: "Bin gleich im Büro." },
+    { jid: "491700006888@s.whatsapp.net", richtung: "sie", von: "Jannik", ts: jetzt - 300, text: "Brauchst du was vom Bäcker?" },
+    { jid: "491700003333@s.whatsapp.net", richtung: "sie", von: "Mama", ts: jetzt - 1800, text: "Ruf mal an." },
+    { jid: "111111@g.us", richtung: "sie", von: "Ioannis", ts: jetzt - 900, text: "Termin verschoben auf zehn." },
+  ].map((o) => JSON.stringify(o)).join("\n") + "\n");
 
   // --- Ein bestimmter Chat funktioniert weiter ---------------------------
   const j = await whatsapp.leseChat("Jannik");
