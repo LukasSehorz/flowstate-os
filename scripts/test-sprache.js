@@ -17,6 +17,7 @@
 process.env.VAULT_PATH = process.env.VAULT_PATH || __dirname; // stimmeLaden faellt auf Notnagel zurueck
 const schnell = require("../lib/schnell.js");
 const { ausZustand, ausAufrufen, markerAufloesen, betrifftKalender } = require("../lib/sprache-routes.js");
+const werkzeuge = require("../lib/werkzeuge.js");
 
 let fehler = 0;
 function pruefe(name, wahr) {
@@ -115,6 +116,26 @@ const GUTE_ANTWORT = {
   pruefe("Mapper: bei Doppelung gilt der erste Aufruf", m7.aufgabe.titel === "A");
   pruefe("Mapper: unbekanntes Werkzeug faellt still weg",
     JSON.stringify(ausAufrufen([{ name: "gibt_es_nicht", input: {} }])) === JSON.stringify(ausAufrufen([])));
+
+  // 4c. Tageszeit im Wetter-Auftrag (Lukas, 27.07.).
+  //
+  // Er fragte nach dem Wetter "in Landshut am Nachmittag" und bekam die Spanne
+  // des ganzen Tages, 18 bis 28 Grad. Ursache war nicht die Antwort, sondern
+  // die Abfrage: Es wurden nur Tageswerte geholt, stuendliche gar nicht.
+  //
+  // Die Falle beim Reparieren steckt im Deutschen: "morgen" ist der TAG,
+  // "morgens" die Tageszeit. Der erste Entwurf las "Wetter morgen" als
+  // "morgen frueh" und haette die Frage nach dem ganzen Tag still verengt —
+  // derselbe Fehler wie vorher, nur andersherum.
+  const tz = (t) => werkzeuge.tageszeitAus(t)?.wort ?? null;
+  pruefe("Tageszeit: Nachmittag erkannt", tz("Wetter morgen Nachmittag in Landshut") === "nachmittags");
+  pruefe("Tageszeit: 'morgen' allein ist der TAG, keine Tageszeit", tz("Wetter morgen in Dorfen") === null);
+  pruefe("Tageszeit: 'uebermorgen' ist kein Morgen", tz("Wetter uebermorgen") === null);
+  pruefe("Tageszeit: 'frueh' und 'früh' erkannt",
+    tz("wie wird es morgen frueh") === "in der Frueh" && tz("morgen früh") === "in der Frueh");
+  pruefe("Tageszeit: Abend erkannt", tz("wie wird es heute abend") === "abends");
+  pruefe("Tageszeit: Mittag nicht aus Nachmittag", tz("heute nachmittag") === "nachmittags");
+  pruefe("Tageszeit: ohne Angabe null", tz("wie wird das Wetter") === null);
 
   // 5. Temperature-Weiche in schnell.js: Sonnet 5 darf KEIN temperature bekommen
   pruefe("Temp-Weiche: sonnet-5 ohne temperature", !/-4-|haiku-4|opus-4/.test("claude-sonnet-5"));

@@ -76,7 +76,7 @@ let fehler = 0;
     const ok = !fehlt.length && !zuviel.length && !sagtFalsch && !d.fehler;
 
     console.log(`${ok ? "✅" : "❌"} "${f.frage}"`);
-    console.log(`   ${d.dauerMs} ms · ${gerufen.length ? gerufen.join(" + ") : "kein Aufruf"} · ${d.tokenRaus} Token · Speicher ${d.speicher}`);
+    console.log(`   ${d.dauerMs} ms · ${gerufen.length ? gerufen.join(" + ") : "kein Aufruf"} · ${d.tokenRaus} Token (davon ${d.tokenDenken} gedacht) · Speicher ${d.speicher}`);
     if (a.text) console.log(`   sagt: ${a.text}`);
     if (!ok) {
       fehler++;
@@ -89,7 +89,9 @@ let fehler = 0;
   }
 
   const s = [...dauern].sort((x, y) => x - y);
-  console.log(`\nVerstehen: Median ${s[Math.floor(s.length / 2)]} ms · langsamste ${s[s.length - 1]} ms`);
+  console.log(`\nStellung:  ${process.env.SPRACHE_DENKEN || "adaptiv"} / ${process.env.SPRACHE_AUFWAND || "low"}`);
+  console.log(`Verstehen: Median ${s[Math.floor(s.length / 2)]} ms · langsamste ${s[s.length - 1]} ms`);
+  console.log(`Treffer:   ${FAELLE.length - fehler} von ${FAELLE.length}`);
   console.log(fehler ? `${fehler} von ${FAELLE.length} Faellen daneben.` : `Alle ${FAELLE.length} Faelle sauber.`);
   process.exit(fehler ? 1 : 0);
 })();
