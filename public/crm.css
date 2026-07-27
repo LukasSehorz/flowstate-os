@@ -2295,3 +2295,16 @@ th.ct-spalte-schnitt{font-weight:600}
 .tp-spaet{box-shadow:inset 3px 0 0 var(--danger), var(--s1);background:var(--danger-flaeche)}
 .tp-spaet .tp-zahl,.tp-spaet .tp-datum{color:var(--danger)}
 .tp-s-spaet{background:var(--danger);color:#fff}
+
+/* ---------- Was jetzt raus muss ----------
+   Steht vor allem anderen auf der Seite: es ist das Einzige mit einer Uhr im
+   Nacken. Rote Kante, aber keine Panik-Farbe auf der ganzen Fläche — sonst
+   stumpft der Blick ab, wenn öfter mal etwas fällig ist. */
+.id-faellig{margin-bottom:16px;box-shadow:inset 3px 0 0 var(--danger), var(--s2)}
+.id-faellig-zeile{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:11px 0;border-top:1px solid var(--border)}
+.id-faellig-zeile>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.id-faellig-zeile strong{font-size:14px;font-weight:650}
+.id-faellig-fuss{display:flex;gap:8px;align-items:flex-start;line-height:1.5;
+  margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.id-faellig-fuss svg{width:15px;height:15px;flex-shrink:0;margin-top:2px;color:var(--warning)}
