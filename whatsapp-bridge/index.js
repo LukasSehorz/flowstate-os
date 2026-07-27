@@ -159,7 +159,17 @@ async function start() {
     logger: pino({ level: "silent" }),
     browser: ["Flowstate OS", "Chrome", "120.0.0"],
     markOnlineOnConnect: false,   // nicht als "online" erscheinen -> unauffaellig
-    syncFullHistory: false,
+    // Auf true gestellt am 27.07.: WhatsApp schickt den Chatbestand nur bei
+    // der Erstsynchronisierung am Stueck. Mit false meldete sich jeder Chat
+    // erst, wenn dort etwas passierte — nach dem Neustart kannte die Bruecke
+    // genau EINEN Chat, und alles andere konnte gar nicht als ungelesen
+    // auftauchen. Fuer den Ungelesen-Zaehler ist der Bestand aber die
+    // Voraussetzung.
+    //
+    // Was das kostet: einmalig mehr Datenverkehr beim Verbinden. Der Verlauf
+    // selbst bleibt auf 2.500 Zeilen begrenzt (siehe verlaufSpeichern), es
+    // laeuft also nichts voll.
+    syncFullHistory: true,
     // Retry-Receipts bedienen: Fragt der Empfaenger eine Nachricht neu an (weil
     // sein Geraet sie nicht entschluesseln konnte), MUSS Baileys den Inhalt neu
     // senden koennen. Ohne diesen Rueckgriff bleibt sie fuer immer bei einem
@@ -297,10 +307,66 @@ function verlaufSpeichern(m) {
   } catch {}
 }
 
+// Was in den Verlauf geschrieben wird — und zwar fuer JEDE Nachrichtenart.
+//
+// Der Fehler, den das behebt (Lukas, 27.07.): Er zeigte auf eine WhatsApp von
+// 19:17 — ein PDF, "Fragenkatalog Testimonial (KI Beratung).pdf" — und fragte,
+// warum sie nicht auftaucht. Im Verlauf standen dazu NULL Eintraege.
+//
+// Ursache: Diese Funktion kannte nur vier Faelle — reinen Text, den Text einer
+// zitierten Nachricht und die Bildunterschrift von Bild und Video. Bei allem
+// anderen kam ein leerer String zurueck, und verlaufSpeichern() verwirft leere
+// Nachrichten. Ein PDF ohne Bildunterschrift, eine Sprachnachricht, ein Foto
+// ohne Text: alles unsichtbar. Nicht "falsch vorgelesen" — gar nicht da.
+//
+// Das betraf nicht nur das Vorlesen: Auch der Ungelesen-Zaehler laeuft ins
+// Leere, wenn WhatsApp eine ungelesene Nachricht meldet, zu der es im Verlauf
+// nichts gibt.
+//
+// Jetzt bekommt jede Art eine vorlesbare Beschreibung. Der Dateiname ist dabei
+// das Wertvollste — "ein PDF" sagt wenig, "Fragenkatalog Testimonial" sagt
+// alles.
 function textAus(m) {
-  const msg = m.message || {};
-  return msg.conversation || msg.extendedTextMessage?.text ||
-    msg.imageMessage?.caption || msg.videoMessage?.caption || "";
+  // Verschwindende und einmalig sichtbare Nachrichten sind nur Huellen um die
+  // eigentliche Nachricht — erst auspacken, sonst ist alles darin unsichtbar.
+  let msg = m.message || {};
+  for (let i = 0; i < 3 && msg; i++) {
+    const kern = msg.ephemeralMessage?.message
+      || msg.viewOnceMessage?.message
+      || msg.viewOnceMessageV2?.message
+      || msg.viewOnceMessageV2Extension?.message
+      || msg.documentWithCaptionMessage?.message;
+    if (!kern) break;
+    msg = kern;
+  }
+
+  const text = msg.conversation || msg.extendedTextMessage?.text;
+  if (text) return text;
+
+  // Bild/Video/Dokument mit Bildunterschrift: die ist der eigentliche Inhalt.
+  const bu = msg.imageMessage?.caption || msg.videoMessage?.caption || msg.documentMessage?.caption;
+
+  const d = msg.documentMessage;
+  if (d) {
+    const name = String(d.fileName || "").trim();
+    return bu ? `[Dokument: ${name || "ohne Namen"}] ${bu}` : `[Dokument: ${name || "ohne Namen"}]`;
+  }
+  if (msg.audioMessage) {
+    const s = Number(msg.audioMessage.seconds) || 0;
+    const dauer = s ? ` ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : "";
+    return msg.audioMessage.ptt ? `[Sprachnachricht${dauer}]` : `[Audio${dauer}]`;
+  }
+  if (msg.imageMessage) return bu ? `[Bild] ${bu}` : "[Bild]";
+  if (msg.videoMessage) return bu ? `[Video] ${bu}` : "[Video]";
+  if (msg.stickerMessage) return "[Sticker]";
+  if (msg.contactMessage) return `[Kontakt: ${msg.contactMessage.displayName || "geteilt"}]`;
+  if (msg.contactsArrayMessage) return "[mehrere Kontakte]";
+  if (msg.locationMessage || msg.liveLocationMessage) return "[Standort]";
+  if (msg.pollCreationMessage || msg.pollCreationMessageV3) {
+    return `[Umfrage: ${msg.pollCreationMessage?.name || msg.pollCreationMessageV3?.name || ""}]`.trim();
+  }
+  if (msg.reactionMessage) return "";   // Reaktionen sind keine eigene Nachricht
+  return bu || "";
 }
 
 function eingang(m) {

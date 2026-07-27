@@ -72,7 +72,8 @@ const TESTS = [
   // test-kalender prueft das LESEN der gws-cli-Antwort, test-kalender-seite die
   // Rechnerei der Kalenderseite (Monatsraster, Googles ganztaegiges Ende).
   "test-kalender", "test-kalender-seite",
-  "test-suche", "test-termin", "test-wa-lesen", "test-crm-sprache", "test-zufluss-telegram",
+  "test-suche", "test-termin", "test-wa-lesen",
+  "test-wa-arten", "test-crm-sprache", "test-zufluss-telegram",
 ];
 for (const t of TESTS) {
   const p = path.join(wurzel, "scripts", t + ".js");
