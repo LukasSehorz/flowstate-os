@@ -166,6 +166,45 @@ function pruefe(name, wahr) {
     /nichts Neues gekommen/.test(nix.reply));
   console.log("   →", nix.reply);
 
+  // --- Der ECHTE Ungelesen-Zaehler (chats.json) --------------------------
+  //
+  // Zweiter Anlauf am 27.07.: Die Bruecke hoerte nie auf "chats.*", genau dort
+  // liefert WhatsApp unreadCount je Chat — dieselbe Zahl wie im gruenen Kreis
+  // auf dem Handy, und sie faellt auf 0, sobald Lukas den Chat dort oeffnet.
+  // Liegt chats.json vor, gilt sie; die Schaetzung oben ist nur noch Rueckfall.
+  fs.writeFileSync(path.join(TMP, "verlauf.jsonl"), [
+    { jid: "491700006888@s.whatsapp.net", richtung: "sie", von: "Jannik", ts: jetzt - 5000, text: "Laengst gelesen." },
+    { jid: "491700006888@s.whatsapp.net", richtung: "sie", von: "Jannik", ts: jetzt - 400, text: "Das ist neu." },
+    { jid: "491700003333@s.whatsapp.net", richtung: "sie", von: "Mama", ts: jetzt - 300, text: "Auch gelesen." },
+    { jid: "111111@g.us", richtung: "sie", von: "Ioannis", ts: jetzt - 200, text: "Gruppe, eine offen." },
+  ].map((o) => JSON.stringify(o)).join("\n") + "\n");
+  fs.writeFileSync(path.join(TMP, "chats.json"), JSON.stringify({
+    "491700006888@s.whatsapp.net": { unread: 1, t: jetzt - 400 },   // nur die juengste
+    "491700003333@s.whatsapp.net": { unread: 0, t: jetzt - 300 },   // gelesen -> raus
+    "111111@g.us": { unread: 1, t: jetzt - 200 },
+  }));
+  const echtZ = await whatsapp.leseChat("gibt es ungelesene Nachrichten");
+  console.log("   →", echtZ.reply);
+  pruefe("Zaehler: sagt 'Ungelesen', nicht die Naeherung", /^Ungelesen: /.test(echtZ.reply));
+  pruefe("Zaehler: gelesener Chat faellt ganz weg", !/Mama/.test(echtZ.reply));
+  pruefe("Zaehler: nur die als ungelesen gezaehlte Nachricht", /Das ist neu/.test(echtZ.reply));
+  pruefe("Zaehler: aeltere im selben Chat bleiben stumm", !/Laengst gelesen/.test(echtZ.reply));
+
+  // Alles gelesen -> ehrliche, ECHTE Auskunft (nicht die Schaetzung).
+  fs.writeFileSync(path.join(TMP, "chats.json"), JSON.stringify({
+    "491700006888@s.whatsapp.net": { unread: 0, t: jetzt - 400 },
+    "111111@g.us": { unread: 0, t: jetzt - 200 },
+  }));
+  const durch = await whatsapp.leseChat("ungelesene Nachrichten");
+  pruefe("Zaehler: alles gelesen -> 'Nichts Ungelesenes'", /Nichts Ungelesenes/.test(durch.reply));
+  console.log("   →", durch.reply);
+
+  // Ohne chats.json bleibt es bei der erklaerten Naeherung.
+  fs.rmSync(path.join(TMP, "chats.json"));
+  const ohne = await whatsapp.leseChat("ungelesene Nachrichten");
+  pruefe("Ohne Zaehler: Rueckfall auf die Naeherung, sichtbar benannt",
+    /Seit du zuletzt geschrieben hast/.test(ohne.reply));
+
   // Die Frage nach EINEM Chat darf davon unberuehrt bleiben — dort will Lukas
   // den Verlauf sehen, nicht nur das Unbeantwortete.
   fs.writeFileSync(path.join(TMP, "verlauf.jsonl"), [

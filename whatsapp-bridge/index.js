@@ -56,6 +56,52 @@ function merkeGesendet(id, message) {
 let kontakte = {};
 try { kontakte = JSON.parse(fs.readFileSync(CONTACTS, "utf-8")); } catch {}
 function speichereKontakte() { try { fs.writeFileSync(CONTACTS, JSON.stringify(kontakte)); } catch {} }
+// --- Ungelesen-Zaehler je Chat --------------------------------------------
+//
+// Geschrieben wird nach chats.json: { "<jid>": { unread, t } }.
+//
+// Zwei Eigenheiten von Baileys, die hier beruecksichtigt sind:
+//
+//   - "chats.update" liefert TEILobjekte. Fehlt unreadCount, bleibt der alte
+//     Wert stehen — sonst wuerde jede Namensaenderung den Zaehler loeschen.
+//   - unreadCount kann NEGATIV kommen (-1 heisst "als ungelesen markiert").
+//     Das wird als "mindestens eine" gewertet, nicht als Unfug weitergereicht.
+//
+// Bewusst NICHT gespeichert wird der Nachrichteninhalt — der steht im Verlauf.
+// Hier liegt nur die Zahl, die es sonst nirgends gibt.
+const CHATS = path.join(WA_DIR, "chats.json");
+let chats = {};
+try { chats = JSON.parse(fs.readFileSync(CHATS, "utf-8")); } catch { chats = {}; }
+let chatsSchreibt = null;
+function speichereChats() {
+  clearTimeout(chatsSchreibt);
+  chatsSchreibt = setTimeout(() => {
+    try { fs.writeFileSync(CHATS, JSON.stringify(chats)); } catch {}
+  }, 500);   // gebuendelt: bei der Erstsynchronisierung kommen hunderte auf einmal
+}
+
+function mergeChats(liste) {
+  let geaendert = false;
+  for (const c of liste || []) {
+    if (!c || !c.id) continue;
+    const alt = chats[c.id] || {};
+    let unread = alt.unread || 0;
+    if (c.unreadCount != null) unread = c.unreadCount < 0 ? 1 : c.unreadCount;
+    const t = Number(c.conversationTimestamp?.low ?? c.conversationTimestamp ?? alt.t ?? 0) || 0;
+    if (unread !== alt.unread || t !== alt.t) { chats[c.id] = { unread, t }; geaendert = true; }
+  }
+  if (geaendert) speichereChats();
+}
+
+// Schreibt Lukas selbst in einen Chat, hat er ihn offen — dann ist dort nichts
+// mehr ungelesen. WhatsApp meldet das zwar auch, aber spaeter; so stimmt die
+// Zahl sofort und Alexandra liest nicht vor, was er gerade selbst beantwortet.
+function chatGelesen(jid) {
+  if (!jid || !chats[jid] || !chats[jid].unread) return;
+  chats[jid] = { ...chats[jid], unread: 0 };
+  speichereChats();
+}
+
 function mergeKontakte(liste) {
   let geaendert = false;
   for (const c of liste || []) {
@@ -171,6 +217,21 @@ async function start() {
   });
 
   // Kontakte aus WhatsApp mitnehmen — damit "schick Jannik ..." aufloesbar ist.
+  // CHATS: der echte Ungelesen-Zaehler (27.07.).
+  //
+  // Bis hierher hoerte die Bruecke auf Kontakte, Gruppen und Nachrichten — aber
+  // nie auf chats.*. Genau dort liefert WhatsApp unreadCount je Chat, und
+  // "chats.update" kommt auch dann, wenn Lukas einen Chat am HANDY oeffnet:
+  // Der Zaehler faellt auf 0. Ohne dieses Ereignis konnte das Dashboard
+  // "ungelesen" nur schaetzen (an Lukas' eigenen Nachrichten).
+  //
+  // messaging-history.set liefert den Anfangsbestand, upsert neue Chats,
+  // update die Aenderungen.
+  sock.ev.on("messaging-history.set", (arg) => mergeChats(arg?.chats));
+  sock.ev.on("chats.set", (arg) => mergeChats(arg?.chats || arg));
+  sock.ev.on("chats.upsert", (arg) => mergeChats(arg));
+  sock.ev.on("chats.update", (arg) => mergeChats(arg));
+
   sock.ev.on("contacts.set", (arg) => mergeKontakte(arg?.contacts || arg));
   sock.ev.on("contacts.upsert", (arg) => mergeKontakte(arg));
   sock.ev.on("contacts.update", (arg) => mergeKontakte(arg));
@@ -205,6 +266,9 @@ async function start() {
         }
       } catch {}
       try { verlaufSpeichern(m); } catch {}   // ALLE Chats mitschreiben (nur lesen)
+      // Eigene Nachricht (auch vom Handy getippt) heisst: Chat ist offen und
+      // damit gelesen. WhatsApp meldet das auch selbst, nur spaeter.
+      try { if (m.key?.fromMe) chatGelesen(m.key.remoteJid); } catch {}
       try { eingang(m); } catch { /* eine Nachricht darf nichts umwerfen */ }
     }
   });
