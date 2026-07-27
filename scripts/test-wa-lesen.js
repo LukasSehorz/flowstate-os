@@ -93,6 +93,24 @@ function pruefe(name, wahr) {
     /63 in Team Flowstate/.test(echt.reply) && !/Arbeitskram/.test(echt.reply));
   pruefe("Lawine: bleibt vorlesbar kurz (war 576 Zeichen)", echt.reply.length < 200);
 
+  // Drei Personen auf einmal — die Lage im ersten Live-Lauf nach dem Umbau.
+  // Damals wurden alle drei in voller Laenge zitiert, zusammen ueber 400
+  // Zeichen. Ab dem dritten Zitat hoert bei einer Stimme niemand mehr zu.
+  const drei = [
+    { jid: "491700001111@s.whatsapp.net", richtung: "sie", von: "Phil", ts: jetzt - 100,
+      text: "ja top! Schick gerne mal nen Bild vom Buero. das sollte aber passen. Ja koennen es gerne zusammen machen. aber dann vielleicht nach einander und ich schneide es zusammen." },
+    { jid: "491700003333@s.whatsapp.net", richtung: "sie", von: "Mama", ts: jetzt - 200, text: "Ja" },
+    { jid: "491700002222@s.whatsapp.net", richtung: "sie", von: "Anna", ts: jetzt - 300,
+      text: "Alles gut. Es ist gerade ja auch super viel los und in Bewegung bei dir. Mach dir da keinen Kopf und da ist eine Woche frueher oder spaeter nicht entscheidend." },
+  ];
+  fs.writeFileSync(path.join(TMP, "verlauf.jsonl"), drei.map((o) => JSON.stringify(o)).join("\n") + "\n");
+  const dreiR = await whatsapp.neueNachrichten();
+  console.log("   →", dreiR.reply);
+  pruefe("Drei Personen: hoechstens zwei im Wortlaut",
+    (dreiR.reply.match(/„/g) || []).length <= 2);
+  pruefe("Drei Personen: die dritte wird trotzdem genannt", /Anna/.test(dreiR.reply));
+  pruefe("Drei Personen: bleibt vorlesbar (war ueber 400 Zeichen)", dreiR.reply.length < 320);
+
   // Nur Gruppenrauschen, kein Mensch: ehrlich sagen, dass nichts da ist.
   fs.writeFileSync(path.join(TMP, "verlauf.jsonl"),
     viele.filter((m) => m.jid.endsWith("@g.us") && m.jid !== "111111@g.us")
