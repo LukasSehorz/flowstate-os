@@ -1989,7 +1989,8 @@ th.ct-spalte-schnitt{font-weight:600}
 .id-band:hover{text-decoration:none;transform:translateY(-1px);box-shadow:var(--s2)}
 .id-band-zahl{flex-shrink:0;min-width:52px;height:52px;padding:0 12px;border-radius:14px;
   display:grid;place-items:center;font-size:24px;font-weight:700;letter-spacing:-.02em;
-  background:var(--blau-800);color:#fff}
+  color:#fff;background:linear-gradient(168deg,#454A52 0%,#292D33 52%,#15171B 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.16), 0 4px 14px -4px rgba(12,14,18,.5)}
 .id-band-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 .id-band-text strong{font-size:15px;font-weight:650}
 .id-band-pfeil{flex-shrink:0;font-size:13px;font-weight:650;color:var(--primary)}
@@ -2005,7 +2006,9 @@ th.ct-spalte-schnitt{font-weight:600}
 /* Zwei Spalten: eine Idee ist zu lang fuer drei und zu kurz fuer eine. */
 .id-liste{display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:16px;align-items:start}
 .id-karte{display:flex;flex-direction:column;gap:10px}
-.id-karte--ja{border-left:3px solid var(--success)}
+/* Innenkante statt Rahmen: ein 3px-Balken bricht an einer Karte mit 14px
+   Eckenradius sichtbar auf. Als inset-Schatten folgt er der Rundung. */
+.id-karte--ja{box-shadow:inset 3px 0 0 var(--success), var(--s1)}
 .id-kopf{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
 .id-marken{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .id-tasten{display:flex;gap:8px;flex-shrink:0}
@@ -2014,8 +2017,13 @@ th.ct-spalte-schnitt{font-weight:600}
    Treffen (44 px), gruen und rot getrennt, damit man sie nicht verwechselt. */
 .id-ja,.id-nein{width:44px;height:44px;padding:0;border-radius:12px;display:grid;place-items:center}
 .id-ja svg,.id-nein svg{width:20px;height:20px}
-.id-ja{background:var(--success);color:#fff}
-.id-ja:hover{background:#0F5F37}
+/* Der Haken ist die HAeUFIGERE Handlung und darum der dunkle, schwere Knopf —
+   nicht der bunte. Im Graphit-Umfeld war das 44px grosse Signalgruen die einzige
+   Farbe auf der ganzen Seite und zog jeden Blick auf sich, egal worum es ging.
+   Die Bedeutung traegt ohnehin das Zeichen, nicht die Farbe. */
+.id-ja{background:var(--blau-800);color:#fff;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14), var(--s1)}
+.id-ja:hover{background:var(--blau-900)}
 .id-nein{background:var(--surface-2);color:var(--text-secondary)}
 .id-nein:hover{background:var(--danger-flaeche);color:var(--danger)}
 .id-titel{font-size:15.5px;font-weight:650;line-height:1.4}
