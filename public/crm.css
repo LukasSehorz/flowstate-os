@@ -2432,3 +2432,7 @@ button.still.gefahr svg{width:15px;height:15px;margin-right:4px;vertical-align:-
   .kal-w-kopf,.kal-gz,.kal-w-gitter{grid-template-columns:40px repeat(7,minmax(0,1fr))}
   .kal-gz-label{font-size:0;padding:7px 4px}
 }
+/* Das Etikett: 3 bis 6 Wörter zum Wiedererkennen. Steht ÜBER dem Hook, weil man
+   auf einer Tafel mit zwanzig Kärtchen sucht und nicht liest. */
+.id-etikett{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--text-muted);margin-bottom:-4px}
