@@ -43,7 +43,14 @@ const FAELLE = [
   { frage: "schieb den Call mit Krotzer auf halb sechs", erwartet: ["termin_verschieben"], verboten: ["lange_arbeit"] },
   { frage: "wie wird das Wetter morgen und sind neue Mails da", erwartet: ["wetter", "mail_lesen"], verboten: [],
     warum: "Zwei Anliegen, zwei parallele Aufrufe." },
-  { frage: "schreib Jannik dass ich mich morgen melde", erwartet: ["whatsapp_senden"], verboten: [] },
+  // Seit dem 27.07. muss der Werkzeugaufruf die FERTIGE Nachricht tragen, nicht
+  // den Auftrag an das Modell. Vorher formulierte ein zweiter Modellaufruf nach
+  // und kostete bis zu 6,2 Sekunden. Geprueft wird deshalb der Inhalt des
+  // Aufrufs, nicht nur sein Name: Steht dort noch "schreib ihm, dass ...",
+  // ist der alte Vertrag zurueck.
+  { frage: "schreib Jannik dass ich mich morgen melde", erwartet: ["whatsapp_senden"], verboten: [],
+    prueft: (a) => !/^(schreib|sag|frag|richte|teile|informier)\b/i.test(String(a.whatsapp?.text || "").trim()),
+    warum: "Der Text muss abschickbar sein, kein Auftrag an dich selbst." },
   { frage: "wann hab ich morgen Zeit", erwartet: [], verboten: ["lange_arbeit", "gehirn_suchen"],
     sagt: /elf|11|frei|zwischen/i, warum: "Luecken liest das Modell selbst aus dem STAND ab." },
   // Zahlen duerfen ausgeschrieben sein ("eintausendfuenfhundert") — fuer eine
@@ -73,16 +80,21 @@ let fehler = 0;
     const fehlt = f.erwartet.filter((w) => !gerufen.includes(w));
     const zuviel = f.verboten.filter((w) => gerufen.includes(w));
     const sagtFalsch = f.sagt && !f.sagt.test(a.text);
-    const ok = !fehlt.length && !zuviel.length && !sagtFalsch && !d.fehler;
+    // prueft() schaut in den INHALT des Aufrufs, nicht nur auf seinen Namen —
+    // "richtiges Werkzeug mit unbrauchbarem Inhalt" ist sonst ein blinder Fleck.
+    const inhaltFalsch = f.prueft && !f.prueft(a);
+    const ok = !fehlt.length && !zuviel.length && !sagtFalsch && !inhaltFalsch && !d.fehler;
 
     console.log(`${ok ? "✅" : "❌"} "${f.frage}"`);
     console.log(`   ${d.dauerMs} ms · ${gerufen.length ? gerufen.join(" + ") : "kein Aufruf"} · ${d.tokenRaus} Token (davon ${d.tokenDenken} gedacht) · Speicher ${d.speicher}`);
+    if (a.whatsapp) console.log(`   Nachricht: „${a.whatsapp.text}“`);
     if (a.text) console.log(`   sagt: ${a.text}`);
     if (!ok) {
       fehler++;
       if (fehlt.length) console.log(`   ⚠ fehlt: ${fehlt.join(", ")}${f.warum ? " — " + f.warum : ""}`);
       if (zuviel.length) console.log(`   ⚠ unnoetig: ${zuviel.join(", ")}${f.warum ? " — " + f.warum : ""}`);
       if (sagtFalsch) console.log(`   ⚠ gesagter Text passt nicht zu ${f.sagt}${f.warum ? " — " + f.warum : ""}`);
+      if (inhaltFalsch) console.log(`   ⚠ Inhalt des Aufrufs unbrauchbar${f.warum ? " — " + f.warum : ""}`);
       if (d.fehler) console.log(`   ⚠ Fehler: ${d.fehler}`);
     }
     if (d.intern.length) console.log(`   ⚠ interner Begriff durchgerutscht: ${d.intern.join(", ")}`);

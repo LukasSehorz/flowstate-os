@@ -65,7 +65,12 @@ pruefe("Jedes Werkzeug hat Pflichtfelder" + (ohnePflicht.length ? ` — offen: $
 // Schema. Sie steht jetzt einmal im Prompt und wird dort geprueft.)
 const beschreibungen = JSON.stringify(WERKZEUGE);
 pruefe("Kontakte loest der Server auf (nie 'kenne X nicht')", /Kontakte loest der Server auf/.test(beschreibungen));
-pruefe("WhatsApp: Absicht statt Wortlaut", /die ABSICHT, nicht der Wortlaut/.test(beschreibungen));
+// Umgedreht am 27.07.: Das Modell liefert den FERTIGEN Text. Der zweite
+// Modellaufruf, der die Absicht nachformulierte, kostete im Log bis zu 6,2 s.
+pruefe("WhatsApp: fertiger Text statt Absicht", /die FERTIGE Nachricht/.test(beschreibungen));
+pruefe("WhatsApp: kein Absichts-Vertrag mehr", !/die ABSICHT, nicht der Wortlaut/.test(beschreibungen));
+pruefe("Schreibregeln stehen im Prompt (gelten fuer Mail UND WhatsApp)",
+  hat("Nachrichten schreiben", "FERTIGEN Text", "Keine Floskeln", "keine Unterschrift"));
 pruefe("WhatsApp: kein Serienversand", /Serienversand/.test(beschreibungen));
 pruefe("Gruppen: nur freigegebene, keine erfundenen", /Erfinde keine Gruppennamen/.test(beschreibungen));
 pruefe("Mail nur intern direkt senden", /lukas\.sehorz@hotmail\.com/.test(beschreibungen));
