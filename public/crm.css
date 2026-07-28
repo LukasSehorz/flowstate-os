@@ -3,6 +3,14 @@
    Icon-Rail + Top-Bar + Reiter + Segment-Switcher · Raster 8px
    ===================================================================== */
 :root{
+  /* Die drei Sparten. Eine Farbe je Geschäftsfeld, überall dieselbe — auf den
+     To-Do-Karten, im Detailfenster, später überall dort, wo eine Sparte
+     auftaucht. Bewusst außerhalb der Graphit-Umschaltung definiert: Webdesign
+     ist blau, egal auf welcher Seite man steht. Alle drei liegen bei mindestens
+     4,5:1 gegen Weiß, damit weiße Schrift auf dem Abzeichen lesbar bleibt. */
+  --sp-webdesign:#2563EB;   /* Blau */
+  --sp-performance:#C2620A; /* Orange */
+  --sp-ki:#8C2340;          /* Weinrot */
   --blau-900:#0B2545;--blau-800:#12376B;--blau-700:#1B4B93;--blau-600:#2563EB;
   --blau-500:#3B82F6;--blau-400:#60A5FA;--blau-300:#93C5FD;--blau-200:#BFDBFE;
   --blau-100:#DBEAFE;--blau-50:#EFF6FF;
@@ -1035,6 +1043,26 @@ body.crm-dashboard-design .quote-kachel>em.schlechter{color:#F0A79E}
 
 /* ---------- Belegeingang mit Prüfschritt ---------- */
 .beleg-liste{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+/* Gebuchte Belege ausklappbar (28.07.) — beim Einpflegen eines ganzen Jahres
+   schob die Liste sonst die Ablage zum Hochladen aus dem Bild. Was noch zu
+   prüfen ist, steht weiter offen darüber; hier liegt nur das Erledigte. */
+.beleg-mehr{margin-top:14px;border-top:1px solid var(--border);padding-top:12px}
+.beleg-mehr>summary{display:flex;align-items:center;gap:10px;cursor:pointer;
+  list-style:none;padding:7px 2px;border-radius:var(--r-sm);
+  transition:background var(--tempo)}
+.beleg-mehr>summary::-webkit-details-marker{display:none}
+.beleg-mehr>summary:hover{background:var(--surface-2)}
+/* Eigenes Dreieck, damit es links steht und mitdreht — das eingebaute sitzt je
+   nach Browser woanders. */
+.beleg-mehr>summary::before{content:"";width:0;height:0;flex:none;
+  border-left:5px solid var(--text-muted);border-top:4px solid transparent;
+  border-bottom:4px solid transparent;transition:transform var(--tempo)}
+.beleg-mehr[open]>summary::before{transform:rotate(90deg)}
+.beleg-mehr-titel{font-size:13.5px;font-weight:600}
+.beleg-mehr-hinweis{margin-left:auto}
+.beleg-mehr[open] .beleg-mehr-hinweis::after{content:" — zuklappen"}
+.beleg-mehr-fuss{display:flex;align-items:flex-start;gap:8px;margin-top:12px}
+.beleg-mehr-fuss svg{width:15px;height:15px;flex:none;margin-top:1px}
 .beleg{border:1px solid var(--border);border-radius:13px;padding:12px 13px;
   background:linear-gradient(158deg,#FFFFFF 0%,var(--surface-2) 100%)}
 .beleg.gebucht{opacity:.72}
@@ -2552,3 +2580,357 @@ button.still.gefahr svg{width:15px;height:15px;margin-right:4px;vertical-align:-
   transition:opacity var(--tempo)}
 .id-karte--weg:hover{opacity:1}
 .id-karte--weg .id-titel{font-weight:600}
+
+/* ---------- Kanalstand ----------
+   Der Stand je Kanal, von Hand eingetragen. Bewusst getrennt von den Summen
+   darüber: das eine ist, was unsere erfassten Videos gebracht haben, das
+   andere der Kanal inklusive allem davor. */
+.ks-raster{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.ks-kanal{padding:13px 15px;border-radius:var(--r-md);background:var(--surface-2);
+  border:1px solid var(--border);display:flex;flex-direction:column;gap:7px;min-width:0}
+.ks-kopf{display:flex;flex-direction:column;gap:1px;padding-bottom:6px;
+  border-bottom:1px solid var(--border)}
+.ks-kopf strong{font-size:13.5px;font-weight:650}
+.ks-zeile{display:flex;align-items:baseline;gap:8px;font-size:12.5px}
+.ks-zeile span{color:var(--text-secondary);flex:1;min-width:0}
+.ks-zeile b{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+/* Die Veränderung ist die eigentliche Aussage — nicht „4.210 Abos", sondern
+   „+310 seit letzter Woche". Darum steht sie direkt an der Zahl. */
+.ks-delta,.ks-gleich{font-style:normal;font-size:11px;font-weight:700;
+  padding:1px 6px;border-radius:99px;white-space:nowrap}
+.ks-delta.auf{background:var(--success-flaeche);color:var(--success)}
+.ks-delta.ab{background:var(--danger-flaeche);color:var(--danger)}
+.ks-gleich{background:var(--surface-3);color:var(--text-muted)}
+
+/* ---------- Zentrale ----------
+   Die Startseite läuft ab dem 27.07. im selben System wie CRM, Buchhaltung und
+   Content: .karte mit .karte-kopf, .sub darunter, „öffnen →" als .caption
+   rechts im Kopf. Vorher hatte sie ein eigenes Vokabular (.card, .tile, .row
+   aus style.css) und Emoji als Überschriften — sie sah aus wie eine andere
+   Anwendung als die Bereiche, in die sie führt.
+
+   Bewusst KEINE .kacheln-Reihe wie in den Bereichen selbst. Eine Kachel zeigt
+   eine grosse Zahl ohne Zusammenhang; auf einer Übersicht über Übersichten
+   sagt die Zahl allein nichts, erst die drei Zeilen darunter machen sie
+   lesbar. Genau daran sind die fünf Kacheln gescheitert, die hier standen —
+   sie wiederholten nur, was in der Karte darunter ohnehin stand. */
+.zt-tasten{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.zt-tasten form{margin:0}
+/* Auf dem Telefon stehen vier Knöpfe untereinander und schieben die erste
+   Karte fast zweihundert Pixel nach unten — auf einer Übersichtsseite ist das
+   die halbe sichtbare Fläche für Knöpfe, die man selten braucht. Zwei nebenein-
+   ander, gleich breit: halbe Höhe, und die Trefferflächen werden eher größer. */
+@media (max-width:560px){
+  .zt-tasten{width:100%}
+  .zt-tasten > *{flex:1 1 calc(50% - 4px)}
+  .zt-tasten form button,.zt-tasten > .knopf{width:100%;justify-content:center}
+}
+.zt-raster{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:16px}
+.zt-raster .karte,.zt-raster .karte+.karte{margin:0}
+/* In einer 310px breiten Karte bricht "öffnen →" sonst zwischen Wort und Pfeil
+   um und steht zweizeilig neben der Überschrift. */
+.zt-raster .karte-kopf > a.caption{white-space:nowrap}
+
+/* Beschriftung links, Zahl rechts. Tabellenziffern, damit die Zahlen über
+   mehrere Zeilen und über mehrere Karten hinweg untereinander stehen. */
+.zt-liste{display:flex;flex-direction:column}
+.zt-zeile{display:flex;align-items:baseline;justify-content:space-between;gap:14px;
+  padding:9px 0;border-bottom:1px solid var(--border);font-size:13.5px}
+.zt-zeile:first-child{padding-top:0}
+.zt-zeile:last-child{border-bottom:0;padding-bottom:0}
+.zt-zeile > span:first-child{color:var(--text-secondary);min-width:0}
+.zt-wert{font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap}
+.zt-wert.gross{font-size:16px;font-weight:700;letter-spacing:-.02em}
+.zt-wert .zt-ziel{font-weight:500;color:var(--text-muted)}
+.zt-zeile.warnt > span:first-child{color:var(--danger)}
+.zt-zeile.warnt .zt-wert{color:var(--danger)}
+.zt-fuss{margin-top:13px;padding-top:11px;border-top:1px solid var(--border)}
+.zt-leer{padding:6px 0 2px}
+
+/* Der Kartenkopf des Kalenders trägt die Tagesnavigation da, wo sonst der
+   „öffnen →"-Link steht — beides nebeneinander in .zt-kopf-rechts. */
+.zt-kopf-rechts{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.zt-nav{display:inline-flex;gap:4px}
+.zt-nav button{width:27px;height:27px;padding:0;border-radius:8px;box-shadow:none;
+  background:var(--surface-2);color:var(--text-secondary);border:1px solid var(--border);
+  display:grid;place-items:center}
+.zt-nav button:hover{background:var(--surface-3);color:var(--foreground);box-shadow:none}
+.zt-nav svg{width:14px;height:14px}
+
+/* Termine: die Uhrzeit bekommt eine eigene Spalte. Fett im Fliesstext ("09:00
+   Wochenstart mit Lukas") liest sich als ein Satz — untereinander stehende
+   Uhrzeiten liest man als Tagesablauf. */
+/* 62px: breit genug fuer "ganztägig" in Versalien. Bei 54px lief das Wort aus
+   seiner Spalte heraus und klebte am Titel des Termins. */
+.zt-termin{display:grid;grid-template-columns:62px 1fr;gap:12px;align-items:baseline;
+  padding:9px 0;border-bottom:1px solid var(--border);font-size:13.5px}
+.zt-termin:first-child{padding-top:0}
+.zt-termin:last-child{border-bottom:0;padding-bottom:0}
+.zt-termin-zeit{font-weight:700;font-variant-numeric:tabular-nums;font-size:13px}
+.zt-termin-zeit.ganz{font-size:9.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.03em;color:var(--text-muted)}
+.zt-termin-ort{display:block;font-size:12px;color:var(--text-muted);margin-top:2px}
+.zt-frei{display:flex;flex-direction:column;align-items:center;gap:7px;padding:22px 0 18px;
+  text-align:center}
+.zt-frei svg{width:22px;height:22px;color:var(--text-muted)}
+
+/* ---------- Zentrale: Geld und Ausblick ----------
+   Umsatz, Entwicklung und Forecast — dieselben Grössen wie im CRM-Dashboard
+   und aus derselben Rechnung (lib/crm.js zentraleZahlen, Abschlusschancen aus
+   lib/pipeline-quoten.js). Auch dieselben Bauteile: .forecast, .kennliste,
+   .chart-* werden hier wiederverwendet, nicht nachgebaut.
+
+   Bewusst NICHT identisch angeordnet. Im CRM steht die Umsatzzahl in der
+   Mitte zwischen Kurve und Forecast; hier steht sie links und trägt die Reihe.
+   Und rechts neben ihr steht nicht das Monatsziel, sondern der Umsatz
+   INSGESAMT — auf einer Startseite ist "was haben wir bisher gemacht" die
+   zweite Frage nach "was haben wir diesen Monat gemacht". Wer beide Seiten
+   kennt, erkennt die Familie und merkt trotzdem sofort, wo er ist. */
+.zt-geld{display:grid;grid-template-columns:1fr 1.35fr .9fr;gap:16px;margin-bottom:16px;
+  align-items:stretch}
+.zt-geld .karte{margin:0}
+
+/* Mittig, waagerecht wie senkrecht. Die Karte steht neben einer 200px hohen
+   Kurve und wird auf deren Höhe gestreckt — oben angeschlagen sass der Inhalt
+   im oberen Drittel und darunter klaffte die halbe Karte leer. Zentriert wird
+   die freie Fläche zum Rahmen um die Zahl, statt zum Loch darunter.
+   Deshalb hier auch text-align:center: eine Zahl, die mittig in ihrem Kasten
+   steht, aber linksbündig gesetzt ist, sieht aus wie verrutscht. */
+.zt-umsatz{display:flex;flex-direction:column;justify-content:center;align-items:center;
+  text-align:center;gap:22px}
+.zt-umsatz-haupt{display:flex;flex-direction:column;align-items:center;gap:3px}
+/* Zwei Beschriftungen nebeneinander lesen sich sonst als ein Satz
+   ("6 Abschlüsse Juni ohne Umsatz"). */
+.zt-punkt::before{content:"·";margin-right:9px;color:var(--text-muted)}
+/* clamp statt fester Groesse: Bei 25.300 € passt 40px, bei 1.284.900 € nicht
+   mehr — und eine umbrechende Umsatzzahl sieht aus wie ein Fehler. */
+.zt-umsatz-zahl{font-size:clamp(26px,3.1vw,40px);font-weight:700;letter-spacing:-.035em;
+  line-height:1.05;font-variant-numeric:tabular-nums}
+.zt-umsatz-fuss{display:flex;align-items:center;justify-content:center;gap:9px;
+  flex-wrap:wrap;margin-top:5px}
+/* Die Trennlinie geht über die volle Kartenbreite, der Inhalt darunter steht
+   in zwei gleich breiten Spalten — so sitzt "Insgesamt" symmetrisch zur
+   grossen Zahl darüber und nicht irgendwo rechts. */
+.zt-umsatz-seite{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;
+  border-top:1px solid var(--border);padding-top:16px}
+.zt-umsatz-neben{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.zt-umsatz-neben-zahl{font-size:18px;font-weight:700;letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums}
+/* "Insgesamt" ist die zweitwichtigste Zahl der Karte und bekommt darum die
+   volle Textfarbe, während der Vormonat zurücktritt. */
+.zt-umsatz-neben.stark .zt-umsatz-neben-zahl{color:var(--foreground)}
+.zt-umsatz-neben:not(.stark) .zt-umsatz-neben-zahl{color:var(--text-secondary)}
+
+.zt-kurve .chart-achse{padding-left:0}
+.zt-vorn{display:flex;flex-direction:column}
+.zt-vorn .kennliste{margin-top:14px}
+
+/* Unter 1200px wird die dreispaltige Reihe zu schmal: die Umsatzzahl schrumpft
+   auf Fussnotengroesse und die Kurve hat weniger Breite als Beschriftung.
+   Dann Kurve über die volle Breite, Umsatz und Ausblick darunter nebeneinander. */
+@media (max-width:1200px){
+  .zt-geld{grid-template-columns:1fr 1fr}
+  .zt-kurve{grid-column:1/-1;order:-1}
+}
+/* Einspaltig gilt das Vorziehen der Kurve NICHT mehr: untereinander ist die
+   Umsatzzahl die Überschrift der Reihe und muss zuerst kommen. Nebeneinander
+   war sie nur nach oben gerückt, weil eine Kurve über zwei Spalten besser
+   aussieht als eine Zahl über zwei Spalten. */
+@media (max-width:760px){
+  .zt-geld{grid-template-columns:1fr}
+  .zt-kurve{order:0}
+  .zt-umsatz-seite{grid-template-columns:1fr 1fr}
+}
+/* Zwölf Monatskürzel auf Telefonbreite ergeben "AugSepOktNov…" — ohne Lücke
+   gelesen ist das keine Achse mehr. Jedes zweite bleibt stehen; die Kurve
+   bleibt lesbar, weil die Punkte ohnehin sichtbar sind. */
+@media (max-width:560px){
+  .zt-kurve .chart-achse span:nth-child(2n){visibility:hidden}
+}
+
+/* ---------- To-Do-Seite ----------
+   Die Zeilen selbst sind .todo-* aus dem CRM (dieselbe Tabelle, dieselbe
+   Darstellung). Hier steht nur, was die Seite darum herum braucht. */
+.td-block{margin-bottom:16px}
+.td-block:last-child{margin-bottom:0}
+/* Überfällig trägt einen roten Rand statt einer roten Fläche: die Karte bleibt
+   lesbar, die Dringlichkeit steht trotzdem sofort im Bild. */
+/* ---------- Notizfeld der Kundenakte ----------
+   Ein grosses, freies Feld. Zeilenhöhe wie Fliesstext, nicht wie ein
+   Eingabefeld: hier stehen Sätze und Absätze, keine Stichwörter.
+   Senkrecht vergrösserbar, waagerecht nicht — sonst zieht man es aus der
+   Karte heraus. */
+/* Kopfzeile der Akte: links zurück, rechts Speichern. Der Knopf steht oben,
+   weil man ihn dort sucht — und noch einmal unten in der klebenden Leiste,
+   weil die Akte länger ist als jeder Bildschirm. Beide hängen am selben
+   Formular, es ist derselbe Vorgang. */
+.akte-leiste-oben{display:flex;align-items:center;justify-content:space-between;
+  gap:16px;flex-wrap:wrap;margin-bottom:6px}
+.akte-leiste-oben .akte-zurueck{margin:0}
+.akte-speichern-oben{display:flex;align-items:center;gap:12px}
+/* Solange nichts geändert wurde, ist der Knopf ruhig; danach hebt er sich ab. */
+#speichern-oben{transition:box-shadow var(--tempo),transform var(--tempo)}
+#speichern-oben.wartet{box-shadow:0 0 0 3px var(--warning-flaeche), var(--s2)}
+
+/* Speicherleiste der Kundenakte — klebt unten, erscheint nur bei Änderungen.
+   Die Akte ist länger als jeder Bildschirm; ein fester Knopf am Seitenanfang
+   oder -ende wäre je nach Scrollposition unerreichbar. */
+.akte-speicherleiste{position:sticky;bottom:0;z-index:20;display:flex;align-items:center;
+  gap:12px;margin:16px 0 0;padding:12px 16px;border-radius:var(--r-lg);
+  background:var(--surface);border:1px solid var(--border-stark);box-shadow:var(--s3)}
+.akte-speicherleiste[hidden]{display:none}
+.akte-speicher-text{flex:1;font-size:13.5px;font-weight:600}
+/* Der Punkt davor sagt „hier liegt etwas an", ohne dass es eine Warnung wäre. */
+.akte-speicher-text::before{content:"";display:inline-block;width:8px;height:8px;
+  border-radius:50%;background:var(--warning);margin-right:9px;vertical-align:1px}
+@media (max-width:560px){
+  .akte-speicherleiste{flex-wrap:wrap}
+  .akte-speicher-text{flex:1 0 100%}
+  .akte-speicherleiste button{flex:1}
+}
+
+.akte-notizen{margin-bottom:16px}
+.akte-notizen textarea{width:100%;min-height:150px;resize:vertical;line-height:1.6;
+  font:inherit;font-size:14px;padding:12px 14px}
+.akte-notizen-fuss{display:flex;align-items:center;justify-content:space-between;
+  gap:12px;margin-top:12px;flex-wrap:wrap}
+
+/* ---------- Sparten-Farben auf den To-Do-Karten ----------
+   Webdesign blau, Performance Marketing orange, KI-Projekte weinrot. Die Sparte
+   steht nicht an der Aufgabe, sondern am Kunden (sein Tag, sonst die Sparte
+   seines jüngsten Deals) — siehe die Abfrage in lib/crm.js.
+
+   Getragen wird die Farbe von einem linken Streifen über einen Innenschatten,
+   nicht von einer eingefärbten Fläche: Die Karten stehen zu viert nebeneinander
+   in schmalen Spalten, und drei verschiedene Füllfarben nebeneinander machen die
+   Tafel unruhig, ohne dass man schneller findet, was man sucht. Der Streifen
+   ordnet zu, sobald man ihn kennt, und tritt zurück, wenn man ihn nicht braucht.
+
+   Bewusst per inset-Schatten und nicht per border-left: ein dicker farbiger Rand
+   an einer Karte ist ein Muster, das man aus jedem Baukasten kennt. Der
+   Innenschatten sitzt in der Kante der Karte statt daneben. */
+/* WICHTIG — die Selektoren müssen body.crm-dashboard-design mitnehmen.
+   Sonst gewinnt die Regel „body.crm-dashboard-design .heute-todo" weiter oben
+   (Spezifität 0,2,1 gegen 0,2,0) und der farbige Streifen kommt nie an. Genau
+   daran ist der erste Anlauf am 28.07. gescheitert: Die Klasse stand auf der
+   Karte, die Regel stand im Blatt — und trotzdem war nichts zu sehen.
+
+   Die Farbe steckt in einer eigenen Variablen je Karte, damit Grundzustand,
+   Überfahren und beide Themen dieselbe Farbe benutzen und nicht dreimal
+   dasselbe dastehen muss. */
+.heute-todo.sp-webdesign{--sp:var(--sp-webdesign)}
+.heute-todo.sp-performance{--sp:var(--sp-performance)}
+.heute-todo.sp-ki{--sp:var(--sp-ki)}
+
+.heute-todo.sp-webdesign,.heute-todo.sp-performance,.heute-todo.sp-ki,
+body.crm-dashboard-design .heute-todo.sp-webdesign,
+body.crm-dashboard-design .heute-todo.sp-performance,
+body.crm-dashboard-design .heute-todo.sp-ki{
+  box-shadow:inset 4px 0 0 var(--sp), inset 0 1px 0 rgba(255,255,255,.9),
+    0 1px 2px rgba(20,22,26,.05), 0 8px 20px -12px rgba(20,22,26,.22)}
+.heute-todo.sp-webdesign:hover,.heute-todo.sp-performance:hover,.heute-todo.sp-ki:hover,
+body.crm-dashboard-design .heute-todo.sp-webdesign:hover,
+body.crm-dashboard-design .heute-todo.sp-performance:hover,
+body.crm-dashboard-design .heute-todo.sp-ki:hover{
+  box-shadow:inset 4px 0 0 var(--sp), inset 0 1px 0 rgba(255,255,255,.9),
+    0 10px 26px -8px rgba(20,22,26,.26)}
+/* Im Weiss-Modus wird der Schatten flach gesetzt — der Streifen muss auch dort
+   mit, sonst verschwindet er ausgerechnet in der hellsten Ansicht. */
+:root[data-weiss="1"] body.crm-dashboard-design .heute-todo.sp-webdesign,
+:root[data-weiss="1"] body.crm-dashboard-design .heute-todo.sp-performance,
+:root[data-weiss="1"] body.crm-dashboard-design .heute-todo.sp-ki{
+  box-shadow:inset 4px 0 0 var(--sp), var(--s1)}
+/* Die Titelzeile darf nicht mitfärben, wenn die Karte beim Überfahren die
+   Sparten-Farbe annimmt — sonst springt der Text. */
+.heute-todo .heute-todo-titel{color:var(--foreground)}
+
+/* Das Abzeichen im Detailfenster nennt die Sparte beim Namen. */
+.badge.sp-abzeichen{color:#fff}
+.badge.sp-abzeichen.sp-webdesign{background:var(--sp-webdesign)}
+.badge.sp-abzeichen.sp-performance{background:var(--sp-performance)}
+.badge.sp-abzeichen.sp-ki{background:var(--sp-ki)}
+
+/* Notizfeld im To-Do-Formular der Kundenakte — nimmt die volle Zeile, weil
+   dort ganze Sätze stehen und keine Stichwörter. */
+.akte-todo-notiz{flex:1 1 100%}
+
+.td-block.td-spaet{border-color:var(--danger)}
+.td-notiz{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46ch}
+
+/* Die Tafel: dieselben vier Wichtigkeits-Spalten wie im CRM-Dashboard, aber
+   grösser. Dort ist sie eine Karte unter vielen auf einer vollen Seite; hier
+   ist sie der Hauptgegenstand und darf den Platz nehmen. Grössere Spaltenköpfe,
+   höhere Karten, lesbare Titel statt Kleinstschrift. */
+.td-tafel{margin-bottom:16px}
+.td-spalten{gap:14px}
+.td-spalten .heute-spalte{gap:10px;padding:4px;border-radius:12px;min-height:120px}
+.td-spalten .heute-spalte-kopf{font-size:11.5px;letter-spacing:.04em;padding-bottom:9px;
+  min-height:0;color:var(--text-secondary)}
+.td-karte{padding:13px 14px;border-radius:12px;gap:11px}
+.td-karte .heute-todo-titel{font-size:14px;line-height:1.32}
+.td-karte .heute-todo-kunde{font-size:11.5px;margin:3px 0 8px}
+.td-karte .badge.dring{font-size:9.5px;padding:2px 9px}
+.td-karte .badge.dring + .badge.dring{margin-left:5px}
+.td-karte .todo-haken{width:23px;height:23px}
+.td-karte .todo-haken svg{width:13px;height:13px}
+/* Eine leere Spalte braucht trotzdem eine Ablagefläche, sonst kann man nichts
+   hineinziehen. Der Strich hält sie offen. */
+.td-spalte-leer{text-align:center;padding:16px 0;color:var(--text-muted)}
+@media (max-width:900px){
+  .td-spalten{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:560px){
+  .td-spalten{grid-template-columns:1fr}
+  .td-spalten .heute-spalte{min-height:0}
+}
+
+/* ---------------------------------------- Dokumente in der Kundenakte
+   Zwei Listen unter einer Ablage: Rechnungen (liegen in der Buchhaltung)
+   und Unterlagen (liegen nur hier). Getrennt, weil man mit ihnen
+   Verschiedenes tut — die einen hakt man ab, die anderen liest man nach. */
+.dok-titel{margin:16px 0 8px;font-size:13px;font-weight:700;
+  display:flex;align-items:baseline;gap:6px}
+.dok-titel .caption{font-weight:400}
+.dok-liste{display:flex;flex-direction:column;gap:2px}
+.dok-zeile{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;
+  border:1px solid var(--border);background:var(--surface)}
+.dok-zeile:hover{border-color:var(--border-stark)}
+.dok-name{display:flex;align-items:center;gap:8px;min-width:0;flex:1;
+  color:inherit;text-decoration:none;font-weight:600;font-size:13px}
+.dok-name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dok-name svg{width:16px;height:16px;flex:none;opacity:.55}
+.dok-name:hover{text-decoration:underline}
+.dok-meta{font-size:12px;color:var(--text-muted);flex:none;white-space:nowrap}
+.dok-weg{flex:none;display:flex}
+.dok-weg button{padding:4px}
+.dok-weg svg{width:14px;height:14px}
+@media (max-width:600px){
+  .dok-zeile{flex-wrap:wrap}
+  .dok-name{flex:1 1 100%}
+}
+
+/* „Verloren" ist kein Knopf, den man aus Versehen trifft: still im Kopf,
+   rot erst beim Darüberfahren. */
+.verloren-knopf{color:var(--text-muted)}
+.verloren-knopf:hover{color:var(--danger);background:var(--danger-flaeche)}
+.verloren-knopf svg{width:15px;height:15px}
+
+/* Retainer-Stand: wie viele Monatsbeiträge eingegangen sind.
+   Die Punkte zeigen auf einen Blick, wo der Vertrag steht — eine Zahl
+   allein sagt nicht, ob 2 von 3 viel oder wenig ist. */
+.retainer-spur{display:flex;margin-top:7px;gap:4px;flex:none}
+.retainer-spur i{width:22px;height:7px;border-radius:4px;background:var(--border-stark);opacity:.45}
+.retainer-spur i.voll{background:var(--success);opacity:1}
+
+
+/* Der Zähler mit − und +: die häufigste Handlung ist „einen Monat weiter",
+   und die soll ein Klick sein, kein Aufklappen einer Liste. */
+.retainer-feld{margin-bottom:14px}
+.retainer-zeile{display:flex;align-items:stretch;gap:6px}
+.retainer-zeile select{flex:1;min-width:0}
+.retainer-knopf{flex:none;width:38px;font-size:18px;line-height:1;font-weight:600;
+  border:1px solid var(--border);background:var(--surface);border-radius:9px;
+  color:var(--text-secondary);cursor:pointer;transition:all var(--tempo,.15s)}
+.retainer-knopf:hover{background:var(--surface-2);border-color:var(--border-stark);color:var(--foreground)}
+.retainer-knopf:active{transform:scale(.94)}
+.retainer-feld .caption{display:block;margin-top:4px}

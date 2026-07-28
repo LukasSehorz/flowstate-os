@@ -11,3 +11,6 @@ shots/
 
 # Videodateien — 50 bis 200 MB je Short, gehoeren nicht ins Git
 daten/
+
+# Datenbank-Sicherungen — enthalten Kundendaten (scripts/sicherung.js)
+sicherungen/

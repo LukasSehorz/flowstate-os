@@ -51,14 +51,11 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--surface-2);
 .tile-num{font-size:30px;font-weight:700;color:var(--foreground);line-height:1.15;letter-spacing:-.03em}
 .tile-label{color:var(--text-muted);font-size:12.5px;margin-top:2px}
 
-/* Kalender-Karte */
-.cal-nav{float:right;display:inline-flex;align-items:center;gap:8px}
-.cal-nav .nav{background:var(--surface-2);color:var(--primary);border:1px solid var(--border-stark);
-  font-weight:700;padding:3px 10px;box-shadow:none}
-.cal-nav .nav:hover{background:var(--surface-3);box-shadow:none}
-#cal-label{font-size:13px;color:var(--foreground);min-width:78px;text-align:center}
-.cal-frei{text-align:center;padding:14px 0;color:var(--text-muted)}
-.cal-frei-icon{font-size:30px;display:block;margin-bottom:6px}
+/* Die Kalender-Karte stand hier (.cal-nav, #cal-label, .cal-frei). Seit dem
+   27.07. laeuft die Zentrale im Designsystem aus crm.css — die Karte benutzt
+   .zt-nav, .zt-termin und .zt-frei. Das alte #cal-label{min-width:78px;
+   text-align:center} hat die Unterzeile "Heute" noch eingerueckt, obwohl sie
+   laengst eine normale .sub im Kartenkopf war. */
 
 /* Tabellen und Abzeichen */
 .tbl{width:100%;border-collapse:collapse;margin-top:16px}

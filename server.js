@@ -2,19 +2,75 @@
 // Schichten: Dashboard (hier) -> Hermes (Agent) -> Vault/Daten (unten)
 const express = require("express");
 const session = require("express-session");
-const { execFile } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { marked } = require("marked");
-const { schale } = require("./lib/schale.js");
+const { schale, ICON, S } = require("./lib/schale.js");
 const verlauf = require("./lib/verlauf.js");
+
+// Zusaetzliche Zeichen fuer die Zentrale. ICON aus schale.js hat schon alles,
+// was auch in der Rail steht (sonne, funke, leads, kunden, euro, kalender …) —
+// hier stehen nur die, die es dort nicht gibt. Gebaut mit demselben S() und
+// derselben Strichstaerke, damit nichts aus der Reihe faellt.
+const ZT = {
+  post: S('<path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/>'),
+  info: S('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'),
+  links: S('<path d="m15 18-6-6 6-6"/>'),
+  rechts: S('<path d="m9 6 6 6-6 6"/>'),
+  frei: S('<path d="M12 3v2M5.6 5.6l1.4 1.4M3 12h2M18.4 5.6 17 7M21 12h-2"/><circle cx="12" cy="12" r="4"/><path d="M6 19h12"/>'),
+  // Fuer Umsatz, Forecast und To-Dos. Bewusst dieselben Pfade wie im
+  // CRM-Dashboard (lib/crm-routes.js) — dieselbe Zahl soll auch dasselbe
+  // Zeichen tragen, sonst sucht man auf zwei Seiten nach demselben Wert.
+  waage: S('<path d="M12 3v18M7 7h10M5.5 7 3 13h5zM18.5 7 16 13h5z"/><path d="M3 13a2.5 2.5 0 0 0 5 0M16 13a2.5 2.5 0 0 0 5 0"/>'),
+  trend: S('<path d="M22 7l-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/>'),
+  schichten: S('<path d="m12 2 9 5-9 5-9-5 9-5z"/><path d="m3 12 9 5 9-5M3 17l9 5 9-5"/>'),
+  ziel: S('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>'),
+  euro: S('<path d="M15 6.5A6 6 0 1 0 15 17.5"/><path d="M4 10.5h9M4 13.5h9"/>'),
+  kalenderKlein: S('<rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M8 2.5v4M16 2.5v4M3 10h18"/>'),
+  haken: S('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'),
+  warnung: S('<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>'),
+};
+
+const eur = (n) => (n == null ? "–" : Math.round(Number(n)).toLocaleString("de-DE") + " €");
+// Kurz fuer die Achse: 36.800 wird zu "37k €". Auf einer 48 px breiten
+// Y-Achse ist die volle Zahl nicht lesbar.
+const eurK = (n) => {
+  const v = Number(n) || 0;
+  if (v >= 10000) return Math.round(v / 1000) + "k €";
+  if (v >= 1000) return (v / 1000).toFixed(1).replace(".0", "").replace(".", ",") + "k €";
+  return Math.round(v) + " €";
+};
+
+// Die Umsatzkurve. Dieselbe Rechnung wie im CRM-Dashboard: Catmull-Rom in
+// kubische Bezier, damit die Kurve weich laeuft, und die Stuetzpunkte auf den
+// Wertebereich des Abschnitts geklemmt — ohne das schwingt sie zwischen zwei
+// Monaten unter die Nulllinie und behauptet einen Verlust, den es nie gab.
+function umsatzKurve(werte) {
+  const max = Math.max(1, ...werte);
+  const pkt = werte.map((w, i) => [
+    (i / (werte.length - 1 || 1)) * 780 + 10,
+    190 - (w / max) * 178,
+  ]);
+  const klemm = (v, a, b) => Math.min(Math.max(v, Math.min(a, b)), Math.max(a, b));
+  let linie = `M${pkt[0][0].toFixed(1)},${pkt[0][1].toFixed(1)}`;
+  for (let i = 0; i < pkt.length - 1; i++) {
+    const p0 = pkt[i - 1] || pkt[i], p1 = pkt[i], p2 = pkt[i + 1], p3 = pkt[i + 2] || p2;
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, klemm(p1[1] + (p2[1] - p0[1]) / 6, p1[1], p2[1])];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, klemm(p2[1] - (p3[1] - p1[1]) / 6, p1[1], p2[1])];
+    linie += ` C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return {
+    max, pkt, linie,
+    flaeche: linie + ` L${pkt[pkt.length - 1][0].toFixed(1)},190 L10,190 Z`,
+    gitter: [0, 1, 2, 3, 4].map((i) => 12 + i * 44.5),
+  };
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PASSWORD = process.env.DASHBOARD_PASSWORD || "";
 const VAULT_PATH = process.env.VAULT_PATH || "/vault";
 const DATA_PATH = process.env.DATA_PATH || path.join(__dirname, "data");
-const GWS_ENV = { ...process.env, GWS_ENCRYPTION: "none" };
 
 if (!fs.existsSync(DATA_PATH)) fs.mkdirSync(DATA_PATH, { recursive: true });
 
@@ -126,6 +182,16 @@ catch (e) { console.error("Sprach-Modul konnte nicht geladen werden:", e.message
 // Steht hinter dem Auth-Gate: die Routen schreiben in ein echtes Google-Konto.
 try { require("./lib/kalender-routes.js")(app); console.log("Kalender-Modul geladen"); }
 catch (e) { console.error("Kalender-Modul konnte nicht geladen werden:", e.message); }
+
+// To-Dos haengen in der Rail hinter dem Kalender und muessen deshalb NACH ihm
+// geladen werden — "nach: kalender" kann nur greifen, wenn es den Kalender
+// schon gibt. Verloren geht sonst nichts (schale.eintragen fuehrt zusammen),
+// aber die Reihenfolge waere vertauscht. DATABASE_URL, weil die Aufgaben in
+// der CRM-Datenbank liegen.
+if (process.env.DATABASE_URL) {
+  try { require("./lib/todo-routes.js")(app); console.log("To-Do-Modul geladen"); }
+  catch (e) { console.error("To-Do-Modul konnte nicht geladen werden:", e.message); }
+}
 
 // WhatsApp-Koppelseite (/whatsapp). Die Bruecke laeuft als eigener Container;
 // faellt sie aus, zeigt die Seite nur "nicht verbunden" — das Dashboard bleibt heil.
@@ -321,41 +387,204 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
 }
 
 // ---------- Zentrale ----------
+//
+// Nur Karten, keine Kachelreihe mehr (27.07.). Die fuenf Kacheln oben ("Termine
+// heute", "Wichtige Mails", "Brauchen dich", "Leads gesamt", "Offene Deals")
+// zeigten ausnahmslos Zahlen, die zwei Zentimeter tiefer nochmal in der
+// zugehoerigen Karte standen — jede Zahl wurde doppelt geholt und doppelt
+// angezeigt. Die Karte gewinnt, weil sie die Zahl UND die Zeilen dahinter hat.
+//
+// Ebenfalls raus: "Wissens-Vault" (Dateizaehler) und "System" (Laufzeit, Mounts).
+// Das sind Betriebsdaten, keine Tagesuebersicht. Die Endpunkte dazu gibt es
+// weiter, sie haengen nur nicht mehr auf der Startseite.
+//
+// Dafuer sind die drei Bereiche dazugekommen, die es beim letzten Stand der
+// Zentrale noch nicht gab: Buchhaltung, Content und Marketing. Jeder liefert
+// seine Zahlen ueber eine eigene Route in seinem eigenen Modul.
 app.get("/", async (req, res) => {
   const heute = new Date().toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  // Buchhaltung sieht nur die Geschaeftsfuehrung (dieselbe Regel wie unter
+  // /buchhaltung, siehe lib/buchhaltung-routes.js). Fuer ein Teammitglied wird
+  // die Karte gar nicht erst gebaut — eine Karte, die nur "darfst du nicht
+  // sehen" sagt, ist keine Information.
+  //
+  // Wer nur mit dem gemeinsamen Passwort da ist (kein req.session.crm), bekommt
+  // sie trotzdem: die Karte fragt dann nach der persoenlichen Anmeldung, genau
+  // wie die CRM-Karte darueber. Sonst waere die Buchhaltung fuer Jannik und
+  // Lukas je nach Anmeldeweg mal da und mal weg.
+  const nutzer = (req.session && req.session.crm) || null;
+  const admin = !nutzer || nutzer.rolle === "admin";
+  // Buchhaltung, Content und Marketing haengen an der Datenbank — ohne
+  // DATABASE_URL laedt server.js ihre Routen oben gar nicht erst. Dann duerfen
+  // hier auch keine Karten stehen, die auf eine 404 zeigen und rot "Fehler beim
+  // Laden" schreiben. Auf dem Laptop ohne Datenbank bleibt die Zentrale damit
+  // schlicht kuerzer, statt kaputt auszusehen.
+  const datenbank = Boolean(process.env.DATABASE_URL);
   // aktiv = "zentrale-start" (nicht "zentrale"): Seit der Kalender als
   // Unterpunkt darunter haengt, hat die Zentrale selbst einen eigenen
   // Untereintrag — sonst waere in der Rail kein Kind markiert.
+  // Eine Karte = ein Bereich. Kopf mit Titel und Unterzeile, rechts der Weg
+  // dorthin — dasselbe Muster wie die Karten im CRM, in der Buchhaltung und im
+  // Content. Der Inhalt wird nachgeladen und von renderCard() unten gebaut.
+  const karte = (titel, unter, quelle, ziel, zielWort) => `
+    <div class="karte"><div class="karte-kopf"><div>
+      <h2>${titel}</h2><div class="sub">${unter}</div></div>
+      ${ziel ? `<a href="${ziel}" class="caption">${zielWort} →</a>` : ""}</div>
+      <div data-load="${quelle}"><p class="caption">Lädt …</p></div></div>`;
+
+  // ---- Geld und Ausblick: dieselben Groessen wie im CRM-Dashboard ----
+  //
+  // Diese drei Bloecke werden SERVERSEITIG gebaut, nicht nachgeladen wie die
+  // Karten darunter. Grund: eine Kurve aus zwoelf Monaten im Browser zu
+  // zeichnen hiesse, die Bezier-Rechnung ein zweites Mal zu schreiben — und
+  // damit zwei Kurven zu pflegen, die dieselbe Zahl zeigen sollen. Die Daten
+  // kommen aus crm.zentraleZahlen(), die Abschlusschancen aus
+  // lib/pipeline-quoten.js: dieselbe Quelle, aus der das CRM-Dashboard rechnet.
+  //
+  // Ohne persoenliche Anmeldung gibt es die Zahlen nicht — daran haengen die
+  // Zeilenrechte in der Datenbank. Dann steht hier ein Hinweis statt einer
+  // leeren Kurve.
+  let geldBlock = "";
+  if (datenbank && nutzer) {
+    try {
+      const z = await require("./lib/crm.js").zentraleZahlen(nutzer);
+      const MON = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+      const kurve = umsatzKurve(z.verlauf.map((v) => v.wert));
+      const monatName = new Date().toLocaleDateString("de-DE", { month: "long" });
+      const vormonatName = (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
+        return d.toLocaleDateString("de-DE", { month: "long" }); })();
+      // Veraenderung zum Vormonat. Ohne Vormonatsumsatz gibt es keinen
+      // Prozentwert — "+100 %" auf eine Null ist keine Aussage, sondern eine
+      // Division, die zufaellig durchgeht.
+      const wachstum = z.umsatz.vormonat > 0
+        ? Math.round(((z.umsatz.monat - z.umsatz.vormonat) / z.umsatz.vormonat) * 100)
+        : null;
+      const monateMitUmsatz = z.verlauf.filter((v) => v.wert > 0).length;
+      const schnitt = monateMitUmsatz ? z.umsatz.gesamt / monateMitUmsatz : 0;
+
+      geldBlock = `
+      <div class="zt-geld">
+        <!-- Links die Zahl, um die es geht. Anders als im CRM-Dashboard steht
+             rechts nicht das Monatsziel, sondern der Umsatz INSGESAMT — auf der
+             Startseite ist "was haben wir bisher gemacht" die zweite Frage nach
+             "was haben wir diesen Monat gemacht". -->
+        <div class="karte zt-umsatz">
+          <div class="zt-umsatz-haupt">
+            <span class="kachel-label">Umsatz ${esc(monatName)}</span>
+            <div class="zt-umsatz-zahl">${eur(z.umsatz.monat)}</div>
+            <div class="zt-umsatz-fuss">
+              <span class="caption">${z.umsatz.anzahl_monat} ${z.umsatz.anzahl_monat === 1 ? "Abschluss" : "Abschlüsse"}</span>
+              ${wachstum === null
+                ? `<span class="caption zt-punkt">${esc(vormonatName)} ohne Umsatz</span>`
+                : `<span class="trend ${wachstum >= 0 ? "auf" : "ab"} klein">${wachstum >= 0 ? "↗" : "↘"} ${Math.abs(wachstum)} % zu ${esc(vormonatName)}</span>`}
+            </div>
+          </div>
+          <div class="zt-umsatz-seite">
+            <div class="zt-umsatz-neben">
+              <span class="kachel-mini-titel">${esc(vormonatName)}</span>
+              <div class="zt-umsatz-neben-zahl">${eur(z.umsatz.vormonat)}</div>
+            </div>
+            <div class="zt-umsatz-neben stark">
+              <span class="kachel-mini-titel">Insgesamt</span>
+              <div class="zt-umsatz-neben-zahl">${eur(z.umsatz.gesamt)}</div>
+              <span class="kachel-mini-ziel">${z.umsatz.anzahl_gesamt} Abschlüsse · Ø ${eur(schnitt)}/Monat</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="karte zt-kurve">
+          <div class="karte-kopf"><div><h2>Umsatzentwicklung</h2>
+            <div class="sub">Zwölf Monate — gewonnene Deals je Monat</div></div>
+            <a href="/crm" class="caption">CRM →</a></div>
+          <div class="chart-flaeche" style="height:200px">
+            <div class="chart-y">${[kurve.max, kurve.max * .75, kurve.max * .5, kurve.max * .25, 0]
+              .map((v, i) => `<span style="top:${kurve.gitter[i]}px">${eurK(v)}</span>`).join("")}</div>
+            <svg viewBox="0 0 800 200" preserveAspectRatio="none" style="width:100%;height:180px">
+              <defs>
+                <linearGradient id="ztfl" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="var(--blau-600)" stop-opacity=".38"/>
+                  <stop offset="45%" stop-color="var(--blau-500)" stop-opacity=".16"/>
+                  <stop offset="100%" stop-color="var(--blau-400)" stop-opacity="0"/></linearGradient>
+                <linearGradient id="ztln" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="var(--blau-400)"/>
+                  <stop offset="100%" stop-color="var(--blau-900)"/></linearGradient>
+              </defs>
+              ${kurve.gitter.map((y) => `<line x1="0" y1="${y}" x2="800" y2="${y}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 6"/>`).join("")}
+              <path d="${kurve.flaeche}" fill="url(#ztfl)"/>
+              <path d="${kurve.linie}" fill="none" stroke="url(#ztln)" stroke-width="2.5" stroke-linecap="round"/>
+              ${kurve.pkt.map((p) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" fill="var(--surface-fest, #fff)" stroke="var(--blau-600)" stroke-width="2.5"/>`).join("")}
+            </svg>
+            <div class="chart-achse">${z.verlauf.map((v) =>
+              `<span class="caption">${MON[Number(v.monat.slice(5, 7)) - 1]}</span>`).join("")}</div>
+          </div>
+        </div>
+
+        <div class="karte zt-vorn">
+          <div class="karte-kopf"><div><h2>Blick nach vorn</h2>
+            <div class="sub">Was in der offenen Pipeline steckt</div></div></div>
+          <div class="forecast">
+            <div class="forecast-label">${ZT.waage} Forecast</div>
+            <div class="forecast-zahl">${eur(z.forecast)}</div>
+            <div class="forecast-sub">gewichtet nach Phasen-Wahrscheinlichkeit</div>
+          </div>
+          <div class="kennliste">
+            <div class="kennzeile">${ZT.trend}<span>Pipeline offen</span><b>${eur(z.pipeline_wert)}</b></div>
+            <div class="kennzeile">${ZT.schichten}<span>Offene Deals</span><b>${z.offene_deals}</b></div>
+            <div class="kennzeile">${ZT.euro}<span>Ø Deal-Größe</span><b>${z.offene_deals ? eur(z.pipeline_wert / z.offene_deals) : "—"}</b></div>
+            <div class="kennzeile">${ZT.kalenderKlein}<span>Nächste 30 Tage</span><b>${z.erwartet30 ? eur(z.erwartet30) : "—"}</b></div>
+            <div class="kennzeile">${ZT.ziel}<span>Kunden · Leads</span><b>${z.kunden} · ${z.leads}</b></div>
+          </div>
+        </div>
+      </div>`;
+    } catch (e) {
+      console.error("Zentrale-Zahlen:", e.message);
+      geldBlock = `<div class="hinweis warn" style="margin-bottom:16px">${ZT.warnung}<div>
+        Umsatz und Forecast sind gerade nicht abrufbar — die CRM-Datenbank antwortet nicht.</div></div>`;
+    }
+  } else if (datenbank) {
+    geldBlock = `<div class="hinweis info" style="margin-bottom:16px">${ZT.info}<div>
+      <strong>Melde dich persönlich an</strong>, dann stehen hier Umsatz, Entwicklung und Forecast —
+      an deinem Konto hängen die Zeilenrechte in der Datenbank.
+      <a href="/crm/anmelden">Jetzt anmelden →</a></div></div>`;
+  }
+
   res.send(layout("Zentrale", "zentrale-start", `
-    <div class="head-row">
-      <div><p class="muted">${heute}</p></div>
-      <div class="qa">
-        <form method="post" action="/briefing/neu" class="inline"><button>☀️ Briefing erstellen</button></form>
-        <form method="post" action="/skill/mail-triage" class="inline"><button>📬 Mail-Triage starten</button></form>
-        <a class="btn-link" href="/leads">🎯 Lead-Lauf</a>
-        <a class="btn-link" href="/chat">✦ Alexandra fragen</a>
+    <div class="seiten-kopf">
+      <div><p class="sub">${heute}${nutzer ? " · " + esc(nutzer.name.split(" ")[0]) : ""}</p></div>
+      <div class="zt-tasten">
+        <form method="post" action="/briefing/neu"><button class="dunkel">${ICON.sonne} Briefing erstellen</button></form>
+        <form method="post" action="/skill/mail-triage"><button class="sekundaer">${ZT.post} Mail-Triage starten</button></form>
+        <a class="knopf sekundaer" href="/leads">${ICON.leads} Lead-Lauf</a>
+        <a class="knopf sekundaer" href="/chat">${ICON.funke} Alexandra fragen</a>
       </div>
     </div>
-    ${req.query.gestartet ? `<div class="card note"><p>🚀 <strong>${esc(req.query.gestartet)}</strong> läuft — Alexandra arbeitet im Hintergrund. Ergebnis erscheint hier, Seite in ein paar Minuten neu laden.</p></div>` : ""}
-    <div class="tiles">
-      <div class="tile" data-tile="/api/calendar"><span class="tile-num">–</span><span class="tile-label">Termine heute</span></div>
-      <div class="tile" data-tile="/api/mail"><span class="tile-num">–</span><span class="tile-label">Wichtige Mails</span></div>
-      <div class="tile" data-tile="/api/inbox"><span class="tile-num">–</span><span class="tile-label">Brauchen dich</span></div>
-      <div class="tile" data-tile="/api/leads/stats"><span class="tile-num">–</span><span class="tile-label">Leads gesamt</span></div>
-      <div class="tile" data-tile="/api/crm/stats"><span class="tile-num">–</span><span class="tile-label">Offene Deals</span></div>
-    </div>
-    <div class="grid">
-      <div class="card wide" id="card-briefing"><h2>☀️ Tages-Briefing <span class="muted small">von Alexandra</span></h2><div class="card-body" data-load="/api/briefing">Lade…</div></div>
-      <div class="card"><h2>📅 Kalender
-        <span class="cal-nav"><button class="tiny nav" onclick="calShift(-1)">‹</button><span id="cal-label">Heute</span><button class="tiny nav" onclick="calShift(1)">›</button></span></h2>
-        <div class="card-body" id="cal-body">Lade…</div></div>
-      <div class="card"><h2>📬 Mail-Triage <span class="muted small">vier Körbe</span></h2><div class="card-body" data-load="/api/mail">Lade…</div></div>
-      <div class="card"><h2>✅ Was braucht mich?</h2><div class="card-body" data-load="/api/inbox">Lade…</div></div>
-      <div class="card"><h2>🎯 Leads</h2><div class="card-body" data-load="/api/leads/stats">Lade…</div></div>
-      <div class="card"><h2>▣ Kunden &amp; Pipeline <a class="card-link" href="/crm">CRM öffnen →</a></h2>
-        <div class="card-body" data-load="/api/crm/stats">Lade…</div></div>
-      <div class="card"><h2>❖ Wissens-Vault</h2><div class="card-body" data-load="/api/vault/stats">Lade…</div></div>
-      <div class="card"><h2>⬡ System</h2><div class="card-body" data-load="/api/system">Lade…</div></div>
+    ${req.query.gestartet ? `<div class="hinweis info" style="margin-bottom:16px">${ZT.info}<div>
+      <strong>${esc(req.query.gestartet)}</strong> läuft — Alexandra arbeitet im Hintergrund.
+      Das Ergebnis erscheint hier, lad die Seite in ein paar Minuten neu.</div></div>` : ""}
+
+    ${geldBlock}
+
+    <div class="karte" style="margin-bottom:16px"><div class="karte-kopf"><div>
+      <h2>Tages-Briefing</h2><div class="sub">Was Alexandra für heute zusammengestellt hat</div></div>
+      <a href="/chat" class="caption">Alexandra fragen →</a></div>
+      <div data-load="/api/briefing"><p class="caption">Lädt …</p></div></div>
+
+    <div class="zt-raster">
+      <div class="karte"><div class="karte-kopf"><div>
+        <h2>Kalender</h2><div class="sub" id="cal-label">Heute</div></div>
+        <span class="zt-kopf-rechts">
+          <span class="zt-nav">
+            <button type="button" onclick="calShift(-1)" title="Ein Tag zurück">${ZT.links}</button>
+            <button type="button" onclick="calShift(1)" title="Ein Tag vor">${ZT.rechts}</button></span>
+          <a href="/kalender" class="caption">öffnen →</a></span></div>
+        <div id="cal-body"><p class="caption">Lädt …</p></div></div>
+      ${datenbank ? karte("To-Dos", "Was heute ansteht", "/api/todos/stats", "/todos", "öffnen") : ""}
+      ${karte("Mail-Triage", "Vier Körbe, sortiert von Alexandra", "/api/mail", null)}
+      ${karte("Was braucht mich?", "Freigaben und Entscheidungen", "/api/inbox", null)}
+      ${karte("Kunden &amp; CRM", "Wie der Monat ausgeht", "/api/crm/stats", "/crm", "öffnen")}
+      ${datenbank && admin ? karte("Buchhaltung", "Der laufende Monat", "/api/buchhaltung/stats", "/buchhaltung", "öffnen") : ""}
+      ${datenbank ? karte("Content", "Was wir selbst posten", "/api/content/stats", "/content", "öffnen") : ""}
+      ${datenbank ? karte("Marketing", "Eingekaufte Reichweite", "/api/marketing/stats", "/marketing", "öffnen") : ""}
     </div>`, req));
 });
 
@@ -452,73 +681,17 @@ app.get("/api/crm/stats", async (req, res) => {
   }
 });
 
-app.get("/api/calendar", (req, res) => {
-  // Von Alexandra verifizierter Befehl: Zeitraum "heute" nach Europe/Berlin.
-  // Robust gebaut: nichts hier darf den Prozess werfen — jeder Fehler wird als Hinweis gemeldet.
-  try {
-    const pad = (n) => String(n).padStart(2, "0");
-    const fmt = (d) => {
-      // Datum in Europe/Berlin ermitteln (unabhängig von Container-Zeitzone), Offset Juli = +02:00
-      let y, m, day;
-      try {
-        const p = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(d).split("-");
-        [y, m, day] = p;
-      } catch {
-        y = d.getUTCFullYear(); m = pad(d.getUTCMonth() + 1); day = pad(d.getUTCDate());
-      }
-      return `${y}-${m}-${day}T00:00:00+02:00`;
-    };
-    const offset = Math.max(-30, Math.min(60, parseInt(req.query.offset, 10) || 0));
-    const day = new Date(Date.now() + offset * 86400000);
-    const nextDay = new Date(day.getTime() + 86400000);
-    execFile(
-      "gws-cli",
-      ["calendar", "list", "--from", fmt(day), "--to", fmt(nextDay), "--max", "50"],
-      { env: GWS_ENV, timeout: 25000 },
-      (err, stdout, stderr) => {
-        try {
-          if (err) return res.json({ ok: false, hint: "Kalender nicht abrufbar.", detail: String(stderr || err.message || err).slice(0, 400) });
-          const data = safeJson(stdout);
-          // gws-cli verpackt die Termine als JSON-String in einer Sicherheits-Huelle:
-          // { events: { warning: "EXTERNAL CONTENT...", data: "[{...}]", security_warnings: [...] } }
-          let events = null;
-          const huelle = data && data.events;
-          if (huelle && typeof huelle === "object" && typeof huelle.data === "string") {
-            const inner = safeJson(huelle.data);
-            if (Array.isArray(inner)) events = inner;
-          }
-          if (!events) {
-            for (const c of [data, data?.events, data?.items, data?.data]) {
-              if (Array.isArray(c) && !(c[0] && typeof c[0] === "object" && "matched_text" in c[0])) { events = c; break; }
-            }
-          }
-          if (!events) return res.json({ ok: false, hint: "Unbekanntes Kalender-Format — Rohdaten:", detail: String(stdout).slice(0, 350) });
-          // Abgesagte Termine ausblenden
-          events = events.filter((e) => (e.status || "confirmed") !== "cancelled");
-          const mapped = (events || []).map((e) => {
-            const ev = e.event || e; // manche CLIs verschachteln
-            return {
-              titel: ev.summary || ev.title || ev.name || ev.subject || "(ohne Titel)",
-              start: (ev.start && (ev.start.dateTime || ev.start.date)) || ev.startTime || ev.start_time || ev.begin || (typeof ev.start === "string" ? ev.start : "") || ev.when || "",
-              ort: ev.location || "",
-            };
-          });
-          const antwort = { ok: true, datum: fmt(day).slice(0, 10), events: mapped };
-          // Selbst-Diagnose: wenn kein einziger Titel erkannt wurde, Feldnamen mitliefern
-          if (mapped.length && mapped.every((m) => m.titel === "(ohne Titel)")) {
-            antwort.felder = Object.keys(events[0] || {}).join(", ");
-          }
-          res.json(antwort);
-        } catch (e2) {
-          res.json({ ok: false, hint: "Kalender-Antwort nicht lesbar.", detail: String(e2.message).slice(0, 300) });
-        }
-      }
-    );
-  } catch (e) {
-    res.json({ ok: false, hint: "Kalender-Aufruf fehlgeschlagen.", detail: String(e.message).slice(0, 300) });
-  }
-});
+// /api/calendar stand hier — eine zweite, eigene Kalender-Abfrage nur fuer die
+// Karte auf der Zentrale, mit eigenem Umgang mit ganztaegigen Terminen und
+// eigener Auspack-Logik fuer die Sicherheitshuelle von gws-cli. Seit es
+// lib/kalender.js gibt (der Kalender unter /kalender), sind das zwei Anzeigen
+// desselben Google-Kalenders, die auseinanderlaufen koennen — und genau das
+// sollte nicht sein. Die Karte holt ihren Tag jetzt bei /api/kalender/tag,
+// derselben Leseroutine, aus der auch die Kalenderseite gebaut wird.
 
+// Wissens-Vault und System haengen seit dem 27.07. nicht mehr auf der Zentrale
+// (Betriebsdaten, keine Tagesuebersicht). Die Endpunkte bleiben — sie sind das
+// einzige, was von aussen sagen kann, ob Vault und Alexandra erreichbar sind.
 app.get("/api/vault/stats", (req, res) => {
   try {
     const files = walkVault(VAULT_PATH);
@@ -974,7 +1147,6 @@ for (const [id, [title, desc]] of Object.entries(PLACEHOLDERS)) {
 
 // ---------- Helpers ----------
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
-function safeJson(s) { try { return JSON.parse(s); } catch { return String(s).slice(0, 2000); } }
 
 function walkVault(dir, base = "") {
   const out = [];
@@ -1022,9 +1194,24 @@ function layout(title, active, content, req) {
       try {
         const r = await fetch(el.dataset.load); const d = await r.json();
         el.innerHTML = renderCard(el.dataset.load, d);
-      } catch (e) { el.innerHTML = "<p class='error'>Fehler beim Laden.</p>"; }
+      } catch (e) { el.innerHTML = "<p class='caption'>Nicht erreichbar.</p>"; }
     });
-    // Kalender mit Tages-Navigation
+    // Termintitel kommen aus einem fremden Kalender — da steht irgendwann alles
+    // drin. Nichts davon geht ungefiltert in innerHTML.
+    function hesc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+
+    // Das Zeichen fuer den freien Tag kommt ueber JSON.stringify herein, nicht
+    // roh: ein SVG enthaelt doppelte Anfuehrungszeichen (viewBox="0 0 24 24"),
+    // und direkt in einen JS-String interpoliert schliesst das erste davon den
+    // String — der Rest der Seite waere dann ein Syntaxfehler.
+    const IKON_FREI = ${JSON.stringify(ZT.frei)};
+
+    // Kalender mit Tages-Navigation.
+    //
+    // Quelle ist /api/kalender/tag aus lib/kalender-routes.js — dieselbe
+    // Leseroutine wie die Kalenderseite unter /kalender. Diese Karte ist die
+    // Kurzfassung dieses Kalenders, kein zweiter mit eigener Abfrage.
     let calOffset = 0;
     const TAGE = ["So","Mo","Di","Mi","Do","Fr","Sa"];
     async function loadCal() {
@@ -1032,73 +1219,156 @@ function layout(title, active, content, req) {
       const label = document.getElementById("cal-label");
       const d = new Date(Date.now() + calOffset * 86400000);
       label.textContent = calOffset === 0 ? "Heute" : calOffset === 1 ? "Morgen" : calOffset === 2 ? "Übermorgen" : calOffset === -1 ? "Gestern" : TAGE[d.getDay()] + ", " + d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
-      body.innerHTML = "Lade…";
+      body.innerHTML = "<p class='caption'>Lädt …</p>";
       try {
-        const r = await fetch("/api/calendar?offset=" + calOffset); const dd = await r.json();
-        if (!dd.ok) { body.innerHTML = "<p class='muted'>" + (dd.hint || "Nicht verfügbar.") + "</p>" + (dd.detail ? "<pre class='small'>" + String(dd.detail).replace(/[<>&]/g, "") + "</pre>" : ""); return; }
-        if (!dd.events.length) {
+        const r = await fetch("/api/kalender/tag?versatz=" + calOffset); const dd = await r.json();
+        if (!dd.ok) { body.innerHTML = "<p class='caption'>" + hesc(dd.hint || "Nicht verfügbar.") + "</p>"; return; }
+        if (!dd.termine.length) {
           const tag = d.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
-          body.innerHTML = "<div class='cal-frei'><span class='cal-frei-icon'>🌤️</span><p><strong>" + tag + "</strong></p><p class='muted'>Keine Termine — freier Tag.</p></div>";
+          body.innerHTML = "<div class='zt-frei'>" + IKON_FREI + "<div><strong>" + tag + "</strong>" +
+            "<p class='caption'>Keine Termine — freier Tag.</p></div></div>";
           return;
         }
-        body.innerHTML = dd.events.map(function (e) {
-          var t = e.start && String(e.start).includes("T") ? new Date(e.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "ganztägig";
-          return "<div class='row'><span><strong>" + t + "</strong> " + e.titel + "</span>" + (e.ort ? "<span class='muted small'>" + e.ort + "</span>" : "") + "</div>";
-        }).join("") + (dd.felder ? "<p class='muted small'>⚠️ Felder: " + dd.felder + "</p>" : "");
-      } catch { body.innerHTML = "<p class='error'>Fehler beim Laden.</p>"; }
+        body.innerHTML = dd.termine.map(function (t) {
+          return "<div class='zt-termin'>" +
+            "<span class='zt-termin-zeit" + (t.uhrzeit ? "" : " ganz") + "'>" + (t.uhrzeit || "ganztägig") + "</span>" +
+            "<span>" + hesc(t.titel) +
+              (t.ort ? "<span class='zt-termin-ort'>" + hesc(t.ort) + "</span>" : "") + "</span></div>";
+        }).join("");
+      } catch { body.innerHTML = "<p class='caption'>Nicht erreichbar.</p>"; }
     }
     function calShift(n) { calOffset += n; loadCal(); }
     loadCal();
-    document.querySelectorAll("[data-tile]").forEach(async (el) => {
-      try {
-        const r = await fetch(el.dataset.tile); const d = await r.json();
-        el.querySelector(".tile-num").textContent = tileNum(el.dataset.tile, d);
-      } catch { el.querySelector(".tile-num").textContent = "?"; }
-    });
-    function tileNum(src, d) {
-      if (!d.ok) return "–";
-      if (src.includes("calendar")) return (d.events || []).length;
-      if (src.includes("mail")) { if (d.leer) return "–"; var k = d.koerbe || {}; return ((k.dringend || []).length + (k.wichtig || []).length); }
-      if (src.includes("inbox")) return d.gesamt ?? 0;
-      if (src.includes("crm")) return d.offene_deals ?? 0;
-      if (src.includes("leads")) return d.gesamt ?? 0;
-      return "–";
+    // Die Kachelreihe ueber den Karten gab es hier — sie holte dieselben fuenf
+    // Zahlen ein zweites Mal, nur um sie ohne Zusammenhang gross anzuzeigen.
+    // Seit dem 27.07. traegt jede Karte ihre Zahl selbst.
+    //
+    // Die Karten der Zentrale sprechen das Vokabular des Designsystems aus
+    // crm.css: .zt-zeile fuer "Beschriftung links, Zahl rechts", .caption fuer
+    // den Fuss, .badge fuer Zustaende. Die agent/*-Zweige weiter unten gehoeren
+    // zur Agenten-Seite, die noch im alten .card/.row-Stil steht — die bleiben
+    // darum unveraendert, sonst haette die Seite halb neue, halb alte Zeilen.
+    // klasse: "gross" hebt die Zahl hervor (die eine Zahl, um die es in der
+    // Karte geht), "warnt" faerbt die ganze Zeile rot.
+    function zeile(label, wert, klasse) {
+      var gross = klasse === "gross";
+      return "<div class='zt-zeile" + (klasse && !gross ? " " + klasse : "") + "'><span>" + label +
+             "</span><span class='zt-wert" + (gross ? " gross" : "") + "'>" + wert + "</span></div>";
+    }
+    function liste() {
+      var teile = [].slice.call(arguments).filter(Boolean);
+      return "<div class='zt-liste'>" + teile.join("") + "</div>";
     }
     function renderCard(src, d) {
-      if (!d.ok && d.anmeldung) return "<p class='muted'>" + d.hint + "</p><p><a class='btn-link' href='/login'>Persönlich anmelden</a></p>";
-      if (!d.ok) return "<p class='muted'>" + (d.hint || "Noch nicht verbunden.") + "</p>" + (d.detail ? "<pre class='small'>" + String(d.detail).replace(/[<>&]/g, "") + "</pre>" : "");
+      // Ziel ist /crm/anmelden, nicht /login: gemeint ist das PERSOENLICHE
+      // Konto (daran haengen die Zeilenrechte in der Datenbank), nicht das
+      // gemeinsame Passwort — mit dem ist man an dieser Stelle ja schon da.
+      if (!d.ok && d.anmeldung) return "<p class='caption'>" + d.hint + "</p>" +
+        "<p style='margin-top:11px'><a class='knopf sekundaer klein' href='/crm/anmelden'>Persönlich anmelden</a></p>";
+      if (!d.ok) return "<p class='caption'>" + (d.hint || "Noch nicht verbunden.") + "</p>" + (d.detail ? "<pre class='small'>" + String(d.detail).replace(/[<>&]/g, "") + "</pre>" : "");
+      var eur = function (n) { return (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: 0 }) + " €"; };
+      var zahl = function (n) { return (Number(n) || 0).toLocaleString("de-DE"); };
+      if (src.includes("buchhaltung")) {
+        return liste(
+          zeile("Einnahmen diesen Monat", eur(d.einnahmen_monat), "gross"),
+          zeile("Ausgaben diesen Monat", eur(d.ausgaben_monat)),
+          zeile("Ergebnis", (d.ergebnis_monat < 0 ? "−" : "") + eur(Math.abs(d.ergebnis_monat)),
+                d.ergebnis_monat < 0 ? "warnt" : ""),
+          d.offen_anzahl ? zeile("Offene Rechnungen", d.offen_anzahl + " · " + eur(d.offen_summe)) : "",
+          d.ueberfaellig ? zeile("Überfällig", d.ueberfaellig, "warnt") : "",
+          d.belege_offen ? zeile("Belege ohne Buchung", d.belege_offen) : ""
+        ) + "<p class='caption zt-fuss'>Einnahmen zählen erst, wenn sie bezahlt sind.</p>";
+      }
+      if (src.includes("content")) {
+        return liste(
+          zeile("Diese Woche veröffentlicht",
+                d.woche + (d.ziel_woche ? " <span class='zt-ziel'>von " + d.ziel_woche + "</span>" : ""), "gross"),
+          zeile("Diesen Monat", d.monat),
+          zeile("In Produktion", d.produktion),
+          zeile("Geplant", d.geplant),
+          d.faellig ? zeile("Muss jetzt raus", d.faellig, "warnt") : ""
+        ) + (d.ziel_woche ? "" : "<p class='caption zt-fuss'>Noch keine Wochenziele festgelegt.</p>");
+      }
+      if (src.includes("marketing")) {
+        return liste(
+          zeile("Laufende Kampagnen", d.laufend, "gross"),
+          d.geplant ? zeile("Geplant", d.geplant) : "",
+          zeile("Ausgaben diesen Monat", eur(d.ausgaben_monat)),
+          zeile("Leads daraus", d.leads_monat),
+          zeile("Kosten je Lead", d.kosten_lead === null
+            ? "<span class='zt-ziel'>noch keine Leads</span>" : eur(d.kosten_lead))
+        ) + (d.klicks_monat ? "<p class='caption zt-fuss'>" + zahl(d.klicks_monat) + " Klicks diesen Monat</p>" : "");
+      }
       if (src.includes("crm")) {
-        var eur = function (n) { return (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: 0 }) + " €"; };
-        return "<div class='row'><span>Offene Deals</span><span><strong>" + d.offene_deals + "</strong></span></div>" +
-               "<div class='row'><span>Pipeline-Wert</span><span><strong>" + eur(d.pipeline_wert) + "</strong></span></div>" +
-               "<div class='row'><span>Umsatz diesen Monat</span><span>" + eur(d.umsatz_monat) + "</span></div>" +
-               "<div class='row'><span>Leads · Kunden</span><span>" + d.leads + " · " + d.kunden + "</span></div>" +
-               (d.wiedervorlagen ? "<div class='row'><span>⏰ Fällige Wiedervorlagen</span><span><strong>" + d.wiedervorlagen + "</strong></span></div>" : "") +
-               "<p class='muted small'>Angemeldet als " + d.name + "</p>";
+        // Offene Deals, Pipeline-Wert, Umsatz und Kunden·Leads standen hier bis
+        // zum 28.07. — alle vier stehen inzwischen weiter oben im Umsatz-Kasten
+        // und unter "Blick nach vorn". Dieselbe Zahl zweimal auf einer Seite
+        // ist genau das, was die fuenf Kacheln erledigt hat.
+        //
+        // Uebrig bleibt, was es sonst nirgends gibt: wie der Monat ausgeht
+        // (gewonnen gegen verloren) und wer auf einen Rueckruf wartet.
+        return liste(
+          zeile("Gewonnen diesen Monat", d.gewonnen_monat, "gross"),
+          zeile("Verloren diesen Monat", d.verloren_monat +
+            (d.verloren_wert_monat ? " <span class='zt-ziel'>· " + eur(d.verloren_wert_monat) + "</span>" : "")),
+          d.wiedervorlagen ? zeile("Fällige Wiedervorlagen", d.wiedervorlagen, "warnt")
+            : zeile("Fällige Wiedervorlagen", "keine"),
+          d.offene_aufgaben ? zeile("Offene Aufgaben", d.offene_aufgaben) : ""
+        ) + "<p class='caption zt-fuss'>Angemeldet als " + d.name + "</p>";
       }
       if (src.includes("briefing")) {
-        if (d.leer) return "<p class='muted'>Noch kein Briefing heute. Klick oben auf <strong>☀️ Briefing erstellen</strong> — Alexandra stellt Termine, Mails und Prioritäten zusammen (dauert 1–3 Min).</p>";
-        return "<div class='md'>" + d.html + "</div><p class='muted small'>Stand: " + d.stand + (d.alterMin > 240 ? " ⚠️ schon " + Math.round(d.alterMin/60) + " Std alt" : "") + "</p>";
+        if (d.leer) return "<p class='caption'>Noch kein Briefing für heute. Oben auf <strong>Briefing erstellen</strong> — " +
+          "Alexandra stellt Termine, Mails und Prioritäten zusammen (dauert 1–3 Minuten).</p>";
+        return "<div class='md'>" + d.html + "</div>" +
+          "<p class='caption zt-fuss'>Stand: " + d.stand +
+          (d.alterMin > 240 ? " <span class='badge b-bernstein'>" + Math.round(d.alterMin / 60) + " Std alt</span>" : "") + "</p>";
       }
       if (src.includes("mail")) {
-        if (d.leer) return "<p class='muted'>Noch keine Triage heute. Klick oben auf <strong>📬 Mail-Triage starten</strong>.</p>";
+        if (d.leer) return "<p class='caption'>Noch keine Triage für heute. Oben auf <strong>Mail-Triage starten</strong>.</p>";
         var k = d.koerbe || {};
-        var out = "";
-        if ((k.dringend || []).length) out += "<p><strong>🔴 Wichtig & dringend (" + k.dringend.length + ")</strong></p>" + k.dringend.map(m => "<div class='row'><span>" + m.von + " — " + m.betreff + "</span></div>").join("");
-        if ((k.wichtig || []).length) out += "<p><strong>🟡 Wichtig (" + k.wichtig.length + ")</strong></p>" + k.wichtig.slice(0,5).map(m => "<div class='row'><span>" + m.von + " — " + m.betreff + "</span></div>").join("");
-        out += "<p class='muted small'>Kann warten: " + (k.warten ?? "–") + " · Werbung: " + (k.werbung ?? "–") + " · Stand: " + (d.stand || "") + "</p>";
-        return out || "<p class='muted'>Postfach leer. 🎉</p>";
+        var korb = function (titel, ton, liste2) {
+          if (!liste2.length) return "";
+          return "<div class='zt-zeile'><span><strong>" + titel + "</strong></span>" +
+                 "<span class='badge " + ton + "'>" + liste2.length + "</span></div>" +
+                 liste2.slice(0, 5).map(function (m) {
+                   return "<div class='zt-zeile'><span>" + m.von + " — " + m.betreff + "</span></div>"; }).join("");
+        };
+        var out = korb("Wichtig &amp; dringend", "b-rot", k.dringend || []) +
+                  korb("Wichtig", "b-bernstein", k.wichtig || []);
+        if (!out) return "<p class='caption'>Postfach leer — nichts, was dich braucht.</p>";
+        return "<div class='zt-liste'>" + out + "</div>" +
+          "<p class='caption zt-fuss'>Kann warten: " + (k.warten ?? "–") + " · Werbung: " + (k.werbung ?? "–") +
+          (d.stand ? " · Stand: " + d.stand : "") + "</p>";
       }
       if (src.includes("inbox")) {
-        if (!d.punkte || !d.punkte.length) return "<p class='muted'>Nichts offen — alles entschieden. ✅</p>";
-        return d.punkte.map(p => "<div class='row'><span>" + (p.titel || p.text || JSON.stringify(p)) + "</span><span class='muted small'>" + (p.von || "") + "</span></div>").join("");
+        if (!d.punkte || !d.punkte.length) return "<p class='caption'>Nichts offen — alles entschieden.</p>";
+        return "<div class='zt-liste'>" + d.punkte.map(function (p) {
+          return "<div class='zt-zeile'><span>" + (p.titel || p.text || JSON.stringify(p)) + "</span>" +
+                 (p.von ? "<span class='caption'>" + p.von + "</span>" : "") + "</div>"; }).join("") + "</div>" +
+          (d.gesamt > d.punkte.length ? "<p class='caption zt-fuss'>" + (d.gesamt - d.punkte.length) + " weitere</p>" : "");
       }
-      if (src.includes("leads/stats")) {
-        return "<div class='row'><span>Läufe</span><span>" + d.laeufe + "</span></div>" +
-               "<div class='row'><span>Leads gesamt</span><span><strong>" + d.gesamt + "</strong></span></div>" +
-               "<div class='row'><span>Top-Leads (Score ≥ 9)</span><span>" + d.top + "</span></div>" +
-               "<div class='row'><span>Manuell erfasst</span><span>" + d.manuell + "</span></div>" +
-               (d.letzter ? "<p class='muted small'>Letzter Lauf: " + d.letzter + "</p>" : "");
+      // Die Leads-Karte stand hier bis zum 27.07. Sie ist von der Zentrale
+      // runter — die Lead-Maschine ist die Fundgrube VOR dem CRM, und auf der
+      // Startseite hat sie zwischen Umsatz und Tagesgeschaeft nichts zu suchen.
+      // Die Seite /leads und /api/leads/stats gibt es unveraendert weiter.
+      if (src.includes("todos")) {
+        var kopf = liste(
+          zeile("Heute", d.heute, "gross"),
+          d.ueberfaellig ? zeile("Überfällig", d.ueberfaellig, "warnt") : "",
+          zeile("Offen insgesamt", d.offen),
+          d.ohne_plan ? zeile("Ohne Tag", d.ohne_plan) : ""
+        );
+        if (!d.naechste.length) {
+          return kopf + "<p class='caption zt-fuss'>" +
+            (d.offen ? "Für heute ist nichts eingeplant." : "Nichts offen — alles erledigt.") + "</p>";
+        }
+        return kopf + "<div class='zt-liste zt-fuss'>" + d.naechste.map(function (t) {
+          return "<div class='zt-zeile" + (t.spaet ? " warnt" : "") + "'><span>" + t.titel +
+            (t.firma ? " <span class='caption'>· " + t.firma + "</span>" : "") + "</span>" +
+            (t.faellig ? "<span class='caption'>" + (t.spaet ? "seit " : "bis ") + t.faellig + "</span>" : "") +
+            "</div>";
+        }).join("") + "</div>" +
+        (d.heute_erledigt ? "<p class='caption zt-fuss'>" + d.heute_erledigt + " heute schon erledigt</p>" : "");
       }
       if (src.includes("agent/status")) {
         return "<div class='row'><span>Erreichbar</span><span>" + (d.online ? "🟢 online" : "⚪ offline") + "</span></div>" +
@@ -1119,15 +1389,6 @@ function layout(title, active, content, req) {
       if (src.includes("agent/entscheidungen")) {
         if (!d.eintraege || !d.eintraege.length) return "<p class='muted'>Noch keine Einträge.</p>";
         return d.eintraege.map(e => "<div class='row'><span><a href='/wissen?f=" + encodeURIComponent("entscheidungen/" + e.datei) + "'>" + e.titel + "</a></span></div>").join("");
-      }
-      if (src.includes("vault")) return "<p><strong>" + d.mdCount + "</strong> Wissens-Dateien</p><p class='muted small'>Zuletzt geändert:</p>" + d.newest.slice(0,4).map(n => "<div class='row'><span>" + n.file + "</span><span class='muted small'>" + n.changed + "</span></div>").join("");
-      if (src.includes("system")) return "<div class='row'><span>App</span><span>" + d.app + "</span></div><div class='row'><span>Läuft seit</span><span>" + d.uptimeMin + " Min</span></div><div class='row'><span>Vault</span><span>" + (d.vaultMounted ? "✅ verbunden" : "❌ fehlt") + "</span></div><div class='row'><span>Alexandra</span><span>" + (d.hermes ? "🟢 online" : "⚪ nicht erreichbar") + "</span></div>";
-      if (src.includes("calendar")) {
-        if (!d.events || !d.events.length) return "<p class='muted'>Heute keine Termine. 🎉</p>";
-        return d.events.map(function (e) {
-          var t = e.start && e.start.includes("T") ? new Date(e.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "ganztägig";
-          return "<div class='row'><span><strong>" + t + "</strong> " + e.titel + "</span>" + (e.ort ? "<span class='muted small'>" + e.ort + "</span>" : "") + "</div>";
-        }).join("");
       }
       return "<pre>" + JSON.stringify(d, null, 2) + "</pre>";
     }
