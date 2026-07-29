@@ -74,8 +74,19 @@ const DATA_PATH = process.env.DATA_PATH || path.join(__dirname, "data");
 
 if (!fs.existsSync(DATA_PATH)) fs.mkdirSync(DATA_PATH, { recursive: true });
 
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+// 5 MB statt der 100 KB, die Express von Haus aus erlaubt.
+//
+// Anlass (29.07.): Eine eingefuegte Lead-Liste mit Bewertungstexten und
+// Maps-Links sprengte die Grenze. Express warf PayloadTooLargeError, der
+// Standard-Fehlerbehandler antwortete mit einer HTML-Seite, und im Browser
+// stand "Unexpected token '<'" — eine Meldung, aus der niemand ableiten kann,
+// dass die Liste schlicht zu gross war.
+//
+// 5 MB sind grosszuegig fuer Formulare (das sind rund 20.000 Lead-Zeilen) und
+// weit unter dem, was den Server belasten wuerde. Dateien laufen ohnehin nicht
+// hierueber, sondern roh ueber eigene Routen.
+app.use(express.urlencoded({ extended: true, limit: "5mb" }));
+app.use(express.json({ limit: "5mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 // Sitzungen auf Platte (ueberleben Container-Neustarts) statt im Arbeitsspeicher
 const FileStore = require("session-file-store")(session);
@@ -1541,6 +1552,32 @@ function layout(title, active, content, req) {
     }
   </script></body></html>`;
 }
+
+// Fehlerbehandlung. Steht ganz unten, nach allen Routen — nur dann sieht sie
+// deren Fehler.
+//
+// Der Anlass (29.07.): Eine zu grosse Lead-Liste liess Express einen Fehler
+// werfen, und der Standard-Behandler antwortete mit einer HTML-Seite. Das
+// Seitenskript erwartete JSON und meldete "Unexpected token '<'" — technisch
+// richtig und fuer den Menschen davor vollkommen wertlos. Wer per fetch fragt,
+// bekommt jetzt eine Antwort in der Sprache, in der er gefragt hat.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const zuGross = err.type === "entity.too.large" || err.status === 413;
+  const status = zuGross ? 413 : (err.status || 500);
+  if (!zuGross) console.error("Serverfehler:", req.method, req.path, "—", err.message);
+  const text = zuGross
+    ? "Die Liste ist zu groß für eine Übertragung. Teil sie in zwei Hälften und füg sie nacheinander ein."
+    : "Da ist auf dem Server etwas schiefgegangen.";
+  if (req.path.startsWith("/api/") || (req.get("accept") || "").includes("json")
+      || req.get("x-requested-with") || req.method === "POST") {
+    return res.status(status).json({ ok: false, fehler: text });
+  }
+  res.status(status).send(layout("Fehler", "zentrale", `
+    <div class="seiten-kopf"><div><h1>Fehler</h1></div></div>
+    <div class="karte leer"><h3>${esc(text)}</h3>
+      <a class="knopf dunkel" href="/">Zur Zentrale</a></div>`, req));
+});
 
 app.listen(PORT, () => {
   console.log(`flowstate-dashboard läuft auf Port ${PORT}`);
