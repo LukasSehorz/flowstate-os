@@ -90,6 +90,57 @@ app.use(
   })
 );
 
+// ---------- Torwaechter: welche Bereiche darf diese Person oeffnen? ----------
+//
+// Die Zeilenrechte in der Datenbank regeln, WELCHE Datensaetze jemand sieht.
+// Hier geht es um die Ebene darueber: welche BEREICHE es fuer ihn ueberhaupt
+// gibt. Ohne das kaeme Simon mit einer getippten Adresse auf /marketing oder
+// /leads — die Rail haette den Punkt zwar ausgeblendet, die Route aber nicht.
+// Ausblenden ist keine Sperre.
+//
+// Steht bewusst GANZ OBEN, vor allen Modulen: die Bereiche werden in
+// unterschiedlicher Reihenfolge geladen (CRM vor dem Auth-Gate, Kalender
+// danach), und ein Waechter, der erst in der Mitte greift, laesst die Haelfte
+// durch. Hier sieht er jede Anfrage.
+//
+// Wer KEIN persoenliches Konto hat (nur gemeinsames Passwort), laeuft
+// unveraendert durch — dafuer sorgt das Auth-Gate weiter unten und die
+// Bereiche selbst.
+const BEREICH_JE_PFAD = {
+  "": "zentrale", umsatz: "zentrale",
+  kalender: "kalender", todos: "todos",
+  crm: "crm", leads: "leads",
+  buchhaltung: "buchhaltung", angebote: "angebote",
+  marketing: "marketing", content: "content", projekte: "projekte",
+  chat: "chat", sprache: "sprache", whatsapp: "chat",
+  wissen: "wissen", agenten: "agenten", einstellungen: "einstellungen",
+};
+// Immer offen: Anmeldung, Abmeldung und was der Browser fuer die Seite braucht.
+const IMMER_OFFEN = new Set(["login", "logout", "bilder", "favicon.ico"]);
+
+app.use((req, res, next) => {
+  const u = req.session && req.session.crm;
+  if (!u || u.rolle === "admin") return next();
+
+  // Erster Pfadabschnitt entscheidet. /api/<bereich>/… wird auf denselben
+  // Bereich abgebildet — sonst waeren die Kacheln der Zentrale ein offenes
+  // Fenster in gesperrte Bereiche.
+  const teile = req.path.split("/").filter(Boolean);
+  const erst = teile[0] || "";
+  if (IMMER_OFFEN.has(erst)) return next();
+  const schluessel = erst === "api" ? (teile[1] || "") : erst;
+  const bereich = BEREICH_JE_PFAD[schluessel];
+  // Unbekannter Pfad (Dateien, neue Routen): durchlassen. Ein Waechter, der
+  // alles Unbekannte sperrt, legt beim naechsten neuen Bereich die Seite lahm.
+  if (!bereich) return next();
+  if (require("./lib/schale.js").darfModul(u, bereich)) return next();
+
+  if (req.path.startsWith("/api/")) {
+    return res.status(403).json({ ok: false, hint: "Für diesen Bereich fehlt dir die Freigabe." });
+  }
+  return res.redirect("/");
+});
+
 // ---------- CRM (eigener Login mit persoenlichen Konten, RLS in der Datenbank) ----------
 if (process.env.DATABASE_URL) {
   try { require("./lib/crm-routes.js")(app); console.log("CRM-Modul geladen"); }
@@ -414,6 +465,10 @@ app.get("/", async (req, res) => {
   // Lukas je nach Anmeldeweg mal da und mal weg.
   const nutzer = (req.session && req.session.crm) || null;
   const admin = !nutzer || nutzer.rolle === "admin";
+  // Dieselbe Regel wie in der Rail und im Torwaechter: eine Karte auf der
+  // Zentrale ist eine Tuer, und eine Tuer, die nicht aufgeht, gehoert nicht in
+  // die Wand. Ohne persoenliches Konto bleibt alles wie bisher.
+  const darf = (id) => require("./lib/schale.js").darfModul(nutzer, id);
   // Buchhaltung, Content und Marketing haengen an der Datenbank — ohne
   // DATABASE_URL laedt server.js ihre Routen oben gar nicht erst. Dann duerfen
   // hier auch keine Karten stehen, die auf eine 404 zeigen und rot "Fehler beim
@@ -468,7 +523,10 @@ app.get("/", async (req, res) => {
              rechts nicht das Monatsziel, sondern der Umsatz INSGESAMT — auf der
              Startseite ist "was haben wir bisher gemacht" die zweite Frage nach
              "was haben wir diesen Monat gemacht". -->
-        <div class="karte zt-umsatz">
+        <!-- Der ganze Kasten führt zur Aufschlüsselung. Eine Summe ohne den
+             Weg zu ihren Bestandteilen ist eine Behauptung — hier ist sie
+             nachprüfbar: ein Klick, und darunter stehen die Kunden. -->
+        <a class="karte zt-umsatz" href="/umsatz" title="Alle Abschlüsse nach Monat ansehen">
           <div class="zt-umsatz-haupt">
             <span class="kachel-label">Umsatz ${esc(monatName)}</span>
             <div class="zt-umsatz-zahl">${eur(z.umsatz.monat)}</div>
@@ -490,7 +548,7 @@ app.get("/", async (req, res) => {
               <span class="kachel-mini-ziel">${z.umsatz.anzahl_gesamt} Abschlüsse · Ø ${eur(schnitt)}/Monat</span>
             </div>
           </div>
-        </div>
+        </a>
 
         <div class="karte zt-kurve">
           <div class="karte-kopf"><div><h2>Umsatzentwicklung</h2>
@@ -551,11 +609,16 @@ app.get("/", async (req, res) => {
   res.send(layout("Zentrale", "zentrale-start", `
     <div class="seiten-kopf">
       <div><p class="sub">${heute}${nutzer ? " · " + esc(nutzer.name.split(" ")[0]) : ""}</p></div>
+      <!-- Die Knöpfe starten eure eigenen Abläufe: Briefing, Mail-Triage,
+           Lead-Lauf, Alexandra. Nichts davon gehört auf die Zentrale von
+           jemandem, der diese Bereiche gar nicht hat — ein Knopf, der ins
+           Leere führt, ist schlimmer als kein Knopf. -->
       <div class="zt-tasten">
+        ${admin ? `
         <form method="post" action="/briefing/neu"><button class="dunkel">${ICON.sonne} Briefing erstellen</button></form>
-        <form method="post" action="/skill/mail-triage"><button class="sekundaer">${ZT.post} Mail-Triage starten</button></form>
-        <a class="knopf sekundaer" href="/leads">${ICON.leads} Lead-Lauf</a>
-        <a class="knopf sekundaer" href="/chat">${ICON.funke} Alexandra fragen</a>
+        <form method="post" action="/skill/mail-triage"><button class="sekundaer">${ZT.post} Mail-Triage starten</button></form>` : ""}
+        ${darf("leads") ? `<a class="knopf sekundaer" href="/leads">${ICON.leads} Lead-Lauf</a>` : ""}
+        ${darf("chat") ? `<a class="knopf sekundaer" href="/chat">${ICON.funke} Alexandra fragen</a>` : ""}
       </div>
     </div>
     ${req.query.gestartet ? `<div class="hinweis info" style="margin-bottom:16px">${ZT.info}<div>
@@ -578,14 +641,98 @@ app.get("/", async (req, res) => {
             <button type="button" onclick="calShift(1)" title="Ein Tag vor">${ZT.rechts}</button></span>
           <a href="/kalender" class="caption">öffnen →</a></span></div>
         <div id="cal-body"><p class="caption">Lädt …</p></div></div>
-      ${datenbank ? karte("To-Dos", "Was heute ansteht", "/api/todos/stats", "/todos", "öffnen") : ""}
-      ${karte("Mail-Triage", "Vier Körbe, sortiert von Alexandra", "/api/mail", null)}
-      ${karte("Was braucht mich?", "Freigaben und Entscheidungen", "/api/inbox", null)}
-      ${karte("Kunden &amp; CRM", "Wie der Monat ausgeht", "/api/crm/stats", "/crm", "öffnen")}
+      ${datenbank && darf("todos") ? karte("To-Dos", "Was heute ansteht", "/api/todos/stats", "/todos", "öffnen") : ""}
+      ${admin ? karte("Mail-Triage", "Vier Körbe, sortiert von Alexandra", "/api/mail", null) : ""}
+      ${admin ? karte("Was braucht mich?", "Freigaben und Entscheidungen", "/api/inbox", null) : ""}
+      ${darf("crm") ? karte("Kunden &amp; CRM", "Wie der Monat ausgeht", "/api/crm/stats", "/crm", "öffnen") : ""}
       ${datenbank && admin ? karte("Buchhaltung", "Der laufende Monat", "/api/buchhaltung/stats", "/buchhaltung", "öffnen") : ""}
-      ${datenbank ? karte("Content", "Was wir selbst posten", "/api/content/stats", "/content", "öffnen") : ""}
-      ${datenbank ? karte("Marketing", "Eingekaufte Reichweite", "/api/marketing/stats", "/marketing", "öffnen") : ""}
+      ${datenbank && darf("content") ? karte("Content", "Was wir selbst posten", "/api/content/stats", "/content", "öffnen") : ""}
+      ${datenbank && darf("marketing") ? karte("Marketing", "Eingekaufte Reichweite", "/api/marketing/stats", "/marketing", "öffnen") : ""}
     </div>`, req));
+});
+
+// --- Umsatz aufgeschluesselt: was hinter der Zahl auf der Zentrale steckt ---
+//
+// Eine Summe allein laesst sich nicht pruefen. Hier steht jeder Monat mit den
+// Kunden, die ihn ausmachen — neuester Monat oben —, und jede Zeile fuehrt in
+// die Kundenakte. Damit sieht man beim Hinsehen, ob ein Kunde fehlt oder einer
+// zu viel drin ist.
+app.get("/umsatz", async (req, res) => {
+  const nutzer = (req.session && req.session.crm) || null;
+  // datenbank ist in der Zentrale-Route lokal — hier neu bilden statt darauf
+  // zu hoffen, dass es global existiert.
+  if (!process.env.DATABASE_URL || !nutzer) {
+    return res.send(layout("Umsatz", "zentrale", `
+      <div class="seiten-kopf"><div><h1>Umsatz</h1>
+        <p>Alle Abschlüsse, nach Monat</p></div></div>
+      <div class="karte leer"><h3>Anmeldung nötig</h3>
+        <p>Melde dich persönlich am CRM an, dann steht der Umsatz hier.</p>
+        <a class="knopf dunkel" href="/crm">Zum CRM</a></div>`, req));
+  }
+  try {
+    const crm = require("./lib/crm.js");
+    const d = await crm.umsatzNachMonat(nutzer);
+    const SPARTE_NAME = { webdesign: "Webdesign", performance: "Performance Marketing", ki: "KI" };
+    const heuteSchluessel = (() => { const n = new Date();
+      return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`; })();
+
+    const monatsBlock = d.monate.map((m) => {
+      const offen = m.summe - m.eingegangen;
+      return `<div class="karte um-monat${m.schluessel === heuteSchluessel ? " jetzt" : ""}">
+        <div class="um-kopf">
+          <div class="um-kopf-titel">
+            <h2>Umsatz ${esc(m.titel)}</h2>
+            <span class="caption">${m.deals.length} ${m.deals.length === 1 ? "Abschluss" : "Abschlüsse"}
+              · ${eur(m.eingegangen)} eingegangen${offen > 0.01 ? ` · ${eur(offen)} offen` : ""}</span>
+          </div>
+          <div class="um-kopf-zahl">${eur(m.summe)}</div>
+        </div>
+        <div class="um-liste">
+          ${m.deals.map((x) => {
+            const rest = x.wert - x.eingegangen;
+            const stand = rest <= 0.01
+              ? { text: "bezahlt", klasse: "b-gruen" }
+              : x.eingegangen > 0.01
+                ? { text: eur(rest) + " offen", klasse: "b-bernstein" }
+                : { text: "nichts eingegangen", klasse: "b-rot" };
+            return `<a class="um-zeile" href="/crm/firma/${x.firma_id}">
+              <span class="um-tag">${x.geschlossen_am
+                ? new Date(x.geschlossen_am).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })
+                : "—"}</span>
+              <span class="um-name">${esc(x.firma)}
+                <i>${esc(SPARTE_NAME[x.sparte] || x.sparte || "—")}${x.ort ? " · " + esc(x.ort) : ""}${
+                  x.status === "verloren" ? " · verloren" : ""}</i></span>
+              <span class="badge ${stand.klasse} um-stand">${esc(stand.text)}</span>
+              <span class="um-wert">${eur(x.wert)}</span>
+            </a>`;
+          }).join("")}
+        </div>
+      </div>`;
+    }).join("");
+
+    res.send(layout("Umsatz", "zentrale", `
+      <div class="seiten-kopf">
+        <div><h1>Umsatz</h1>
+          <p>Alle gewonnenen Abschlüsse — neuester Monat zuerst</p></div>
+        <a class="knopf sekundaer" href="/">← Zentrale</a>
+      </div>
+      <div class="um-summe">
+        <div><span class="caption">Umsatz insgesamt</span><b>${eur(d.gesamt)}</b>
+          <span class="caption">${d.anzahl} Abschlüsse</span></div>
+        <div><span class="caption">Davon eingegangen</span><b>${eur(d.eingegangen)}</b>
+          <span class="caption">in der Buchhaltung gebucht</span></div>
+        <div><span class="caption">Noch offen</span><b>${eur(d.gesamt - d.eingegangen)}</b>
+          <span class="caption">abgeschlossen, aber nicht bezahlt</span></div>
+      </div>
+      ${d.monate.length ? monatsBlock : `<div class="karte leer"><h3>Noch kein Umsatz</h3>
+        <p>Sobald ein Kunde mit Preis in der Kundenakte steht, erscheint er hier.</p></div>`}`, req));
+  } catch (err) {
+    console.error("Umsatzseite:", err.message);
+    res.send(layout("Umsatz", "zentrale", `
+      <div class="seiten-kopf"><div><h1>Umsatz</h1></div></div>
+      <div class="karte leer"><h3>Nicht abrufbar</h3>
+        <p>Die CRM-Datenbank antwortet gerade nicht.</p></div>`, req));
+  }
 });
 
 // --- Briefing: Alexandra legt es als Markdown im Vault ab, Dashboard zeigt es an ---
