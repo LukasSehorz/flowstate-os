@@ -2984,3 +2984,13 @@ a.zt-umsatz:hover{border-color:var(--border-stark)}
 /* Auf der Pipeline-Karte: wer betreut, und daneben — falls abweichend — wer
    den Kunden geholt hat. Nur bei Abweichung, sonst stünde zweimal dasselbe. */
 .deal-werber{font-style:normal;font-size:11px;opacity:.6;margin-left:5px;font-weight:500}
+
+/* Cold-Calling-Liste: eigene Liste oder Team. Nur für die Geschäftsführung —
+   für alle anderen gibt es nichts umzuschalten. */
+.wer-schalter{display:inline-flex;gap:2px;padding:2px;border-radius:8px;
+  background:var(--surface-2);border:1px solid var(--border);margin-left:auto}
+.wer-schalter a{padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600;
+  color:var(--text-muted);text-decoration:none;white-space:nowrap}
+.wer-schalter a.aktiv{background:var(--surface);color:var(--foreground);box-shadow:var(--s1)}
+.wer-schalter a:hover:not(.aktiv){color:var(--foreground)}
+.anruf-stat-kopf{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
