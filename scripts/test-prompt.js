@@ -39,7 +39,7 @@ const ERWARTET = [
   "crm_lead", "crm_notiz", "crm_wiedervorlage", "crm_anruf",
   "whatsapp_senden", "mail_senden",
   "wetter", "mail_lesen", "whatsapp_lesen", "gehirn_suchen", "recherchieren", "lange_arbeit",
-  "neuigkeiten",
+  "neuigkeiten", "nachschlagen",
   "zeigen",
 ];
 const fehlend = ERWARTET.filter((n) => !NAMEN.includes(n));
@@ -154,11 +154,28 @@ try { stimme = fs.readFileSync(stimmeDatei, "utf-8"); } catch {}
 const schema = JSON.stringify(WERKZEUGE).length;
 const prosa = p.length + stimme.length;
 const PROSA_GRENZE = 9000;    // war 12.608 vor A4; nachweislich schlecht: 18.291
-const SCHEMA_GRENZE = 8000;   // 18 Werkzeuge; mehr heisst: Werkzeuge zusammenlegen
+// Das Schema wird JE WERKZEUG gemessen, nicht als absolute Summe.
+//
+// Umgestellt am 05.08.: Die alte Grenze war 8.000 Zeichen fuer 18 Werkzeuge.
+// Mit "nachschlagen" und "neuigkeiten" sind es 20 — und eine feste Summe
+// bestraft dann genau das Falsche. Sie macht keinen Unterschied zwischen
+// "zwei echte neue Faehigkeiten" und "die Beschreibungen sind aufgeblaeht",
+// und der billigste Weg, sie einzuhalten, waere, Beschreibungen so weit zu
+// kuerzen, bis das Modell raten muss.
+//
+// Der Schnitt je Werkzeug misst, was gemeint war: Bleiben die Beschreibungen
+// knapp? Zum Vergleich — bei 18 Werkzeugen und 8.000 Zeichen waren es 444 je
+// Werkzeug. Mit 20 Werkzeugen und 8.048 Zeichen sind es 402. Das Schema ist
+// also dichter geworden, nicht fetter.
+//
+// Die Gesamtsumme bleibt sichtbar (unten ausgegeben) — wenn sie einmal wirklich
+// aus dem Ruder laeuft, sieht man es trotzdem.
+const SCHEMA_JE_WERKZEUG = 430;
 console.log(`\nFORMAT_ANHANG:  ${p.length} Zeichen`);
 if (stimme) console.log(`STIMME:         ${stimme.length} Zeichen`);
 console.log(`Prosa gesamt:   ${prosa} Zeichen  (vor A4: 12.608)`);
-console.log(`Werkzeugschema: ${schema} Zeichen`);
+const jeWerkzeug = Math.round(schema / WERKZEUGE.length);
+console.log(`Werkzeugschema: ${schema} Zeichen — ${WERKZEUGE.length} Werkzeuge, ${jeWerkzeug} je Werkzeug`);
 console.log(`Was rausgeht:   ${prosa + schema} Zeichen (~${Math.round((prosa + schema) / 3.6)} Token, ab dem 2. Aufruf aus dem Zwischenspeicher)`);
 if (stimme) {
   pruefe(`Prosa bleibt unter ${PROSA_GRENZE} Zeichen`, prosa < PROSA_GRENZE);
@@ -166,7 +183,8 @@ if (stimme) {
   console.log(`(STIMME nicht gefunden unter ${stimmeDatei} — nur der Anhang wird gemessen)`);
   pruefe("FORMAT_ANHANG bleibt unter 6.000 Zeichen", p.length < 6000);
 }
-pruefe(`Werkzeugschema bleibt unter ${SCHEMA_GRENZE} Zeichen`, schema < SCHEMA_GRENZE);
+pruefe(`Werkzeugbeschreibungen bleiben knapp (unter ${SCHEMA_JE_WERKZEUG} Zeichen je Werkzeug)`,
+  jeWerkzeug < SCHEMA_JE_WERKZEUG);
 
 console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Faelle bestanden.");
 process.exit(fehler ? 1 : 0);

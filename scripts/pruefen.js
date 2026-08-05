@@ -73,7 +73,7 @@ const TESTS = [
   // Rechnerei der Kalenderseite (Monatsraster, Googles ganztaegiges Ende).
   "test-kalender", "test-kalender-seite",
   "test-suche", "test-termin", "test-wa-lesen",
-  "test-wa-arten", "test-neuigkeiten", "test-crm-sprache", "test-zufluss-telegram",
+  "test-wa-arten", "test-neuigkeiten", "test-nachschlagen", "test-crm-sprache", "test-zufluss-telegram",
 ];
 for (const t of TESTS) {
   const p = path.join(wurzel, "scripts", t + ".js");
