@@ -109,6 +109,67 @@ function rufen(schluessel, req) {
   melde(uebergriff && String(uebergriff.besitzer) === String(angestellt.id),
     "Ein Mitarbeiter kann der GF nichts unterschieben (Zuweisung wird ignoriert)");
 
+  // ------------------------------------------- Nach Person filtern (GF)
+  melde(alsChef.html.includes(`wer=${angestellt.id}`),
+    `Der Umschalter hat einen Eintrag fuer ${angestellt.name}`);
+
+  const seineAnsicht = await rufen("GET /crm/leads", { nutzer: chef, query: { wer: angestellt.id } });
+  melde(seineAnsicht.html.includes(`Anrufe von ${angestellt.name}`),
+    "Ueberschrift nennt die Person, deren Liste offen ist");
+  melde(seineAnsicht.html.includes("nicht deine eigene"),
+    "Hinweis macht klar, dass man eine fremde Liste sieht");
+  // Der zugewiesene Testlead muss in DIESER Ansicht auftauchen — das ist der
+  // eigentliche Zweck: sehen, was man jemandem gegeben hat.
+  melde(seineAnsicht.html.includes(name), `Der zugewiesene Lead steht in ${angestellt.name}s Liste`);
+  const meineAnsicht = await rufen("GET /crm/leads", { nutzer: chef, query: {} });
+  melde(!meineAnsicht.html.includes(name), "…und NICHT in der eigenen Liste der GF");
+
+  // Eine erfundene uuid darf nicht durchgereicht werden.
+  const erfunden = await rufen("GET /crm/leads",
+    { nutzer: chef, query: { wer: "00000000-0000-0000-0000-000000000000" } });
+  melde(erfunden.html.includes("Meine Anrufe"), "Unbekannte Person faellt auf die eigene Liste zurueck");
+
+  const angestellterFiltert = await rufen("GET /crm/leads",
+    { nutzer: angestellt, query: { wer: chef.id } });
+  melde(angestellterFiltert.html.includes("Meine Anrufe"),
+    "Ein Mitarbeiter kann nicht in fremde Listen schauen");
+
+  // ------------------------------------------- Mehrere auf einmal aendern
+  const { rows: [testLead] } = await crm.system(`select id from firmen where name = $1`, [name]);
+  const sammel = await rufen("POST /crm/leads/sammel", {
+    nutzer: chef, query: {},
+    body: { ids: [Number(testLead.id)], branche: "immobilien", sparte: "performance" },
+  });
+  melde(sammel.json && sammel.json.ok && sammel.json.geaendert === 1, "Sammeländerung meldet 1 Lead");
+  const { rows: [nachher] } = await crm.system(`select tags from firmen where id = $1`, [testLead.id]);
+  melde(nachher.tags.includes("immobilien") && nachher.tags.includes("performance"),
+    "Branche und Bereich sind gesetzt");
+  melde(!nachher.tags.includes("webdesign"),
+    "Der alte Bereich ist weg (nicht beides gleichzeitig)");
+
+  // Nur die Branche aendern darf den Bereich nicht mitnehmen.
+  await rufen("POST /crm/leads/sammel",
+    { nutzer: chef, query: {}, body: { ids: [Number(testLead.id)], branche: "handwerk" } });
+  const { rows: [nurBranche] } = await crm.system(`select tags from firmen where id = $1`, [testLead.id]);
+  melde(nurBranche.tags.includes("handwerk") && nurBranche.tags.includes("performance"),
+    "Nur die Branche zu aendern laesst den Bereich stehen");
+
+  // Zuweisen per Sammeländerung: GF ja, Mitarbeiter nein.
+  await rufen("POST /crm/leads/sammel",
+    { nutzer: chef, query: {}, body: { ids: [Number(testLead.id)], besitzer: chef.id } });
+  const { rows: [umgehaengt] } = await crm.system(`select besitzer from firmen where id = $1`, [testLead.id]);
+  melde(String(umgehaengt.besitzer) === String(chef.id), "GF kann per Sammeländerung zuweisen");
+
+  const fremd = await rufen("POST /crm/leads/sammel",
+    { nutzer: angestellt, query: {}, body: { ids: [Number(testLead.id)], branche: "gastro" } });
+  const { rows: [unberuehrt] } = await crm.system(`select tags from firmen where id = $1`, [testLead.id]);
+  melde(!unberuehrt.tags.includes("gastro"),
+    "Ein Mitarbeiter aendert fremde Leads nicht (RLS greift)");
+  melde(fremd.json && fremd.json.geaendert === 0, "…und bekommt 0 geaenderte zurueck, nicht 1");
+
+  const leer = await rufen("POST /crm/leads/sammel", { nutzer: chef, query: {}, body: { ids: [] } });
+  melde(leer.json && leer.json.ok === false, "Ohne Auswahl passiert nichts");
+
   // ------------------------------------------------------------------ Aufraeumen
   const weg = await crm.system(`delete from firmen where name like 'ZZ Testfirma %'`);
   console.log(`\nAufgeraeumt: ${weg.rowCount} Testfirmen entfernt.`);

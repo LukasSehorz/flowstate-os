@@ -3002,3 +3002,35 @@ a.zt-umsatz:hover{border-color:var(--border-stark)}
 .wer-schalter a.aktiv{background:var(--surface);color:var(--foreground);box-shadow:var(--s1)}
 .wer-schalter a:hover:not(.aktiv){color:var(--foreground)}
 .anruf-stat-kopf{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+
+/* Mehrfachauswahl in der Cold-Calling-Liste (05.08.).
+   Anlass: Nach einem Import mit der falschen Vorauswahl standen 107 Leads mit
+   der falschen Branche da. Einzeln umzustellen heisst 107 Mal klicken — das
+   macht niemand, und die Liste bleibt falsch. */
+.sammel-tipp{margin:0 0 8px}
+.anruf-zeile.gewaehlt>td{background:var(--auswahl-bg,rgba(59,130,246,.10))}
+.anruf-zeile.gewaehlt>td:first-child{box-shadow:inset 3px 0 0 var(--auswahl-rand,#3B82F6)}
+/* Waehrend des Ziehens keine Textmarkierung — sonst faerbt sich beim Ziehen
+   ueber die Zeilen der halbe Bildschirm blau. */
+body.zieht-aus{user-select:none;-webkit-user-select:none}
+.wer-schalter{flex-wrap:wrap}
+
+/* Die Leiste liegt fest ueber dem Inhalt statt unter der Tabelle: Bei 200
+   Zeilen muesste man sonst ans Ende scrollen, um die Auswahl anzuwenden. */
+.sammel-leiste{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:60;
+  display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:12px 16px;box-shadow:0 18px 40px -12px rgba(0,0,0,.35)}
+.sammel-leiste[hidden]{display:none}
+.sammel-leiste label{display:flex;flex-direction:column;gap:4px;
+  font-size:11.5px;font-weight:600;color:var(--text-secondary)}
+.sammel-leiste select{font-size:13px}
+.sammel-zahl{font-size:13.5px;color:var(--text-secondary);align-self:center;white-space:nowrap}
+.sammel-zahl b{font-size:17px;color:var(--foreground);margin-right:3px}
+.sammel-hinweis{font-size:12.5px;align-self:center;color:var(--text-secondary);max-width:230px}
+.sammel-hinweis.fehler{color:var(--danger);font-weight:600}
+.sammel-hinweis.erfolg{color:var(--success);font-weight:600}
+@media (max-width:760px){
+  .sammel-leiste{left:10px;right:10px;transform:none;bottom:10px}
+  .sammel-leiste label{flex:1 1 130px}
+}
