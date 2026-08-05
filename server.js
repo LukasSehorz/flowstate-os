@@ -289,7 +289,11 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
   //
   // veraltet() gab es schon, es wurde nur nie aufgerufen.
   const auffrischen = async () => {
-    const faellig = zustand.veraltet();
+    // Buchhaltung bleibt aussen vor: Sie braucht einen angemeldeten Nutzer
+    // (Zeilenrechte), den es hier nicht gibt. Sie wuerde also jede Runde
+    // vergeblich versucht — und im STAND stuende weiter ein alter Wert.
+    // Beantwortet wird sie live ueber das Werkzeug "nachschlagen".
+    const faellig = zustand.veraltet().filter((t) => t !== "buchhaltung");
     if (!faellig.length) return;
     try { await zustand.bauen(null, faellig); }
     catch (e) { console.error(`Zustand (${faellig.join(", ")}):`, e.message); }
