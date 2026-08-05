@@ -275,11 +275,28 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
 {
   const zustand = require("./lib/zustand.js");
   const takt = Number(process.env.ZUSTAND_TAKT_MS || zustand.FRISCHE.kalender);
-  const auffrischen = () =>
-    zustand.bauen(null, ["kalender"]).catch((e) => console.error("Zustand (Kalender):", e.message));
+  // ALLES AUFFRISCHEN, WAS ABGELAUFEN IST — nicht nur den Kalender.
+  //
+  // Der Fehler, den das behebt (05.08., im grossen Durchlauf gefunden): Hier
+  // stand ["kalender"]. CRM, Buchhaltung und Meta-Ads haben zwar
+  // Frischegrenzen (1 h, 3 h, 3 h), aber niemand hat sie je erneuert. Gemessen
+  // waren die Buchhaltungszahlen im STAND 11.056 Minuten alt — 7,7 Tage.
+  //
+  // Die Folge war schlimmer als veraltete Daten: Alexandra las sie als
+  // AKTUELL vor. Auf "sind noch Rechnungen offen" kam ein ueberzeugtes "Nein,
+  // alles beglichen" — aus einer Woche alten Zahlen. Eine falsche Zahl,
+  // selbstbewusst vorgetragen, ist schlimmer als keine.
+  //
+  // veraltet() gab es schon, es wurde nur nie aufgerufen.
+  const auffrischen = async () => {
+    const faellig = zustand.veraltet();
+    if (!faellig.length) return;
+    try { await zustand.bauen(null, faellig); }
+    catch (e) { console.error(`Zustand (${faellig.join(", ")}):`, e.message); }
+  };
   auffrischen();
   setInterval(auffrischen, takt).unref();
-  console.log(`Zustand: Kalender alle ${Math.round(takt / 60000)} Min.`);
+  console.log(`Zustand: prueft alle ${Math.round(takt / 60000)} Min., frischt auf was abgelaufen ist.`);
 }
 
 // Zweites Gehirn — Zufluss (Entscheidung Lukas 22.07.): Firmen-Aggregatzahlen
