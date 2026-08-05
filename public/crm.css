@@ -623,6 +623,13 @@ table.tabelle{width:100%;border-collapse:collapse}
 .lead-neu-wahl button{flex:1;background:none;color:var(--text-secondary);box-shadow:none;
   padding:8px 12px;font-size:13.5px;border-radius:8px}
 .lead-neu-wahl button.aktiv{background:var(--surface);color:var(--foreground);font-weight:600;box-shadow:var(--s1)}
+/* "In wessen Liste?" — nur fuer die Geschaeftsfuehrung sichtbar. Bewusst
+   abgesetzt und nicht als weiteres Feld unter vielen: Wem die Leads gehoeren,
+   entscheidet, wer sie anruft. Das muss man sehen, bevor man drueckt. */
+.lead-neu-fuer{background:var(--surface-2);border-radius:10px;padding:11px 12px;margin-bottom:18px}
+.lead-neu-fuer label{display:block;font-size:12px;font-weight:600;margin-bottom:6px}
+.lead-neu-fuer select{width:100%}
+.lead-neu-fuer .sub{font-size:12px}
 .lead-neu-raster{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
 .lead-neu-raster .voll{grid-column:1/-1}
 .lead-neu-spalten{font-size:12px;font-weight:600;color:var(--text-secondary);
@@ -757,7 +764,8 @@ body.crm-dashboard-design .lead-neu-wahl{
 body.crm-dashboard-design .lead-neu-wahl button.aktiv{
   background:linear-gradient(158deg,#FFFFFF 0%,#F4F3F0 100%);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.9), 0 4px 12px -6px rgba(43,42,40,.3)}
-body.crm-dashboard-design .lead-neu-spalten{
+body.crm-dashboard-design .lead-neu-spalten,
+body.crm-dashboard-design .lead-neu-fuer{
   background:linear-gradient(160deg,#F2F1ED 0%,#E4E3DE 100%);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.7)}
 
