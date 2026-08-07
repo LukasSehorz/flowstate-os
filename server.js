@@ -187,6 +187,45 @@ app.get("/login", (req, res) => {
 // Das gemeinsame Passwort bleibt als Rueckfallebene, gibt aber keinen CRM-Zugriff —
 // das CRM braucht eine persoenliche Identitaet, weil die Datenbank daran die
 // Zeilenrechte (RLS) haengt. Ein geteiltes Passwort kann Lukas nicht von Louis unterscheiden.
+// DIENSTANMELDUNG fuer die eigenen Hintergrundlaeufe (07.08.2026).
+//
+// Warum es das braucht: Der taegliche Postfachlauf und der Telegram-Beleg legen
+// Rechnungen ueber /buchhaltung/beleg/hochladen ab — bewusst ueber HTTP und
+// nicht an der Datenbank vorbei, damit die Zeilenrechte der Datenbank greifen.
+// Dieser Endpunkt haengt aber an req.session.crm, und das setzt nur die
+// CRM-Anmeldung mit Mail und Passwort. Die hat der Server nicht.
+//
+// Gefunden wurde das beim ersten echten Lauf: Vier gefundene Rechnungen, alle
+// vier abgewiesen, Umleitung nach /crm/anmelden. Der 19-Uhr-Lauf waere jeden
+// Abend genauso ins Leere gelaufen — und haette gemeldet, es sei nichts da.
+//
+// ZWEI SCHRANKEN, und beide muessen halten:
+//   1. Nur von diesem Rechner selbst. Traefik sitzt in einem eigenen Container
+//      und traegt eine Netzwerkadresse, kein 127.0.0.1 — von aussen ist dieser
+//      Endpunkt damit nicht erreichbar.
+//   2. Das Dashboard-Passwort, das der Prozess ohnehin kennt.
+//
+// Das vergibt KEINE neuen Rechte: Der Prozess hat die Datenbank sowieso in der
+// Hand. Es macht nur sichtbar, ALS WEN er handelt — und laesst die Zeilenrechte
+// weiter greifen, statt sie zu umgehen.
+const DIENST_KONTO = process.env.DIENST_KONTO || "lukas.sehorz@flowstate-ai.net";
+app.post("/intern/dienst-anmelden", async (req, res) => {
+  const her = String(req.socket.remoteAddress || "");
+  const drinnen = her === "127.0.0.1" || her === "::1" || her === "::ffff:127.0.0.1";
+  if (!drinnen) return res.status(403).json({ ok: false, hint: "nur intern" });
+  if (!PASSWORD || req.body?.passwort !== PASSWORD) return res.status(403).json({ ok: false, hint: "falsches Passwort" });
+  try {
+    const { rows } = await require("./lib/crm.js").system(
+      `select p.id, u.email, p.name, p.rolle, p.module
+         from public.profiles p join auth.users u on u.id = p.id
+        where lower(u.email) = lower($1) and p.aktiv and p.rolle = 'admin'`, [DIENST_KONTO]);
+    if (!rows[0]) return res.status(403).json({ ok: false, hint: `Kein aktives Admin-Konto ${DIENST_KONTO}` });
+    req.session.crm = { ...rows[0], module: rows[0].module || [] };
+    req.session.authed = true;
+    res.json({ ok: true, als: rows[0].email });
+  } catch (e) { res.status(500).json({ ok: false, hint: String(e.message).slice(0, 120) }); }
+});
+
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
   if (email && process.env.DATABASE_URL) {
