@@ -92,7 +92,13 @@ pruefe("Laengengrenze: hoechstens drei Saetze", hat("HOECHSTENS DREI SAETZE"));
 pruefe("Kalender/Aufgaben/CRM: Ergebnis nicht selbst sagen", hat("Ergebnis NICHT selbst sagen"));
 // Beim Nachschlagen dauert es Sekunden — ohne einen Zwischensatz wirkt die
 // Stille im Gespraech wie ein Abbruch (07.08.2026, Rueckmeldung Lukas).
-pruefe("Nachschlagen wird angekuendigt", hat("Sag EINEN kurzen Satz, WAS du nachsiehst"));
+pruefe("Nachschlagen wird angekuendigt", hat("WAS du nachsiehst"));
+// Der Ansagesatz muss VOR dem Werkzeugaufruf kommen, sonst wird er erst nach
+// dem Denken gesprochen und die Stille bleibt (07.08.2026).
+pruefe("Ansage kommt vor dem Aufruf", hat("BEVOR du das Werkzeug aufrufst"));
+// Die Laengenregel darf ihn nicht wieder verbieten — genau dieser Widerspruch
+// liess das Modell am 07.08. schweigen, obwohl die Regel schon deployt war.
+pruefe("Laengenregel verbietet die Ansage nicht", !hat("keine Wiederholung dessen, was du gerade aufrufst"));
 pruefe("Aufrufe laufen parallel", hat("parallel"));
 pruefe("Jeder Aufruf nur sein Arbeitsteil", hat("nur seinen Arbeitsteil"));
 pruefe("Wetter/Mail stehen nie im STAND", hat("stehen NIE im STAND"));
