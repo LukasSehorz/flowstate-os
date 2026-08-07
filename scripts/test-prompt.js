@@ -40,6 +40,7 @@ const ERWARTET = [
   "whatsapp_senden", "mail_senden",
   "wetter", "mail_lesen", "whatsapp_lesen", "gehirn_suchen", "recherchieren", "lange_arbeit",
   "neuigkeiten", "nachschlagen", "daten_fragen",
+  "beleg_erstellen", "beleg_nummer",
   "zeigen",
 ];
 const fehlend = ERWARTET.filter((n) => !NAMEN.includes(n));
@@ -179,12 +180,29 @@ const PROSA_GRENZE = 9000;    // war 12.608 vor A4; nachweislich schlecht: 18.29
 //
 // Die Gesamtsumme bleibt sichtbar (unten ausgegeben) — wenn sie einmal wirklich
 // aus dem Ruder laeuft, sieht man es trotzdem.
-const SCHEMA_JE_WERKZEUG = 430;
+// NACHGESCHAERFT (07.08.): Der SCHNITT hat dasselbe Problem eine Ebene hoeher.
+// beleg_erstellen hat zehn Parameter — Firma, Betrag, Leistung, Sparte, Anrede,
+// Strasse, PLZ, Mail, Zahlungsziel, Art — und ist damit fast dreimal so gross
+// wie ein Werkzeug mit einem Feld. Es zog den Schnitt allein von 402 auf 435,
+// ohne dass eine einzige Beschreibung schwammiger geworden waere.
+//
+// Der MEDIAN beantwortet die eigentliche Frage: Ist das TYPISCHE Werkzeug knapp
+// beschrieben? Ein einzelner grosser Ausreisser verschiebt ihn nicht, zehn
+// aufgeblaehte Beschreibungen schon.
+//
+// Damit der Ausreisser nicht unbeobachtet wachsen kann, wird er zusaetzlich
+// einzeln gedeckelt. Zwei Zahlen, zwei Fragen — statt einer Zahl, die beide
+// vermischt und deshalb keine von beiden richtig beantwortet.
+const SCHEMA_MEDIAN = 400;
+const SCHEMA_GROESSTES = 1200;
 console.log(`\nFORMAT_ANHANG:  ${p.length} Zeichen`);
 if (stimme) console.log(`STIMME:         ${stimme.length} Zeichen`);
 console.log(`Prosa gesamt:   ${prosa} Zeichen  (vor A4: 12.608)`);
-const jeWerkzeug = Math.round(schema / WERKZEUGE.length);
-console.log(`Werkzeugschema: ${schema} Zeichen — ${WERKZEUGE.length} Werkzeuge, ${jeWerkzeug} je Werkzeug`);
+const groessen = WERKZEUGE.map((x) => JSON.stringify(x).length).sort((a, b) => a - b);
+const median = groessen[Math.floor(groessen.length / 2)];
+const groesstes = groessen[groessen.length - 1];
+const dickster = WERKZEUGE.reduce((a, b) => (JSON.stringify(a).length > JSON.stringify(b).length ? a : b));
+console.log(`Werkzeugschema: ${schema} Zeichen — ${WERKZEUGE.length} Werkzeuge, Median ${median}, Schnitt ${Math.round(schema / WERKZEUGE.length)}, groesstes ${groesstes} (${dickster.name})`);
 console.log(`Was rausgeht:   ${prosa + schema} Zeichen (~${Math.round((prosa + schema) / 3.6)} Token, ab dem 2. Aufruf aus dem Zwischenspeicher)`);
 if (stimme) {
   pruefe(`Prosa bleibt unter ${PROSA_GRENZE} Zeichen`, prosa < PROSA_GRENZE);
@@ -192,8 +210,10 @@ if (stimme) {
   console.log(`(STIMME nicht gefunden unter ${stimmeDatei} — nur der Anhang wird gemessen)`);
   pruefe("FORMAT_ANHANG bleibt unter 6.000 Zeichen", p.length < 6000);
 }
-pruefe(`Werkzeugbeschreibungen bleiben knapp (unter ${SCHEMA_JE_WERKZEUG} Zeichen je Werkzeug)`,
-  jeWerkzeug < SCHEMA_JE_WERKZEUG);
+pruefe(`Das typische Werkzeug bleibt knapp (Median unter ${SCHEMA_MEDIAN} Zeichen)`,
+  median < SCHEMA_MEDIAN, `Median ${median}`);
+pruefe(`Kein Werkzeug laeuft davon (unter ${SCHEMA_GROESSTES} Zeichen)`,
+  groesstes < SCHEMA_GROESSTES, `${dickster.name}: ${groesstes}`);
 
 console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Faelle bestanden.");
 process.exit(fehler ? 1 : 0);

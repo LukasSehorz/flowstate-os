@@ -65,6 +65,8 @@ services:
       # nicht steht, existiert fuer sie nicht — private Gruppen sind damit von
       # vornherein aussen vor. Leer = gar keine Gruppen. Entscheidung Lukas 24.07.
       - WA_GRUPPEN=${WA_GRUPPEN:-}
+      # Rechnungs- und Angebotsvorlagen aus Lukas' Bestand (nur lesend).
+      - VORLAGEN_PFAD=/vorlagen
       # Telegram-Bot (eigener Alexandra-Bot). Ohne Token schlummert er.
       # SELF_URL: das Dashboard ruft seine eigene Schnellspur intern auf.
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
@@ -97,6 +99,7 @@ services:
       - default
       - hermes
     volumes:
+      - /opt/flowstate-vorlagen:/vorlagen:ro
       - /docker/hermes-agent-pocv/data/vault:/vault:ro
       # Zweites Gehirn: NUR diese Unterordner sind beschreibbar. Der Vault-Sync
       # (Host-Cron) committet + pusht sie nach Obsidian. Rest bleibt :ro, damit

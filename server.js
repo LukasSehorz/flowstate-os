@@ -442,6 +442,8 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
   // auf morgen — Termine, To-Dos, Zahlen. Dashboard-nativ, mit Stimme.
   const report = require("./lib/report.js");
   const REPORT_STUNDE = Number(process.env.REPORT_STUNDE || 20);
+  // Eine Stunde vor dem Abend-Report, damit neue Belege noch darin auftauchen.
+  const MAIL_STUNDE = Number(process.env.MAIL_BELEGE_STUNDE || (REPORT_STUNDE - 1));
   const berlinStunde = () => Number(new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", hour: "2-digit", hour12: false }).format(new Date()));
   const berlinTag = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date());
   // Zwei proaktive Meldungen (Bereich J, "Herzstück"): morgens ein Briefing
@@ -455,9 +457,33 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
       if (r.ok && telegram.hatOwner?.()) { await telegram.push(r.text); console.log(`${name} gesendet (${r.quelle || "?"}).`); }
     } catch (e) { console.error(`${name}:`, e.message); }
   };
+  // RECHNUNGEN AUS DEM POSTFACH (07.08., Wunsch Lukas: "Wenn eine Rechnung an
+  // meine Mail kommt, soll am Ende des Tages das immer ueberprueft werden.")
+  //
+  // Laeuft VOR dem Abend-Report, damit die neuen Belege noch in dessen Zahlen
+  // auftauchen. Zwei Tage Rueckschau statt einem: faellt ein Lauf aus, ist am
+  // naechsten Tag nichts verloren. Doppelte werden ohnehin an der Pruefsumme
+  // erkannt und uebersprungen.
+  let letzterMailTag = "";
+  const mailBelege = require("./lib/mail-belege.js");
+  const belegePruefen = async () => {
+    const heute = berlinTag(), std = berlinStunde();
+    if (letzterMailTag === heute || std !== MAIL_STUNDE) return;
+    letzterMailTag = heute;
+    try {
+      const r = await mailBelege.laufen({
+        dash: telegram.dash,
+        tage: 2,
+        melden: telegram.hatOwner?.() ? (t) => telegram.push(t) : null,
+      });
+      console.log(`Rechnungen aus dem Postfach: ${r.ok ? `${r.neu} neu` : r.hint}`);
+    } catch (e) { console.error("Postfach-Belege:", e.message); }
+  };
+
   const reportPruefen = async () => {
     const heute = berlinTag(), std = berlinStunde();
     if (letzterBriefingTag !== heute && std === BRIEFING_STUNDE) { letzterBriefingTag = heute; await proaktivSenden("morgen", "Morgen-Briefing"); }
+    await belegePruefen();
     if (letzterReportTag !== heute && std === REPORT_STUNDE) { letzterReportTag = heute; await proaktivSenden("abend", "Abend-Report"); }
   };
   // Das Dashboard besitzt den Report (Entscheidung 22.07.): Es PLANT hier
@@ -466,7 +492,7 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
   // stoppt bei jedem Modellwechsel und er kann keine Stimme. So kommt der Report
   // verlaesslich und in Alexandras Stimme.
   setInterval(reportPruefen, 5 * 60 * 1000).unref();
-  console.log(`Zweites Gehirn: Morgen-Briefing ${BRIEFING_STUNDE} Uhr + Abend-Report ${REPORT_STUNDE} Uhr (Hermes generiert, Stimme liest vor).`);
+  console.log(`Zweites Gehirn: Morgen-Briefing ${BRIEFING_STUNDE} Uhr + Abend-Report ${REPORT_STUNDE} Uhr, Rechnungen aus dem Postfach ${MAIL_STUNDE} Uhr.`);
 
   // Waechter (P4.2): proaktive Warnungen tagsueber. Prueft CRM + Kalender und
   // meldet Neues gebuendelt per Stimme; Tages-Dedup verhindert Wiederholung.
