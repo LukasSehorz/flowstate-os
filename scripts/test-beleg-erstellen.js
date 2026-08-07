@@ -15,6 +15,14 @@
 //
 // Aufruf: node scripts/test-beleg-erstellen.js
 
+const os = require("os");
+const fs = require("fs");
+const path = require("path");
+
+// In einen Wegwerfordner ablegen — der Test soll nichts Echtes hinterlassen.
+const ORDNER = fs.mkdtempSync(path.join(os.tmpdir(), "beleg-test-"));
+process.env.BELEG_AUSGANG = ORDNER;
+
 const gmail = require("../lib/gmail-direkt.js");
 const nummern = require("../lib/beleg-nummer.js");
 const vorlage = require("../lib/beleg-vorlage.js");
@@ -74,9 +82,14 @@ const AUFTRAG = {
   const r1 = await b.erstellen(AUFTRAG);
   pruefe("Rechnung wird erzeugt", r1.ok, r1.reply);
   pruefe("Nummer laeuft weiter (R-2026-131)", r1.nummer === "R-2026-131", r1.nummer);
-  pruefe("Anhang ist eine PDF", r1.datei?.name.endsWith(".pdf") && r1.datei.typ === "application/pdf");
   // Wie im Bestand: laufende Nummer, Kunde, Sparte (vgl. 20_Krotzer_Eisele_Website.docx).
-  pruefe("Dateiname im Stil des Bestands", /^131_Mueller_Sohn_Website\.pdf$/.test(r1.datei.name), r1.datei?.name);
+  pruefe("Dateiname im Stil des Bestands", /^131_Mueller_Sohn_Website\.docx$/.test(r1.datei), r1.datei);
+
+  // Die Datei muss WIRKLICH liegen. Ohne das waere eine erstellte, aber nicht
+  // sofort verschickte Rechnung nach zwanzig Minuten verloren — mitsamt der
+  // Nummer, die dafuer schon vergeben ist.
+  pruefe("Die Word-Datei liegt im Ausgang", fs.existsSync(path.join(ORDNER, "131_Mueller_Sohn_Website.docx")),
+    fs.readdirSync(ORDNER).join(", "));
 
   // Der Satz, den Lukas woertlich verlangt hat.
   pruefe("Die Rueckfrage nach der Mail kommt woertlich",
@@ -99,7 +112,11 @@ const AUFTRAG = {
   const a3 = await b.antwortAuf("ja schick sie raus");
   pruefe("Nach der zweiten Freigabe geht sie raus", gesendet.length === 1, a3.reply);
   pruefe("An die richtige Adresse", gesendet[0]?.an === "thomas@mueller-sohn.de");
-  pruefe("Mit Anhang", gesendet[0]?.anhaenge?.length === 1 && gesendet[0].anhaenge[0].name.endsWith(".pdf"));
+  pruefe("Mit Anhang, und zwar als PDF",
+    gesendet[0]?.anhaenge?.length === 1 && gesendet[0].anhaenge[0].name === "131_Mueller_Sohn_Website.pdf",
+    gesendet[0]?.anhaenge?.[0]?.name);
+  pruefe("Die PDF liegt auch im Ausgang", fs.existsSync(path.join(ORDNER, "131_Mueller_Sohn_Website.pdf")),
+    fs.readdirSync(ORDNER).join(", "));
   pruefe("Betreff traegt Nummer und Firma",
     /R-2026-131/.test(gesendet[0]?.betreff || "") && /Müller & Sohn/.test(gesendet[0]?.betreff || ""));
   pruefe("Verwendungszweck steht im Text", /Verwendungszwecks? R-2026-131/.test(gesendet[0]?.text || ""));
@@ -155,10 +172,23 @@ const AUFTRAG = {
   //
   // Stillschweigend eine Word-Datei zu verschicken, waere schlimmer als der
   // fehlende Wandler selbst: Lukas glaubt, es sei eine PDF rausgegangen.
+  //
+  // Die Entscheidung faellt jetzt beim SENDEN, nicht beim Erstellen — die
+  // Wandlung laeuft nebenher, damit die Rueckfrage nicht 1,6 s spaeter kommt.
+  // Der Hinweis muss deshalb in der Sendebestaetigung stehen.
+  gesendet = [];
+  b.vergessen();
   pdf.wandeln = async () => ({ pdf: null, hint: "kein Wandler" });
-  const ohnePdf = await b.erstellen(AUFTRAG);
-  pruefe("Ohne PDF-Wandler kommt eine Word-Datei", ohnePdf.datei.name.endsWith(".docx"));
-  pruefe("Und Alexandra sagt es dazu", /Word-Datei/.test(ohnePdf.reply), ohnePdf.reply);
+  await b.erstellen({ ...AUFTRAG, email: "kunde@example.com" });
+  await b.antwortAuf("ja");
+  const raus = await b.antwortAuf("ja");
+  pruefe("Ohne PDF-Wandler geht die Word-Datei raus", gesendet[0]?.anhaenge?.[0]?.name.endsWith(".docx"),
+    gesendet[0]?.anhaenge?.[0]?.name);
+  pruefe("Und Alexandra sagt beim Senden dazu, dass es keine PDF war",
+    /Word-Datei, nicht als PDF/.test(raus.reply), raus.reply);
+
+  // --- Aufraeumen -------------------------------------------------------------
+  try { fs.rmSync(ORDNER, { recursive: true, force: true }); } catch {}
 
   console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Faelle bestanden.");
   process.exit(fehler ? 1 : 0);
