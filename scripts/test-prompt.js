@@ -39,7 +39,7 @@ const ERWARTET = [
   "crm_lead", "crm_notiz", "crm_wiedervorlage", "crm_anruf",
   "whatsapp_senden", "mail_senden",
   "wetter", "mail_lesen", "whatsapp_lesen", "gehirn_suchen", "recherchieren", "lange_arbeit",
-  "neuigkeiten", "nachschlagen",
+  "neuigkeiten", "nachschlagen", "daten_fragen",
   "zeigen",
 ];
 const fehlend = ERWARTET.filter((n) => !NAMEN.includes(n));
