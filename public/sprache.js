@@ -1032,4 +1032,34 @@
     }
     if (wakeAn) wakeStarten();   // Wunsch ueberlebt den Seitenwechsel
   }).catch(() => {});
+
+  // STANDORT MELDEN (07.08.2026, Wunsch Lukas: "er soll immer wissen, wo ich
+  // bin"). Anlass: "Wie warm wird es morgen, da wo ich gerade bin?" — das
+  // System kannte nur den fest hinterlegten Ort Dorfen, er stand in Nizza.
+  //
+  // Der Browser fragt EINMAL um Erlaubnis; danach merkt er sie sich und es
+  // laeuft still. Ohne Erlaubnis passiert nichts und alles bleibt wie bisher —
+  // darum auch kein Hinweis, keine Aufforderung, kein zweites Fragen.
+  //
+  // enableHighAccuracy ist AUS: Fuer "wie warm wird es hier" reicht die Stadt,
+  // und GPS einzuschalten kostet Akku und wartet auf Satellitenempfang.
+  // maximumAge erlaubt eine Viertelstunde alte Position — in der Zeit aendert
+  // sich das Wetter nicht.
+  function standortMelden() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        fetch("/api/sprache/standort", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat: p.coords.latitude, lon: p.coords.longitude }),
+        }).catch(() => {});
+      },
+      () => { /* abgelehnt oder nicht verfuegbar — stillschweigend weiter */ },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 900000 }
+    );
+  }
+  standortMelden();
+  // Alle 15 Minuten nachfassen, solange die Seite offen ist: Lukas arbeitet
+  // unterwegs, und ein Ort von heute Morgen ist kein "wo ich gerade bin".
+  setInterval(standortMelden, 15 * 60 * 1000);
 })();
