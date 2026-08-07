@@ -64,8 +64,12 @@ const SATZ = `Stell mir ein Angebot für ${FIRMA}. Die brauchen eine neue Websit
   let summe = 0;
 
   // --- Aufruf 1: den Satz verstehen und die Felder fuellen ------------------
+  // Der echte System-Prompt, nicht eine Naeherung: Er ist der groesste
+  // Einzelposten der Eingabe, und mit einem Platzhalter waere die ganze
+  // Messung wertlos.
   const stimme = require("../lib/stimme.js");
-  const system = typeof stimme.STIMME === "string" ? stimme.STIMME : String(stimme.STIMME || "");
+  const system = String(await stimme.laden() || stimme.NOTNAGEL || "");
+  if (system.length < 200) { console.log("System-Prompt nicht ladbar — Messung waere wertlos."); process.exit(1); }
   let t = Date.now();
   const a1 = await schnell.mitWerkzeugen(system, SATZ, WERKZEUGE,
     { maxTokens: 1000, model: process.env.SPRACHE_VERSTEHEN_MODEL || "claude-sonnet-5", timeoutMs: 30000 });
