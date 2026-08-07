@@ -382,6 +382,41 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
     console.log(`Zweites Gehirn: Telegram-Verdichtung alle ${Math.round(tgTakt / 3600000)} Std.`);
   }
 
+  // SPRACH-VERDICHTUNG (07.08.2026): dasselbe fuers GESPROCHENE Gespraech.
+  //
+  // Bis heute lief die Sprachspur an allem vorbei — das Sprachlog war reine
+  // Technik-Diagnose und wurde von der Chronik nie gelesen. Darum begann jedes
+  // Gespraech bei null: "Was habe ich dich gerade gefragt?" konnte sie nicht
+  // beantworten, sobald drei Wortwechsel dazwischen lagen.
+  //
+  // Zwei Ergebnisse je Lauf: Firmenwissen nach eingang/erkenntnisse/ (wie
+  // Telegram) UND eine fortgeschriebene Liste "so arbeitet Lukas", die bei
+  // jeder Frage im STAND mitgeht. Letzteres ist der Lernteil.
+  //
+  // Takt bewusst 6 Stunden statt naechtlich: Was am Vormittag geklaert wurde,
+  // soll am Nachmittag schon gelten, nicht erst morgen.
+  const zuflussSprache = require("./lib/zufluss-sprache.js");
+  const spTakt = Number(process.env.SPRACHE_VERDICHTUNG_MS || 6 * 60 * 60 * 1000);
+  const spLaufen = () =>
+    zuflussSprache.verdichte()
+      .then((r) => {
+        if (r.ok && (r.neu || r.gelernt)) {
+          console.log(`Sprach-Verdichtung: ${r.neu} Erkenntnis(se), ${r.gelernt} zur Zusammenarbeit gelernt.`);
+        } else if (!r.ok) console.error("Sprach-Verdichtung:", r.grund);
+      })
+      .catch((e) => console.error("Sprach-Verdichtung:", e.message));
+  if (vault.schreibbar("eingang")) {
+    setTimeout(spLaufen, 3 * 60 * 1000).unref();      // einmal kurz nach dem Start
+    setInterval(spLaufen, spTakt).unref();
+    console.log(`Zweites Gehirn: Sprach-Verdichtung alle ${Math.round(spTakt / 3600000)} Std.`);
+  }
+
+  // Von Hand ausloesen (Test/Vorschau).
+  app.post("/api/gehirn/sprache-verdichten", async (req, res) => {
+    try { res.json(await zuflussSprache.verdichte({ tage: Number(req.body?.tage) || 2 })); }
+    catch (e) { res.status(500).json({ ok: false, grund: e.message }); }
+  });
+
   // Von Hand ausloesen (Test / spaeter Dashboard-Kachel).
   app.post("/api/gehirn/telegram", async (req, res) => {
     try { res.json(await zuflussTelegram.verdichte()); }
