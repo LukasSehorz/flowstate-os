@@ -313,8 +313,19 @@ catch (e) { console.error("WhatsApp-Modul konnte nicht geladen werden:", e.messa
 
 // Telegram-Bot (Alexandra auf Telegram, Schnellspur + Sprachantwort). Schlummert
 // ohne TELEGRAM_BOT_TOKEN — beruehrt Hermes' eigenes Telegram nicht.
-try { require("./lib/telegram.js").starten(); }
-catch (e) { console.error("Telegram-Modul:", e.message); }
+try {
+  const telegram = require("./lib/telegram.js");
+  telegram.starten();
+  // Fertige Rechnungen und Angebote als PDF zustellen (07.08.). Lukas soll das
+  // Dokument SEHEN, bevor er es freigibt — eine Aufzaehlung im Chat sagt nichts
+  // darueber, ob die Anschrift stimmt oder das Layout sitzt.
+  //
+  // Hier verdrahtet und nicht im Beleg-Modul selbst: telegram.js laedt schon
+  // beleg-erstellen.js. Umgekehrt auch, und die beiden wuerden sich im Kreis
+  // laden.
+  require("./lib/beleg-erstellen.js").zustellerSetzen(
+    (buf, name, text) => telegram.pushDatei(buf, name, text, { stimme: false }));
+} catch (e) { console.error("Telegram-Modul:", e.message); }
 
 // Kalender im Hintergrund frisch halten, damit eine Sprachfrage nicht warten muss.
 // Kostet keine Token — das ist ein gws-cli-Aufruf, kein Modell.

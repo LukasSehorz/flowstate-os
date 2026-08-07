@@ -206,16 +206,57 @@ const AUFTRAG = {
   // Die Entscheidung faellt jetzt beim SENDEN, nicht beim Erstellen — die
   // Wandlung laeuft nebenher, damit die Rueckfrage nicht 1,6 s spaeter kommt.
   // Der Hinweis muss deshalb in der Sendebestaetigung stehen.
+  // Lukas, 07.08.: "Das Angebot muss immer als PDF versendet werden, nicht als
+  // Textform." Der erste Entwurf schickte die Word-Datei und sagte hinterher
+  // Bescheid — der Hinweis kam also, NACHDEM die Datei beim Kunden lag.
   gesendet = [];
   b.vergessen();
   pdf.wandeln = async () => ({ pdf: null, hint: "kein Wandler" });
   await b.erstellen({ ...AUFTRAG, email: "kunde@example.com" });
   await b.antwortAuf("ja");
   const raus = await b.antwortAuf("ja");
-  pruefe("Ohne PDF-Wandler geht die Word-Datei raus", gesendet[0]?.anhaenge?.[0]?.name.endsWith(".docx"),
+  pruefe("Ohne PDF wird GAR NICHT gesendet", gesendet.length === 0,
+    `gesendet: ${gesendet[0]?.anhaenge?.[0]?.name}`);
+  pruefe("Es geht nie eine Word-Datei an einen Kunden",
+    !gesendet.some((m) => m.anhaenge?.some((a) => a.name.endsWith(".docx"))));
+  pruefe("Alexandra sagt warum", /als Word-Datei geht es nicht zum Kunden/.test(raus.reply), raus.reply);
+  pruefe("Der Vorgang bleibt offen fuer einen zweiten Versuch",
+    b.wasOffen()?.schritt === "mail-freigeben", JSON.stringify(b.wasOffen()));
+
+  // Und wenn der Wandler dann laeuft, geht es doch noch raus — ohne alles neu
+  // aufzusetzen und ohne eine zweite Nummer zu verbrauchen.
+  pdf.wandeln = async () => ({ pdf: Buffer.from("%PDF-attrappe") });
+  b.vergessen();
+  await b.erstellen({ ...AUFTRAG, email: "kunde@example.com" });
+  await b.antwortAuf("ja");
+  const doch = await b.antwortAuf("ja");
+  pruefe("Mit Wandler geht es als PDF raus", gesendet[0]?.anhaenge?.[0]?.name.endsWith(".pdf"),
     gesendet[0]?.anhaenge?.[0]?.name);
-  pruefe("Und Alexandra sagt beim Senden dazu, dass es keine PDF war",
-    /Word-Datei, nicht als PDF/.test(raus.reply), raus.reply);
+  pruefe("Und die Bestaetigung sagt 'als PDF'", /als PDF/.test(doch.reply), doch.reply);
+
+  // --- Die PDF wird zum Ansehen zugestellt ----------------------------------
+  //
+  // Lukas gibt ein Dokument frei, das er sonst nie zu Gesicht bekommt. Ob die
+  // Anschrift stimmt oder das Layout sitzt, steht in keiner Aufzaehlung.
+  const zugestellt = [];
+  b.zustellerSetzen((buf, name, text) => { zugestellt.push({ name, text, gross: buf.length }); });
+  b.vergessen();
+  const mitPdf = await b.erstellen({ ...AUFTRAG, art: "angebot", betrag: 990, email: "info@kunde.de" });
+  await new Promise((r) => setTimeout(r, 20));   // die Zustellung laeuft nebenher
+  pruefe("Die PDF wird zum Ansehen zugestellt", zugestellt.length === 1, JSON.stringify(zugestellt));
+  pruefe("Und zwar als PDF, nicht als Word", zugestellt[0]?.name.endsWith(".pdf"), zugestellt[0]?.name);
+  pruefe("Mit Nummer und Firma beschriftet",
+    zugestellt[0]?.text.includes(mitPdf.nummer) && zugestellt[0]?.text.includes("Müller"), zugestellt[0]?.text);
+
+  // Ohne Wandler wird NICHTS zugestellt — lieber nichts als eine Word-Datei.
+  zugestellt.length = 0;
+  pdf.wandeln = async () => ({ pdf: null, hint: "kein Wandler" });
+  b.vergessen();
+  await b.erstellen({ ...AUFTRAG, email: "info@kunde.de" });
+  await new Promise((r) => setTimeout(r, 20));
+  pruefe("Ohne PDF wird auch nichts zum Ansehen zugestellt", zugestellt.length === 0, JSON.stringify(zugestellt));
+  pdf.wandeln = async () => ({ pdf: Buffer.from("%PDF-attrappe") });
+  b.zustellerSetzen(null);
 
   // --- Aufraeumen -------------------------------------------------------------
   try { fs.rmSync(ORDNER, { recursive: true, force: true }); } catch {}
