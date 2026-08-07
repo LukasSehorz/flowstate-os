@@ -27,6 +27,7 @@ const gmail = require("../lib/gmail-direkt.js");
 const nummern = require("../lib/beleg-nummer.js");
 const vorlage = require("../lib/beleg-vorlage.js");
 const pdf = require("../lib/beleg-pdf.js");
+const angebotText = require("../lib/angebot-text.js");
 
 // --- Umgebung ersetzen, BEVOR das zu testende Modul geladen wird ------------
 let gesendet = [];
@@ -34,11 +35,12 @@ gmail.senden = async (m) => { gesendet.push(m); return { ok: true, id: "test" };
 gmail.bereit = () => true;
 
 // Nummern ohne Datenbank: aufsteigend, wie es die echte Vergabe auch tut.
-let zaehler = { rechnung: 130, angebot: 118 };
+let zaehler = { rechnung: 130, angebot: 23 };
 nummern.naechste = async (art) => {
   const a = art === "angebot" ? "angebot" : "rechnung";
   zaehler[a] += 1;
-  return { ok: true, nummer: `${a === "angebot" ? "A" : "R"}-2026-${zaehler[a]}`, zahl: zaehler[a], jahr: 2026 };
+  const echt = require("../lib/beleg-nummer.js").FORM;
+  return { ok: true, nummer: echt[a](2026, zaehler[a]), zahl: zaehler[a], jahr: 2026 };
 };
 
 // Die Vorlage wird in test-beleg-vorlage.js eigens geprueft. Hier zaehlt der
@@ -46,6 +48,21 @@ nummern.naechste = async (art) => {
 // gemountete Vorlagen laeuft.
 vorlage.erzeugen = () => Buffer.from("PK-attrappe");
 pdf.wandeln = async () => ({ pdf: Buffer.from("%PDF-attrappe") });
+
+// Der Angebotstext kommt sonst vom Modell. Hier eine Attrappe: Geprueft wird der
+// ABLAUF, nicht die Schreibqualitaet — die haengt am Modell und gehoert in einen
+// eigenen Lauf gegen die echte Schnittstelle.
+let textAufrufe = 0;
+angebotText.schreiben = async (a) => {
+  textAufrufe++;
+  return {
+    anrede: "Sehr geehrter Herr Müller,",
+    einleitung: "vielen Dank für Ihr Interesse! In der folgenden Auflistung sehen Sie, was wir anbieten:",
+    vorteile: ["Erster Nutzen für den Betrieb", "Zweiter Nutzen", "Dritter Nutzen", "Vierter Nutzen"],
+    posten_titel: "Erstellung der neuen Webseite",
+    posten_text: "Eine ausführliche Leistungsbeschreibung mit mehr als achtzig Zeichen, damit sie die Prüfung besteht und im Angebot landet.",
+  };
+};
 
 const b = require("../lib/beleg-erstellen.js");
 
@@ -75,6 +92,10 @@ const AUFTRAG = {
 
   const ohneLeistung = await b.erstellen({ ...AUFTRAG, leistung: "Website" });
   pruefe("Zu duenner Leistungstext wird nachgefragt", !ohneLeistung.ok);
+
+  const ohneProjekt = await b.erstellen({ ...AUFTRAG, art: "angebot", leistung: "" });
+  pruefe("Beim Angebot wird nach dem Projekt gefragt, nicht nach der Leistung",
+    !ohneProjekt.ok && /beschreib mir das projekt/i.test(ohneProjekt.reply), ohneProjekt.reply);
 
   pruefe("Nach einem Fehlversuch steht nichts offen", b.wasOffen() === null);
 
@@ -157,7 +178,16 @@ const AUFTRAG = {
   // --- Angebote --------------------------------------------------------------
   b.vergessen();
   const ang = await b.erstellen({ ...AUFTRAG, art: "angebot", betrag: 2400, email: "info@kunde.de" });
-  pruefe("Angebot bekommt eine A-Nummer", ang.nummer === "A-2026-119", ang.nummer);
+  // Format wie im Bestand ab 24.06.: 2026-024, dreistellig, ohne Buchstabe.
+  // Der erste Entwurf machte A-2026-119 — ein Format, das Lukas seit sechs
+  // Wochen nicht mehr benutzt.
+  pruefe("Angebot bekommt eine Nummer im Format 2026-NNN", ang.nummer === "2026-024", ang.nummer);
+  pruefe("Für das Angebot wurde ein Text geschrieben", textAufrufe === 1, `${textAufrufe} Aufrufe`);
+  pruefe("Die Nutzenpunkte werden mit vorgelesen",
+    /Erster Nutzen für den Betrieb/.test(ang.reply) && /Erstellung der neuen Webseite/.test(ang.reply), ang.reply);
+  // 30 Tage, nicht 14 — so steht es in jedem Angebot im Bestand.
+  const inDreissig = new Date(Date.now() + 30 * 86400000).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+  pruefe("Angebot gilt 30 Tage", ang.reply.includes(inDreissig), `erwartet ${inDreissig}, bekommen: ${ang.reply.slice(0, 90)}`);
   pruefe("Angebot spricht von Gueltigkeit, nicht von Zahlung", /gültig bis/.test(ang.reply) && !/zahlbar/.test(ang.reply), ang.reply);
   const angMail = await b.antwortAuf("ja");
   pruefe("Angebotsmail bittet nicht um Überweisung", !/Überweisung/.test(angMail.reply), angMail.reply);
