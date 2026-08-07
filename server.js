@@ -222,7 +222,19 @@ app.post("/intern/dienst-anmelden", async (req, res) => {
     if (!rows[0]) return res.status(403).json({ ok: false, hint: `Kein aktives Admin-Konto ${DIENST_KONTO}` });
     req.session.crm = { ...rows[0], module: rows[0].module || [] };
     req.session.authed = true;
-    res.json({ ok: true, als: rows[0].email });
+    // ERST SPEICHERN, DANN ANTWORTEN (07.08.). Die Sitzungen liegen als Dateien
+    // (FileStore). Ohne dieses Warten geht die Antwort raus, bevor die Datei
+    // geschrieben ist — und der naechste Aufruf liest die alte, noch ohne
+    // Anmeldung.
+    //
+    // Das war kein theoretisches Risiko: Von drei Laeufen hintereinander schlug
+    // der erste fehl und die beiden folgenden gingen durch. Genau so haette es
+    // den 19-Uhr-Lauf getroffen, der einmal taeglich auf einen kalten Server
+    // trifft — also praktisch immer den langsamen Fall.
+    req.session.save((fehler) => {
+      if (fehler) return res.status(500).json({ ok: false, hint: "Sitzung nicht gespeichert" });
+      res.json({ ok: true, als: rows[0].email });
+    });
   } catch (e) { res.status(500).json({ ok: false, hint: String(e.message).slice(0, 120) }); }
 });
 
