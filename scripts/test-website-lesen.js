@@ -85,5 +85,10 @@ function pruefe(name, wahr, zusatz) {
   }
 
   console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Fälle bestanden.");
-  process.exit(fehler ? 1 : 0);
+  // KEIN process.exit() hier. Dieser Test schlaegt Adressen im Netz nach, und
+  // ein sofortiges exit() reisst die noch offenen DNS-Handles mit: Node bricht
+  // unter Windows mit einer Zusicherungsverletzung ab — alle Faelle bestanden,
+  // Rueckgabewert trotzdem 1. Die Pruefung vor dem Push hat das zu Recht
+  // angehalten. exitCode setzen und Node selbst auslaufen lassen.
+  process.exitCode = fehler ? 1 : 0;
 })();
