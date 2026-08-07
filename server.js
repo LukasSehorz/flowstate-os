@@ -450,6 +450,39 @@ catch (e) { console.error("Telegram-Modul:", e.message); }
   setInterval(waechterPruefen, 20 * 60 * 1000).unref();
   console.log(`Zweites Gehirn: Waechter aktiv (${WAECHTER_VON}-${WAECHTER_BIS} Uhr, alle 20 Min).`);
 
+  // SELBSTTEST (07.08.2026). Der Waechter oben prueft das Geschaeft, dieser
+  // hier das System selbst: Hoeren, Sprechen, Datenbank, Modellzugang.
+  //
+  // Anlass: Der ElevenLabs-Schluessel wurde am 05.08. um 23:16 Uhr ungueltig,
+  // Alexandra war zwei Tage stumm, und gemerkt hat es niemand.
+  //
+  // Zwei Unterschiede zum Waechter, beide Absicht:
+  //   - RUND UM DIE UHR. Ein toter Zugang um zwei Uhr nachts ist um acht Uhr
+  //     frueh immer noch tot; dann steht die Meldung schon da.
+  //   - PER TELEGRAM, NIE PER STIMME. Eine kaputte Stimme kann sich nicht per
+  //     Stimme melden.
+  const selbsttest = require("./lib/selbsttest.js");
+  const selbsttestLaufen = async () => {
+    try {
+      const r = await selbsttest.pruefe();
+      if (r.text && telegram.hatOwner?.()) {
+        await telegram.push(r.text, { stimme: false });
+        console.log("Selbsttest:", r.text.replace(/\n/g, " ").slice(0, 120));
+      }
+    } catch (e) { console.error("Selbsttest:", e.message); }
+  };
+  setTimeout(selbsttestLaufen, 60 * 1000).unref();   // einmal kurz nach dem Start
+  setInterval(selbsttestLaufen, 20 * 60 * 1000).unref();
+  console.log("Zweites Gehirn: Selbsttest aktiv (alle 20 Min, Meldung per Telegram).");
+
+  // Von Hand ausloesen — mit aktivem Anfassen statt nur Protokoll lesen.
+  app.post("/api/gehirn/selbsttest", async (req, res) => {
+    try {
+      const r = await selbsttest.pruefe({ aktivErzwingen: true });
+      res.json({ ok: true, ...r });
+    } catch (e) { res.status(500).json({ ok: false, hint: e.message }); }
+  });
+
   // Waechter von Hand ausloesen (Test/Vorschau). senden:true schickt per Stimme.
   app.post("/api/gehirn/waechter", async (req, res) => {
     try {
