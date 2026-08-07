@@ -90,6 +90,9 @@ pruefe("Kein JSON-Vertrag mehr im Prompt (das koennen jetzt die Werkzeuge)",
 pruefe("Kein Werkzeug-VERBOT mehr (das war die alte Welt)", !/RUFE KEINE WERKZEUGE AUF/i.test(p));
 pruefe("Laengengrenze: hoechstens drei Saetze", hat("HOECHSTENS DREI SAETZE"));
 pruefe("Kalender/Aufgaben/CRM: Ergebnis nicht selbst sagen", hat("Ergebnis NICHT selbst sagen"));
+// Beim Nachschlagen dauert es Sekunden — ohne einen Zwischensatz wirkt die
+// Stille im Gespraech wie ein Abbruch (07.08.2026, Rueckmeldung Lukas).
+pruefe("Nachschlagen wird angekuendigt", hat("Sag EINEN kurzen Satz, WAS du nachsiehst"));
 pruefe("Aufrufe laufen parallel", hat("parallel"));
 pruefe("Jeder Aufruf nur sein Arbeitsteil", hat("nur seinen Arbeitsteil"));
 pruefe("Wetter/Mail stehen nie im STAND", hat("stehen NIE im STAND"));
