@@ -24,14 +24,39 @@ function pruefe(name, wahr, zusatz) {
   if (!wahr) fehler++;
 }
 
+// Misst ZWEI Zeiten getrennt, und das ist der Punkt:
+//
+//   erstesWort — bis das erste hoerbare Stueck kommt. Das ist die Stille in der
+//                Leitung, und nur die merkt der Anrufer.
+//   gesamt     — bis alles durch ist. Gut fuers Protokoll, aber der Anrufer
+//                hoert da laengst zu.
+//
+// Der erste Entwurf mass nur "gesamt" und meldete 6,8 s, als waere das die
+// Wartezeit. Das war irrefuehrend: Gesprochen wurde da schon lange.
 async function ruf(koerper, ausweis) {
   const kopf = { "content-type": "application/json", accept: "text/event-stream" };
   if (ausweis) kopf.authorization = "Bearer " + ausweis;
+  const los = Date.now();
   const r = await fetch(BASIS + PFAD, {
     method: "POST", headers: kopf, body: JSON.stringify(koerper),
     redirect: "manual", signal: AbortSignal.timeout(90000),
   });
-  return { status: r.status, typ: r.headers.get("content-type") || "", text: await r.text() };
+  const typ = r.headers.get("content-type") || "";
+  if (!r.body || r.status !== 200) {
+    return { status: r.status, typ, text: await r.text(), erstesWort: 0, gesamt: Date.now() - los };
+  }
+  const leser = r.body.getReader();
+  const dek = new TextDecoder();
+  let text = "", erstesWort = 0;
+  while (true) {
+    const { done, value } = await leser.read();
+    if (done) break;
+    const teil = dek.decode(value, { stream: true });
+    text += teil;
+    // Erst wenn wirklich INHALT kommt, nicht beim ersten leeren Stueck.
+    if (!erstesWort && /"content":"[^"]/.test(teil)) erstesWort = Date.now() - los;
+  }
+  return { status: r.status, typ, text, erstesWort, gesamt: Date.now() - los };
 }
 
 const FRAGE = (t) => ({ model: "alexandra", stream: true,
@@ -54,9 +79,7 @@ const FRAGE = (t) => ({ model: "alexandra", stream: true,
   pruefe("Falscher Ausweis wird abgewiesen", falsch.status === 401, `Status ${falsch.status}`);
 
   // --- Der echte Weg ---------------------------------------------------------
-  const los = Date.now();
   const r = await ruf(FRAGE("Wie viele offene Aufgaben habe ich?"), GEHEIM);
-  const ms = Date.now() - los;
 
   pruefe("Mit Ausweis antwortet der Endpunkt", r.status === 200, `Status ${r.status}: ${r.text.slice(0, 150)}`);
   pruefe("Als Ereignisstrom", /text\/event-stream/.test(r.typ), r.typ);
@@ -76,10 +99,12 @@ const FRAGE = (t) => ({ model: "alexandra", stream: true,
   pruefe("Und zwar nicht mit einer Notfallmeldung",
     !/nicht verstanden|schiefgelaufen/i.test(gesagt), gesagt);
 
-  console.log(`\n  Antwort nach ${(ms / 1000).toFixed(1)}s: „${gesagt.slice(0, 200)}"`);
-  // Am Telefon ist Wartezeit anders zu bewerten als im Chat: Stille in der
-  // Leitung wirkt doppelt so lang.
-  if (ms > 6000) console.log(`  ⚠  ${(ms / 1000).toFixed(1)}s ist am Telefon spuerbar lang.`);
+  console.log(`\n  Stille in der Leitung: ${(r.erstesWort / 1000).toFixed(1)}s`);
+  console.log(`  Antwort komplett nach: ${(r.gesamt / 1000).toFixed(1)}s`);
+  console.log(`  „${gesagt.slice(0, 200)}"`);
+  // Nur die Stille zaehlt. Was danach kommt, hoert der Anrufer schon.
+  if (r.erstesWort > 2500) console.log(`  ⚠  ${(r.erstesWort / 1000).toFixed(1)}s Stille ist am Telefon zu lang.`);
+  else if (r.erstesWort > 1500) console.log(`  ·  ${(r.erstesWort / 1000).toFixed(1)}s Stille — spuerbar, aber tragbar.`);
 
   console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Fälle bestanden.");
   process.exitCode = fehler ? 1 : 0;
