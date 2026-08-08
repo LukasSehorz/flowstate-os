@@ -21,10 +21,22 @@ const stimme = require("../lib/stimme.js");
 const zustand = require("../lib/zustand.js");
 const { WERKZEUGE } = require("../lib/sprache-werkzeuge.js");
 
+// NACHGESCHAERFT (08.08.): Der erste Lauf mass mit aufwand "high" und
+// eingeschaltetem Nachdenken — die Sprachroute laeuft aber auf "low". Die
+// Messung sagte also nichts ueber den Betrieb aus.
+//
+// Und sie mass die falsche Stellschraube: Nicht nur das MODELL entscheidet ueber
+// die Stille in der Leitung, sondern vor allem, ob das Modell vor dem Antworten
+// nachdenkt. Beim Nachdenken kommt bis zum ersten Token gar nichts — am
+// Bildschirm ein Zoegern, am Telefon eine Leitung, in der niemand ist.
+//
+// Haiku 4.5 ist raus: Er scheiterte in ALLEN acht Durchgaengen an den 24
+// Werkzeugen. Kein Grenzfall, sondern durchgehend.
 const MODELLE = [
-  { name: "Haiku 4.5", id: "claude-haiku-4-5-20251001" },
-  { name: "Sonnet 5", id: "claude-sonnet-5" },
-  { name: "Opus 5", id: "claude-opus-5" },
+  { name: "Sonnet, denkt", id: "claude-sonnet-5", denken: "adaptiv", aufwand: "low" },
+  { name: "Sonnet, direkt", id: "claude-sonnet-5", denken: "aus", aufwand: "low" },
+  { name: "Opus, denkt", id: "claude-opus-5", denken: "adaptiv", aufwand: "low" },
+  { name: "Opus, direkt", id: "claude-opus-5", denken: "aus", aufwand: "low" },
 ];
 
 // Saetze, wie sie am Telefon fallen. Bewusst gemischt: eine reine Auskunft,
@@ -64,7 +76,7 @@ const median = (a) => (a.length ? [...a].sort((x, y) => x - y)[Math.floor(a.leng
         let erster = 0, text = "";
         try {
           const r = await schnell.mitWerkzeugenStrom(voll, frage, WERKZEUGE,
-            { maxTokens: 1000, model: m.id, timeoutMs: 45000 },
+            { maxTokens: 1000, model: m.id, timeoutMs: 45000, denken: m.denken, aufwand: m.aufwand },
             (satz) => { if (!erster) erster = Date.now() - los; text += (text ? " " : "") + satz; });
           gesamt.push(Date.now() - los);
           if (erster) ersteSaetze.push(erster);
@@ -84,7 +96,7 @@ const median = (a) => (a.length ? [...a].sort((x, y) => x - y)[Math.floor(a.leng
       stumm: gesamt.length - ersteSaetze.length,
     };
     ergebnis.push(e);
-    console.log(`${m.name.padEnd(11)} erstes Wort ${String(e.erster).padStart(5)} ms (Median) · ` +
+    console.log(`${m.name.padEnd(15)} erstes Wort ${String(e.erster).padStart(5)} ms (Median) · ` +
       `fertig ${String(e.gesamt).padStart(5)} ms · Werkzeuge ${e.werkzeuge}` +
       (e.stumm ? ` · ${e.stumm}× gar kein Satz vorab` : "") +
       (e.kaputt ? ` · ${e.kaputt} Fehlschlaege` : ""));
@@ -99,7 +111,7 @@ const median = (a) => (a.length ? [...a].sort((x, y) => x - y)[Math.floor(a.leng
   console.log(`Schnellstes erstes Wort: ${schnellstes.name} (${schnellstes.erster} ms)`);
   for (const e of brauchbar) {
     const mehr = e.erster - schnellstes.erster;
-    console.log(`  ${e.name.padEnd(11)} ${mehr === 0 ? "—" : "+" + mehr + " ms Stille"} gegenüber dem schnellsten`);
+    console.log(`  ${e.name.padEnd(15)} ${mehr === 0 ? "—" : "+" + mehr + " ms Stille"} gegenüber dem schnellsten`);
   }
   // Die Schwelle stammt nicht aus dem Bauch: Unter einer Sekunde klingt eine
   // Antwort wie eine Antwort, ab etwa zwei Sekunden wie ein Aussetzer.
