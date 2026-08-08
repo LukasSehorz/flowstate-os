@@ -274,6 +274,26 @@ app.post("/api/melde", (req, res) => {
     .then((r) => res.json(r)).catch((e) => res.json({ ok: false, grund: String(e.message).slice(0, 200) }));
 });
 
+// ALEXANDRA AM TELEFON — und zwar VOR dem Torwaechter (07.08.).
+//
+// Die Reihenfolge ist hier kein Geschmack, sondern Bedingung: ElevenLabs bringt
+// keine Sitzung mit, sondern einen eigenen Ausweis im Kopfzeilenfeld. Stuende
+// diese Zeile weiter unten, faengt der Torwaechter darunter den Aufruf ab und
+// antwortet mit einer Umleitung zur Anmeldeseite — ElevenLabs bekaeme statt
+// Alexandras Antwort eine HTML-Seite, und in der Leitung waere Stille.
+//
+// Genau so ist es beim ersten Versuch von aussen passiert. Die Testattrappe
+// konnte es nicht sehen: Sie kennt die Reihenfolge der Middleware nicht. Nur
+// ein Aufruf gegen den laufenden Server zeigt es (scripts/test-telefon-live.js).
+//
+// Der Endpunkt bleibt trotzdem geschuetzt — er prueft sein eigenes Geheimnis,
+// bevor er irgendetwas weiterreicht.
+try {
+  const telefon = require("./lib/telefon.js");
+  telefon.routen(app);
+  telefon.anmelden().catch((e) => console.error("Telefon-Anmeldung:", e.message));
+} catch (e) { console.error("Telefon-Modul:", e.message); }
+
 app.use((req, res, next) => {
   if (!PASSWORD) return res.status(500).send("DASHBOARD_PASSWORD ist nicht gesetzt.");
   // Wer im CRM angemeldet ist, ist auch im OS angemeldet — eine Identitaet fuer beides.
@@ -313,14 +333,6 @@ catch (e) { console.error("WhatsApp-Modul konnte nicht geladen werden:", e.messa
 
 // Telegram-Bot (Alexandra auf Telegram, Schnellspur + Sprachantwort). Schlummert
 // ohne TELEGRAM_BOT_TOKEN — beruehrt Hermes' eigenes Telegram nicht.
-// Alexandra am Telefon (07.08.). ElevenLabs ruft hier ihr Gehirn ab —
-// derselbe Prompt, derselbe STAND, dieselben Werkzeuge wie im Browser.
-try {
-  const telefon = require("./lib/telefon.js");
-  telefon.routen(app);
-  telefon.anmelden().catch((e) => console.error("Telefon-Anmeldung:", e.message));
-} catch (e) { console.error("Telefon-Modul:", e.message); }
-
 try {
   const telegram = require("./lib/telegram.js");
   telegram.starten();
