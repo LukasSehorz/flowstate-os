@@ -1145,31 +1145,17 @@ app.post("/chat/leeren", (req, res) => {
   res.redirect("/chat");
 });
 
-app.post("/api/chat", async (req, res) => {
-  const url = process.env.HERMES_CHAT_URL;
-  if (!url) return res.json({ ok: false, hint: "HERMES_CHAT_URL ist noch nicht konfiguriert." });
-  const wer = req.session.crm || null;
-  verlauf.anhaengen(DATA_PATH, wer, "user", String(req.body.message || ""));
-  const history = verlauf.kontext(DATA_PATH, wer);
-  try {
-    const headers = { "Content-Type": "application/json" };
-    if (process.env.HERMES_API_KEY) headers["Authorization"] = "Bearer " + process.env.HERMES_API_KEY;
-    const r = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ model: process.env.HERMES_MODEL || "hermes-agent", messages: history, stream: false }),
-      signal: AbortSignal.timeout(180000),
-    });
-    const d = await r.json().catch(() => null);
-    if (d?.error) return res.json({ ok: false, hint: d.error.message || "Hermes meldet einen Fehler." });
-    const reply = d?.choices?.[0]?.message?.content;
-    if (!reply) return res.json({ ok: false, hint: "Unerwartete Antwort: " + JSON.stringify(d).slice(0, 300) });
-    verlauf.anhaengen(DATA_PATH, wer, "assistant", reply);
-    res.json({ ok: true, reply });
-  } catch (e) {
-    res.json({ ok: false, hint: "Hermes nicht erreichbar: " + String(e.message).slice(0, 200) });
-  }
-});
+// /api/chat STEHT JETZT IN lib/sprache-routes.js (08.08.2026).
+//
+// Hier ging der Chat frueher direkt an Hermes. Zuletzt kam davon nur noch:
+//   HTTP 400: The 'gpt-5.6-sol' model is not supported when using Codex
+//             with a ChatGPT account.
+//
+// Selbst funktionierend haette dieser Weg nichts von dem gekonnt, was an der
+// Sprache haengt — Werkzeuge, STAND, Charakter, Gedaechtnis. Zwei Wege zur
+// selben Assistentin, von denen einer alles kann und einer nichts. Der
+// getippte Chat nimmt jetzt denselben Weg wie das Gespraech; nur wartet er
+// auf die Ergebnisse, statt sie einzeln vorzulesen.
 
 // ---------- Wissen (Vault-Browser) ----------
 app.get("/wissen", (req, res) => {
