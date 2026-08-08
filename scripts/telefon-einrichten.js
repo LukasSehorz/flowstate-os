@@ -57,7 +57,7 @@ function aufbau() {
           // "custom" heisst: NICHT ElevenLabs' Modell denkt, sondern unseres.
           // Das ist der ganze Punkt dieses Aufbaus — sonst waere es ein
           // Telefonbot, der Alexandra ANRUFEN kann, statt Alexandra zu sein.
-          llm: "custom",
+          llm: "custom-llm",   // genau so, nicht "custom" — die Schnittstelle nimmt nur diesen Wert
           custom_llm: {
             server_url: `${BASIS}/telefon`,
             model_id: "alexandra",
@@ -109,7 +109,7 @@ function aufbau() {
   console.log(`  Hoechstdauer: ${c.conversation?.max_duration_seconds} s`);
 
   const stimmt = c.tts?.voice_id === STIMME_ID
-    && c.agent?.prompt?.llm === "custom"
+    && c.agent?.prompt?.llm === "custom-llm"
     && String(c.agent?.prompt?.custom_llm?.server_url || "").includes("/telefon");
   console.log(stimmt ? "\nSteht." : "\nACHTUNG: Der Stand weicht ab — nicht telefonieren, bevor das geklärt ist.");
 
