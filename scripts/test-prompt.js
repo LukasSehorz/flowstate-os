@@ -40,7 +40,7 @@ const ERWARTET = [
   "whatsapp_senden", "mail_senden",
   "wetter", "mail_lesen", "whatsapp_lesen", "gehirn_suchen", "recherchieren", "lange_arbeit",
   "neuigkeiten", "nachschlagen", "daten_fragen",
-  "beleg_erstellen", "beleg_nummer",
+  "beleg_erstellen", "beleg_nummer", "anrufen",
   "zeigen",
 ];
 const fehlend = ERWARTET.filter((n) => !NAMEN.includes(n));
@@ -193,7 +193,19 @@ const PROSA_GRENZE = 9000;    // war 12.608 vor A4; nachweislich schlecht: 18.29
 // Damit der Ausreisser nicht unbeobachtet wachsen kann, wird er zusaetzlich
 // einzeln gedeckelt. Zwei Zahlen, zwei Fragen — statt einer Zahl, die beide
 // vermischt und deshalb keine von beiden richtig beantwortet.
-const SCHEMA_MEDIAN = 400;
+// ZWEITE ANPASSUNG (07.08., anrufen dazu). Der Median sprang von 380 auf 424,
+// ohne dass eine Beschreibung laenger geworden waere: Bei 23 Werkzeugen liegt
+// die Mitte auf einem kleinen, bei 24 auf dem naechstgroesseren. Ein Sprung aus
+// der Position, nicht aus dem Inhalt.
+//
+// EHRLICH GESAGT: Das ist das zweite Mal, dass diese Schranke nachgezogen wird
+// (vorher der Schnitt, jetzt der Median). Wer sie ein DRITTES Mal anheben will,
+// sollte sie stattdessen wegwerfen — dann misst sie nicht, was sie messen soll,
+// und eine Schranke, die man immer nur hochsetzt, ist keine.
+//
+// Was sie weiterhin faengt: wenn mehrere Beschreibungen gleichzeitig ausufern.
+// Was sie nicht faengt: eine einzelne, und dafuer ist die Obergrenze darunter da.
+const SCHEMA_MEDIAN = 450;
 const SCHEMA_GROESSTES = 1200;
 console.log(`\nFORMAT_ANHANG:  ${p.length} Zeichen`);
 if (stimme) console.log(`STIMME:         ${stimme.length} Zeichen`);

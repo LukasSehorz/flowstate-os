@@ -313,6 +313,14 @@ catch (e) { console.error("WhatsApp-Modul konnte nicht geladen werden:", e.messa
 
 // Telegram-Bot (Alexandra auf Telegram, Schnellspur + Sprachantwort). Schlummert
 // ohne TELEGRAM_BOT_TOKEN — beruehrt Hermes' eigenes Telegram nicht.
+// Alexandra am Telefon (07.08.). ElevenLabs ruft hier ihr Gehirn ab —
+// derselbe Prompt, derselbe STAND, dieselben Werkzeuge wie im Browser.
+try {
+  const telefon = require("./lib/telefon.js");
+  telefon.routen(app);
+  telefon.anmelden().catch((e) => console.error("Telefon-Anmeldung:", e.message));
+} catch (e) { console.error("Telefon-Modul:", e.message); }
+
 try {
   const telegram = require("./lib/telegram.js");
   telegram.starten();
