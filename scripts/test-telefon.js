@@ -172,6 +172,53 @@ const NACHRICHT = (...texte) => ({
   const ohneSatz = await t2.anrufen({ an: "+491701234567", ansage: "" });
   pruefe("Kein Anruf ohne Ansage", !ohneSatz.ok && /sagen/.test(ohneSatz.reply), ohneSatz.reply);
 
+  // --- Die Kostenbremse -------------------------------------------------------
+  //
+  // Lukas hatte mit einem frueheren Aufbau 300 € Monatsrechnung. Die Hoechstdauer
+  // beim Agenten deckelt den EINZELNEN Anruf; diese Grenze deckelt die ANZAHL.
+  // Ohne sie koennte eine Schleife hundertmal anrufen, jeder Anruf brav unter
+  // der Hoechstdauer.
+  process.env.TELEFON_MAX_AM_TAG = "3";
+  process.env.TELEFON_ZIEL = "+491701234567";
+  delete require.cache[require.resolve("../lib/telefon.js")];
+  const t3 = require("../lib/telefon.js");
+
+  // Waehlen wird abgefangen — es soll niemand angerufen werden.
+  const echterFetch = global.fetch;
+  let gewaehlt = 0;
+  global.fetch = async (u, o) => {
+    if (String(u).includes("convai/twilio/outbound-call")) {
+      gewaehlt++;
+      return { ok: true, status: 200, json: async () => ({ conversation_id: "c" + gewaehlt }) };
+    }
+    return echterFetch(u, o);
+  };
+
+  for (let i = 1; i <= 3; i++) {
+    const r = await t3.anrufen({ ansage: "Test " + i });
+    pruefe(`Anruf ${i} von 3 geht durch`, r.ok, r.reply);
+  }
+  const zuviel = await t3.anrufen({ ansage: "Einer zu viel" });
+  pruefe("Der vierte wird abgewiesen", !zuviel.ok, zuviel.reply);
+  pruefe("Und es wurde WIRKLICH nicht gewaehlt", gewaehlt === 3, `${gewaehlt}× gewaehlt`);
+  pruefe("Die Meldung sagt, woran es liegt", /Tagesgrenze/.test(zuviel.reply), zuviel.reply);
+  pruefe("Der Stand ist ablesbar", t3.stand().anrufe === 3 && t3.stand().hoechstens === 3, JSON.stringify(t3.stand()));
+
+  // Ein gescheiterter Anruf darf NICHT auf die Grenze angerechnet werden —
+  // sonst sperrt ein kaputter Zugang den ganzen Tag.
+  global.fetch = async (u, o) => {
+    if (String(u).includes("convai/twilio/outbound-call")) {
+      return { ok: false, status: 500, json: async () => ({}) };
+    }
+    return echterFetch(u, o);
+  };
+  process.env.TELEFON_MAX_AM_TAG = "2";
+  delete require.cache[require.resolve("../lib/telefon.js")];
+  const t4 = require("../lib/telefon.js");
+  await t4.anrufen({ ansage: "geht schief" });
+  pruefe("Ein gescheiterter Anruf zaehlt nicht mit", t4.stand().anrufe === 0, JSON.stringify(t4.stand()));
+  global.fetch = echterFetch;
+
   attrappe.close();
   console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Fälle bestanden.");
   process.exitCode = fehler ? 1 : 0;
