@@ -59,7 +59,10 @@ function aufbau() {
           // Telefonbot, der Alexandra ANRUFEN kann, statt Alexandra zu sein.
           llm: "custom-llm",   // genau so, nicht "custom" — die Schnittstelle nimmt nur diesen Wert
           custom_llm: {
-            server_url: `${BASIS}/telefon`,
+            // Das Feld heisst "url", nicht "server_url" — die Dokumentation
+            // schreibt beides, die Schnittstelle nimmt nur das erste.
+            // ElevenLabs haengt "/v1/chat/completions" selbst an.
+            url: `${BASIS}/telefon`,
             model_id: "alexandra",
             api_key: GEHEIM,
           },
@@ -105,12 +108,12 @@ function aufbau() {
   const c = stand.conversation_config || {};
   console.log(`  Stimme:       ${c.tts?.voice_id} (${c.tts?.model_id})`);
   console.log(`  Sprache:      ${c.agent?.language}`);
-  console.log(`  Gehirn:       ${c.agent?.prompt?.llm} -> ${c.agent?.prompt?.custom_llm?.server_url || "—"}`);
+  console.log(`  Gehirn:       ${c.agent?.prompt?.llm} -> ${c.agent?.prompt?.custom_llm?.url || "—"}`);
   console.log(`  Hoechstdauer: ${c.conversation?.max_duration_seconds} s`);
 
   const stimmt = c.tts?.voice_id === STIMME_ID
     && c.agent?.prompt?.llm === "custom-llm"
-    && String(c.agent?.prompt?.custom_llm?.server_url || "").includes("/telefon");
+    && String(c.agent?.prompt?.custom_llm?.url || "").includes("/telefon");
   console.log(stimmt ? "\nSteht." : "\nACHTUNG: Der Stand weicht ab — nicht telefonieren, bevor das geklärt ist.");
 
   const nummern = await el("convai/phone-numbers");
