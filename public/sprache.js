@@ -729,7 +729,11 @@
     const warte = zeile("sie", "…einen Moment", true);
     setzeZustand("denken");
     for (let i = 0; i < 45; i++) {
-      await new Promise((r) => setTimeout(r, 1200));
+      // ERST FRAGEN, DANN WARTEN (07.08.2026). Vorher stand das Warten davor,
+      // und selbst ein Auftrag, der beim Eintreffen schon fertig war, kostete
+      // 1,2 Sekunden Stille. Wetter braucht 57 ms, WhatsApp 1 ms — die
+      // Wartezeit war zuletzt fast vollstaendig hausgemacht.
+      if (i) await new Promise((r) => setTimeout(r, 700));
       const d = await fetch("/api/sprache/auftrag/" + id).then((r) => r.json()).catch(() => null);
       if (!d || !d.ok) break;
       if (d.fertig) {
