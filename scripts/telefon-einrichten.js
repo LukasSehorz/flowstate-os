@@ -45,7 +45,30 @@ async function el(pfad, opt = {}) {
 // den Prompt doch einmal selbst verwendet.
 const PROMPT = `Du bist Alexandra, die Assistentin von Lukas Sehorz (Flowstate, Sehorz & vom Hofe GbR). Du sprichst Deutsch, kurz und natürlich, wie am Telefon. Deine Antworten kommen von einem eigenen Server — gib sie unverändert weiter.`;
 
-function aufbau() {
+// Der Ausweis fuer unseren Endpunkt wird bei ElevenLabs als GEHEIMNIS
+// hinterlegt und nur referenziert — im Klartext nimmt die Schnittstelle ihn
+// nicht an. Das ist die bessere Loesung: Er steht dann nirgends in einer
+// Agentenkonfiguration, die man versehentlich teilt oder abbildet.
+const GEHEIMNIS_NAME = "flowstate_telefon";
+
+async function geheimnisAblegen() {
+  const liste = await el("convai/secrets");
+  const da = (liste.secrets || []).find((x) => x.name === GEHEIMNIS_NAME);
+  if (da) {
+    // Es gibt kein Nachlesen des Werts (zu Recht). Also immer neu setzen —
+    // sonst telefoniert der Agent womoeglich mit einem alten Ausweis, und der
+    // Fehler zeigt sich erst als Schweigen in der Leitung.
+    try { await el(`convai/secrets/${da.secret_id}`, { method: "DELETE" }); }
+    catch (e) { console.log(`  (altes Geheimnis blieb liegen: ${String(e.message).slice(0, 60)})`); }
+  }
+  const neu = await el("convai/secrets", {
+    method: "POST",
+    body: JSON.stringify({ type: "new", name: GEHEIMNIS_NAME, value: GEHEIM }),
+  });
+  return neu.secret_id || neu.id;
+}
+
+function aufbau(geheimId) {
   return {
     name: NAME,
     conversation_config: {
@@ -64,7 +87,7 @@ function aufbau() {
             // ElevenLabs haengt "/v1/chat/completions" selbst an.
             url: `${BASIS}/telefon`,
             model_id: "alexandra",
-            api_key: GEHEIM,
+            api_key: { secret_id: geheimId },
           },
         },
       },
@@ -88,16 +111,19 @@ function aufbau() {
     .filter(([, v]) => !v).map(([n]) => n);
   if (fehlt.length) { console.log("Es fehlt: " + fehlt.join(", ")); process.exit(1); }
 
+  const geheimId = await geheimnisAblegen();
+  console.log(`Ausweis hinterlegt: ${GEHEIMNIS_NAME}`);
+
   const liste = await el("convai/agents");
   const da = (liste.agents || []).find((a) => a.name === NAME);
 
   let id;
   if (da) {
     id = da.agent_id;
-    await el(`convai/agents/${id}`, { method: "PATCH", body: JSON.stringify(aufbau()) });
+    await el(`convai/agents/${id}`, { method: "PATCH", body: JSON.stringify(aufbau(geheimId)) });
     console.log(`Agent aktualisiert: ${id}`);
   } else {
-    const neu = await el("convai/agents/create", { method: "POST", body: JSON.stringify(aufbau()) });
+    const neu = await el("convai/agents/create", { method: "POST", body: JSON.stringify(aufbau(geheimId)) });
     id = neu.agent_id;
     console.log(`Agent angelegt: ${id}`);
   }
