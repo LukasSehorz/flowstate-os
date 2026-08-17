@@ -1,15 +1,16 @@
 const fs = require("fs"), path = require("path"), { spawn } = require("child_process");
 const puppeteer = require("puppeteer-core");
-for (const z of fs.readFileSync("C:/dev/flowstate-dashboard/.env", "utf-8").split("\n")) {
+const WURZEL = path.join(__dirname, "..");
+for (const z of fs.readFileSync(path.join(WURZEL, ".env"), "utf-8").split("\n")) {
   const t = z.trim(); if (!t || t.startsWith("#")) continue;
   const i = t.indexOf("="); if (i > 0) process.env[t.slice(0, i).trim()] ||= t.slice(i + 1).trim();
 }
-const ORDNER = "C:/dev/flowstate-dashboard/shots/os";
+const ORDNER = path.join(WURZEL, "shots", "os");
 const PORT = 3997;
 (async () => {
   fs.mkdirSync(ORDNER, { recursive: true });
   const srv = spawn("node", ["server.js"], {
-    cwd: "C:/dev/flowstate-dashboard",
+    cwd: WURZEL,
     env: { ...process.env, PORT, DASHBOARD_PASSWORD: "test123", VAULT_PATH: "C:/dev/flowstate-vault" },
     stdio: "ignore",
   });
