@@ -663,6 +663,20 @@ table.tabelle{width:100%;border-collapse:collapse}
 .anruf-tabelle th:nth-child(6),.anruf-tabelle td:nth-child(6){width:21%}
 .anruf-tabelle th:nth-child(7),.anruf-tabelle td:nth-child(7){width:8%}
 .anruf-tabelle td .zeile-titel{white-space:normal;line-height:1.25}
+/* Firmenname und Ort muessen sich markieren und kopieren lassen — man schlaegt
+   sie anderswo nach. Die Zeilen-Auswahl per Ziehen darf das nicht kosten:
+   waehrend eines Zuges traegt der body .zieht-aus, dann greift die Sperre aus
+   Zeile ~3015 wieder und die Markierung waechst nicht ueber die Tabelle. */
+body:not(.zieht-aus) .anruf-tabelle td .zeile-titel,
+body:not(.zieht-aus) .anruf-tabelle td .zeile-sub{
+  user-select:text;-webkit-user-select:text;cursor:text}
+/* Maps-Suche fuer Leads ohne Webseite: sichtbar, aber leiser als ein echter
+   Webseiten-Link — er fuehrt zu Google, nicht zum Betrieb selbst. Der lange
+   Selektor ist Absicht: weiter unten faerbt eine Regel ALLE Links der Tabelle
+   blau (body.crm-dashboard-design .anruf-tabelle a) und wuerde sonst gewinnen. */
+body .anruf-tabelle td a.maps-link{
+  color:var(--text-muted);font-weight:500;text-decoration:none;white-space:nowrap}
+body .anruf-tabelle td a.maps-link:hover{color:var(--primary);text-decoration:underline}
 .anruf-tabelle .anruf-ergebnis,.anruf-tabelle .anruf-grund,
 .anruf-tabelle .anruf-notiz,.anruf-tabelle .anruf-grund-frei{
   width:100%;padding:7px 9px;font-size:12.5px;border-radius:8px}
