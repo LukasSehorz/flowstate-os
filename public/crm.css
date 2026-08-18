@@ -670,6 +670,14 @@ table.tabelle{width:100%;border-collapse:collapse}
 body:not(.zieht-aus) .anruf-tabelle td .zeile-titel,
 body:not(.zieht-aus) .anruf-tabelle td .zeile-sub{
   user-select:text;-webkit-user-select:text;cursor:text}
+/* Handy oben, Festnetz darunter. Die zweite Nummer tritt zurueck: Sie ist der
+   Umweg, nicht das Ziel. Das Kuerzel davor steht nur da, wenn es zwei gibt. */
+.anruf-tabelle .tel-zweite{margin-top:3px}
+.anruf-tabelle .tel-art{
+  display:inline-block;min-width:52px;font-size:11px;color:var(--text-muted);
+  font-weight:500;letter-spacing:.01em}
+.anruf-tabelle .tel-zweite a{font-weight:400;opacity:.8}
+
 /* Wann der Lead hochgeladen wurde. Ein Datum, keine Meldung — deshalb noch
    eine Stufe leiser als die Nebenzeile, in der es steht, und angehaengt statt
    in einer eigenen Spalte. Wer es genau wissen will, faehrt darueber: im
