@@ -670,6 +670,13 @@ table.tabelle{width:100%;border-collapse:collapse}
 body:not(.zieht-aus) .anruf-tabelle td .zeile-titel,
 body:not(.zieht-aus) .anruf-tabelle td .zeile-sub{
   user-select:text;-webkit-user-select:text;cursor:text}
+/* Wann der Lead hochgeladen wurde. Ein Datum, keine Meldung — deshalb noch
+   eine Stufe leiser als die Nebenzeile, in der es steht, und angehaengt statt
+   in einer eigenen Spalte. Wer es genau wissen will, faehrt darueber: im
+   Tooltip stehen das volle Datum und die Liste, aus der der Lead stammt. */
+.anruf-tabelle .zeile-quelle{opacity:.62;white-space:nowrap;cursor:help}
+.anruf-tabelle .zeile-quelle::before{content:" · "}
+
 /* Maps-Suche fuer Leads ohne Webseite: sichtbar, aber leiser als ein echter
    Webseiten-Link — er fuehrt zu Google, nicht zum Betrieb selbst. Der lange
    Selektor ist Absicht: weiter unten faerbt eine Regel ALLE Links der Tabelle
