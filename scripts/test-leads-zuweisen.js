@@ -172,7 +172,16 @@ function rufen(schluessel, req) {
 
   // ------------------------------------------------------------------ Aufraeumen
   const weg = await crm.system(`delete from firmen where name like 'ZZ Testfirma %'`);
-  console.log(`\nAufgeraeumt: ${weg.rowCount} Testfirmen entfernt.`);
+  // Seit dem 18.08. legt jeder Upload eine Liste an (call_listen). Die
+  // Testfirmen loeschen ihre Eintraege per ON DELETE CASCADE mit, die Liste
+  // selbst bliebe als leere Huelle stehen — nach jedem Testlauf eine mehr.
+  // Sichtbar waere sie nicht (leadListen blendet leere Listen aus), Datenmuell
+  // ist sie trotzdem.
+  const huellen = await crm.system(
+    `delete from call_listen l where not exists (
+       select 1 from call_listen_eintraege e where e.liste_id = l.id)`);
+  console.log(`\nAufgeraeumt: ${weg.rowCount} Testfirmen entfernt`
+    + (huellen.rowCount ? `, ${huellen.rowCount} leere Liste(n) dazu.` : "."));
 
   await crm.pool.end();
   console.log(fehler ? `\n${fehler} Problem(e).` : "\nAlles sauber.");
