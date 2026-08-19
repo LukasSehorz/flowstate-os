@@ -47,6 +47,16 @@ services:
       # Sekunde. Ohne Schluessel wird Wikipedia genutzt (gratis, aber schwach
       # bei Aktuellem); hilft auch das nicht, geht es an die gruendliche Suche.
       - SERPER_API_KEY=${SERPER_API_KEY:-}
+      # Computer Use (20.08.2026, lib/computer.js): ein echter Browser fuer die
+      # Flugsuche. Der Pfad kommt aus dem Dockerfile; das Budget begrenzt, wie
+      # lange der Abruf hoechstens laufen darf. Gemessen am 20.08.: Google
+      # Fluege braucht rund 20 s bis zu den Preisen, mit abgeschalteten Bildern
+      # und Stylesheets; der ganze Vorgang 31 s. Der Chat wartet 45 s auf kurze
+      # Auftraege — 32 s Budget lassen genug Rand, dass die Antwort noch im
+      # Gespraech ankommt statt als Nachzuegler.
+      - CHROME_PFAD=${CHROME_PFAD:-/usr/bin/chromium}
+      - COMPUTER_BUDGET_MS=${COMPUTER_BUDGET_MS:-32000}
+      - COMPUTER_MODEL=${COMPUTER_MODEL:-claude-haiku-4-5}
       # Wie weit der Kalender im STAND nach vorn reicht (Stufe 3, 25.07.):
       # 14 Tage waren zu knapp — "was steht in drei Wochen an?" lief ins Leere.
       - KALENDER_TAGE=${KALENDER_TAGE:-35}

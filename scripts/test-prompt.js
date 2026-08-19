@@ -41,6 +41,9 @@ const ERWARTET = [
   "wetter", "mail_lesen", "whatsapp_lesen", "gehirn_suchen", "recherchieren", "lange_arbeit",
   "neuigkeiten", "nachschlagen", "daten_fragen",
   "beleg_erstellen", "beleg_nummer", "anrufen",
+  // 20.08.2026 dazugekommen, fuer die Werbeaufnahmen: ein echter Browser
+  // (lib/computer.js) und Nachschub fuer die Anrufliste (lib/leads-nachschub.js).
+  "computer_auftrag", "leads_nachschub",
   "zeigen",
 ];
 const fehlend = ERWARTET.filter((n) => !NAMEN.includes(n));
