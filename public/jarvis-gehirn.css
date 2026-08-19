@@ -257,6 +257,74 @@ body.jarvis-buehne .topbar { border-bottom: 1px solid var(--j-linie); }
   .gh-fussleiste { gap: 12px; }
 }
 
+/* ------------------------------------------------------- Handy (20.08.2026)
+
+   Auf dem Handy war die Seite unbenutzbar: Die Bedienleiste lief rechts aus
+   dem Bild, "ALEXANDRA" war links angeschnitten, der Mikrofon-Hinweis endete
+   mitten im Wort. Genau darueber soll aber gesprochen werden — die Ads zeigen
+   die Bedienung per Stimme am Telefon.
+
+   Der Grund war ein uebersehener Umbau: public/mobil.css passt die Sprachseite
+   ueber "body:has(.voix)" an — das war die alte Kugel-Buehne. Die neue heisst
+   ".gh". Damit griff KEINE der mobilen Regeln mehr, und niemand hat es
+   gemerkt, weil am Rechner alles richtig aussah.
+
+   Die Regeln stehen hier statt in mobil.css, weil dort weiterhin die alte
+   Fassung fuer andere Ansichten gilt. */
+@media (max-width: 620px) {
+  /* Nichts darf breiter sein als das Fenster. Ohne min-width:0 sprengt ein
+     langes Wort in einem Flex-Kind die ganze Zeile. */
+  body.jarvis .gh,
+  body.jarvis .gh-kopf,
+  body.jarvis .gh-fuss,
+  body.jarvis .gh-mitte { max-width: 100%; min-width: 0; }
+  body.jarvis .gh { overflow-x: clip; }
+
+  /* Der Inhalt muss AN der Rail vorbei, nicht unter ihr durch. Sie steht
+     fest bei left:14px und ist 64px breit, endet also bei 78px — der
+     Standard-Einzug von 64px liess sie 14px ueberlappen, und genau darin
+     verschwand der Anfang von "ALEXANDRA". */
+  body.jarvis .inhalt { margin-left: 86px; }
+
+  body.jarvis .gh-kopf { padding: 12px 14px 0; flex-wrap: wrap; }
+  body.jarvis .gh-fuss { padding: 8px 14px 14px; }
+
+  /* Der Name darf nicht mehr in die Kopfleiste ragen. */
+  body.jarvis #kugel-wort { font-size: clamp(20px, 7.5vw, 32px); letter-spacing: .03em; }
+
+  /* Die vier Knoepfe in zwei Reihen statt einer zu langen. Sie bleiben gross
+     genug zum Treffen mit dem Daumen — 44 px ist das uebliche Mindestmass.
+     Der Selektor traegt "body.jarvis" NICHT aus Gewohnheit: Ein @media-Block
+     hat keine hoehere Spezifitaet, und die Grunddefinition von .gh-leiste
+     steht weiter unten in dieser Datei. Ohne den Zusatz gewinnt sie, und die
+     Knoepfe stehen weiter in einer Reihe aus dem Bild heraus. */
+  body.jarvis .gh-leiste {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+  body.jarvis .gh-leiste .vx-tool {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+    white-space: nowrap;
+  }
+
+  /* Fusszeile untereinander: "Signal" und "Ausgabe" nebeneinander ergaeben
+     zwei je halb abgeschnittene Spalten. */
+  body.jarvis .gh-fussleiste { flex-direction: column; align-items: flex-start; gap: 8px; }
+  body.jarvis .gh-fussleiste > * { max-width: 100%; text-align: left; }
+
+  /* Hinweistexte umbrechen lassen statt abschneiden. */
+  body.jarvis #kugel-hinweis { white-space: normal; overflow-wrap: anywhere; text-align: center; }
+
+  /* Gesperrte Versalien setzen den Zwischenraum AUCH hinter den letzten
+     Buchstaben. Bei "ZUSTAND" am rechten Rand ragt dadurch das D heraus.
+     Ein Ausgleich in derselben Groesse holt es zurueck. */
+  body.jarvis .gh-kopf .j-label { margin-right: -.18em; padding-right: .18em; }
+}
+
 /* Die Anzeigezeile. Sie traegt #kugel-wort — in Ruhe "ALEXANDRA", sonst das,
    was gerade passiert ("HÖRT ZU", "DENKT NACH", "SPRICHT"). Die Zeile kommt
    unveraendert aus public/sprache.js; hier bekommt sie nur eine Buehne.
