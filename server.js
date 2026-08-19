@@ -645,218 +645,862 @@ try {
   });
 }
 
-// ---------- Zentrale ----------
+// ---------- Zentrale: JARVIS // COMMAND CENTER ----------
 //
-// Nur Karten, keine Kachelreihe mehr (27.07.). Die fuenf Kacheln oben ("Termine
-// heute", "Wichtige Mails", "Brauchen dich", "Leads gesamt", "Offene Deals")
-// zeigten ausnahmslos Zahlen, die zwei Zentimeter tiefer nochmal in der
-// zugehoerigen Karte standen — jede Zahl wurde doppelt geholt und doppelt
-// angezeigt. Die Karte gewinnt, weil sie die Zahl UND die Zeilen dahinter hat.
+// Umbau vom Karten-Dashboard zum Steuerpult (19.08.2026).
 //
-// Ebenfalls raus: "Wissens-Vault" (Dateizaehler) und "System" (Laufzeit, Mounts).
-// Das sind Betriebsdaten, keine Tagesuebersicht. Die Endpunkte dazu gibt es
-// weiter, sie haengen nur nicht mehr auf der Startseite.
+// Anlass: Diese Seite wird abgefilmt und als Meta-Anzeige fuer das Operating
+// System geschaltet. Sie muss aus zwei Metern Entfernung auf einem grossen
+// Bildschirm tragen — dicht, leuchtend, in dauernder Bewegung. Ein ruhiges
+// Kachel-Dashboard waere fuer diesen Zweck ein Fehlschlag.
 //
-// Dafuer sind die drei Bereiche dazugekommen, die es beim letzten Stand der
-// Zentrale noch nicht gab: Buchhaltung, Content und Marketing. Jeder liefert
-// seine Zahlen ueber eine eigene Route in seinem eigenen Modul.
-app.get("/", async (req, res) => {
-  const heute = new Date().toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  // Buchhaltung sieht nur die Geschaeftsfuehrung (dieselbe Regel wie unter
-  // /buchhaltung, siehe lib/buchhaltung-routes.js). Fuer ein Teammitglied wird
-  // die Karte gar nicht erst gebaut — eine Karte, die nur "darfst du nicht
-  // sehen" sagt, ist keine Information.
-  //
-  // Wer nur mit dem gemeinsamen Passwort da ist (kein req.session.crm), bekommt
-  // sie trotzdem: die Karte fragt dann nach der persoenlichen Anmeldung, genau
-  // wie die CRM-Karte darueber. Sonst waere die Buchhaltung fuer Jannik und
-  // Lukas je nach Anmeldeweg mal da und mal weg.
+// Was sich dabei NICHT geaendert hat, und das ist die wichtigere Haelfte:
+// - Es sind dieselben echten Zahlen aus derselben Datenbank wie vorher. Kein
+//   Wert auf dieser Seite ist erfunden. Was es nicht gibt, steht als
+//   Leerzustand da und wird nicht durch eine huebsche Null ersetzt.
+// - Die Buchhaltung sieht weiterhin nur die Geschaeftsfuehrung (dieselbe
+//   Regel wie unter /buchhaltung).
+// - Jeder Weg in einen anderen Bereich laeuft ueber darfModul(). Eine Kachel
+//   ist eine Tuer, und eine Tuer, die nicht aufgeht, gehoert nicht in die Wand.
+// - Ohne persoenliche Anmeldung bleibt die Seite benutzbar: Termine, Briefing
+//   und die Wege in die Bereiche stehen, die Zahlen nicht — an dem Konto
+//   haengen die Zeilenrechte in der Datenbank.
+//
+// Aufbau: hudDaten() holt alles in einem Rutsch, hudWerte() rechnet daraus die
+// abgeleiteten Groessen, hudStuecke() baut die Teile, die sich bewegen.
+// Dieselben drei Funktionen benutzt /api/hud/zentrale weiter unten. So gibt es
+// GENAU EINE Darstellung jeder Zahl — der Nachzug im Browser kann nicht
+// auseinanderlaufen mit dem, was beim ersten Laden dastand. (Genau das war
+// beim frueheren Kalender-Doppel passiert, siehe /api/kalender/tag.)
+
+// Der Direktionsvertrag. Steht im ausgelieferten HTML direkt hinter <body>,
+// damit die Entwurfsentscheidung dort nachlesbar ist, wo die Seite entsteht —
+// und nicht nur in einem Dokument, das niemand oeffnet.
+const HUD_VERTRAG = `<!--
+THESIS: Die Firma ist ein Instrument; die Startseite ist sein Cockpit, nicht ihr Bericht.
+OWN-WORLD: Fast schwarzes Blau, ein einziger leuchtender Akzent (#4B8DF8), Eckwinkel statt Karten, gesperrte Versalien, Messwerte in Monospace. Signalfarben nur fuer Alarm und Trend.
+STORY: Das Pult faehrt hoch — Panels setzen sich, Zahlen zaehlen an, der Zeiger schwingt ein, die Saeulen bauen sich von links auf. Danach bleibt es wach: Band, Lauftext, Puls, Nachzug alle 45 Sekunden.
+FIRST VIEWPORT: Kopfzeile mit Kennwertband; darunter Tageslast-Kugel links, das Anstehende gross in der Mitte, Messuhr Monatsumsatz rechts.
+FORM: Ungleiches Zwoelf-Spalten-Raster, dichte Mikrotypografie, gezeichnete SVG-Instrumente. Jede Flaeche traegt einen echten Wert oder bleibt ehrlich leer.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->`;
+
+// Zeichen, die es in ICON (schale.js) und ZT (oben) noch nicht gibt. Gebaut
+// mit demselben S() und derselben Strichstaerke — echte gezeichnete Pfade,
+// keine Unicode-Pfeile: ein Pult mit ▲ und → aus der Zeichentabelle sieht in
+// jedem Browser anders aus.
+const HUD_IKON = {
+  pfeil: S('<path d="M4 12h13M12 7l5 5-5 5"/>'),
+  telefon: S('<path d="M15.7 21A12.7 12.7 0 0 1 3 8.3V6a1.5 1.5 0 0 1 1.5-1.5h2.2a1 1 0 0 1 1 .8l.6 2.9a1 1 0 0 1-.5 1.1l-1.5.7a11 11 0 0 0 5.2 5.2l.7-1.5a1 1 0 0 1 1.1-.5l2.9.6a1 1 0 0 1 .8 1V19.5A1.5 1.5 0 0 1 18 21z"/>'),
+  puls: S('<path d="M2 12h4l2.6-7.5 4.8 15L16 12h6"/>'),
+};
+
+// Wie viele Zellen eine Saeule im Histogramm hoch ist. 22 statt eines glatten
+// Balkens: das ist die Rasterung eines Messgeraets, und sie macht die Saeulen
+// im Video lesbar, wo ein Farbverlauf verschwimmt.
+const HUD_ZELLEN = 22;
+
+// Die fuenf Ausgaenge eines Cold Calls, in der Reihenfolge, in der man sie
+// lesen will: erst der Erfolg, dann die Zwischenzustaende, zuletzt die Absage.
+// Die Schluessel sind die Tags aus der Datenbank (siehe crm.anrufStatistik).
+const HUD_CALLS = [
+  { schluessel: "gebucht", titel: "Erstgespräch gebucht", ton: "gruen" },
+  { schluessel: "follow-up", titel: "Follow-up", ton: "" },
+  { schluessel: "nicht-erreicht", titel: "Nicht erreicht", ton: "gelb" },
+  { schluessel: "keine-zeit", titel: "Keine Zeit", ton: "gelb" },
+  { schluessel: "absage", titel: "Absage", ton: "rot" },
+];
+
+const MONATSKUERZEL = ["JAN", "FEB", "MÄR", "APR", "MAI", "JUN", "JUL", "AUG", "SEP", "OKT", "NOV", "DEZ"];
+const hudZahl = (n) => Math.round(Number(n) || 0).toLocaleString("de-DE");
+const hudTag = (w) => (w ? new Date(w).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) : "");
+
+// Cache-Stempel fuer die eigenen Browser-Dateien. Dasselbe Verfahren wie in
+// lib/schale.js: nach einem Deploy laeuft sonst im Browser die alte Fassung
+// weiter, und ein bereits behobener Fehler wirkt fort.
+function hudStempel(datei) {
+  try {
+    const st = fs.statSync(path.join(__dirname, "public", datei.replace(/^\//, "")));
+    return "?v=" + Math.round(st.mtimeMs).toString(36);
+  } catch { return ""; }
+}
+
+// Alle Zahlen der Zentrale in einem Rutsch. Faellt ein Teil aus, faellt nur
+// dieser Teil aus — die Seite bleibt stehen. Auf einem Laptop ohne
+// DATABASE_URL laeuft sie ohne eine einzige Abfrage durch.
+async function hudDaten(req) {
   const nutzer = (req.session && req.session.crm) || null;
-  const admin = !nutzer || nutzer.rolle === "admin";
-  // Dieselbe Regel wie in der Rail und im Torwaechter: eine Karte auf der
-  // Zentrale ist eine Tuer, und eine Tuer, die nicht aufgeht, gehoert nicht in
-  // die Wand. Ohne persoenliches Konto bleibt alles wie bisher.
+  const admin = Boolean(nutzer && nutzer.rolle === "admin");
   const darf = (id) => require("./lib/schale.js").darfModul(nutzer, id);
-  // Buchhaltung, Content und Marketing haengen an der Datenbank — ohne
-  // DATABASE_URL laedt server.js ihre Routen oben gar nicht erst. Dann duerfen
-  // hier auch keine Karten stehen, die auf eine 404 zeigen und rot "Fehler beim
-  // Laden" schreiben. Auf dem Laptop ohne Datenbank bleibt die Zentrale damit
-  // schlicht kuerzer, statt kaputt auszusehen.
   const datenbank = Boolean(process.env.DATABASE_URL);
-  // aktiv = "zentrale-start" (nicht "zentrale"): Seit der Kalender als
-  // Unterpunkt darunter haengt, hat die Zentrale selbst einen eigenen
-  // Untereintrag — sonst waere in der Rail kein Kind markiert.
-  // Eine Karte = ein Bereich. Kopf mit Titel und Unterzeile, rechts der Weg
-  // dorthin — dasselbe Muster wie die Karten im CRM, in der Buchhaltung und im
-  // Content. Der Inhalt wird nachgeladen und von renderCard() unten gebaut.
-  const karte = (titel, unter, quelle, ziel, zielWort) => `
-    <div class="karte"><div class="karte-kopf"><div>
-      <h2>${titel}</h2><div class="sub">${unter}</div></div>
-      ${ziel ? `<a href="${ziel}" class="caption">${zielWort} →</a>` : ""}</div>
-      <div data-load="${quelle}"><p class="caption">Lädt …</p></div></div>`;
+  const d = {
+    nutzer, admin, darf, datenbank,
+    fehler: null, z: null, kz: null, todos: [],
+    team: [], anrufeJePerson: {}, anrufe: null, finanzen: null,
+  };
+  if (!datenbank || !nutzer) return d;
 
-  // ---- Geld und Ausblick: dieselben Groessen wie im CRM-Dashboard ----
-  //
-  // Diese drei Bloecke werden SERVERSEITIG gebaut, nicht nachgeladen wie die
-  // Karten darunter. Grund: eine Kurve aus zwoelf Monaten im Browser zu
-  // zeichnen hiesse, die Bezier-Rechnung ein zweites Mal zu schreiben — und
-  // damit zwei Kurven zu pflegen, die dieselbe Zahl zeigen sollen. Die Daten
-  // kommen aus crm.zentraleZahlen(), die Abschlusschancen aus
-  // lib/pipeline-quoten.js: dieselbe Quelle, aus der das CRM-Dashboard rechnet.
-  //
-  // Ohne persoenliche Anmeldung gibt es die Zahlen nicht — daran haengen die
-  // Zeilenrechte in der Datenbank. Dann steht hier ein Hinweis statt einer
-  // leeren Kurve.
-  let geldBlock = "";
-  if (datenbank && nutzer) {
-    try {
-      const z = await require("./lib/crm.js").zentraleZahlen(nutzer);
-      const MON = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
-      const kurve = umsatzKurve(z.verlauf.map((v) => v.wert));
-      const monatName = new Date().toLocaleDateString("de-DE", { month: "long" });
-      const vormonatName = (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
-        return d.toLocaleDateString("de-DE", { month: "long" }); })();
-      // Veraenderung zum Vormonat. Ohne Vormonatsumsatz gibt es keinen
-      // Prozentwert — "+100 %" auf eine Null ist keine Aussage, sondern eine
-      // Division, die zufaellig durchgeht.
-      const wachstum = z.umsatz.vormonat > 0
-        ? Math.round(((z.umsatz.monat - z.umsatz.vormonat) / z.umsatz.vormonat) * 100)
-        : null;
-      const monateMitUmsatz = z.verlauf.filter((v) => v.wert > 0).length;
-      const schnitt = monateMitUmsatz ? z.umsatz.gesamt / monateMitUmsatz : 0;
-
-      geldBlock = `
-      <div class="zt-geld">
-        <!-- Links die Zahl, um die es geht. Anders als im CRM-Dashboard steht
-             rechts nicht das Monatsziel, sondern der Umsatz INSGESAMT — auf der
-             Startseite ist "was haben wir bisher gemacht" die zweite Frage nach
-             "was haben wir diesen Monat gemacht". -->
-        <!-- Der ganze Kasten führt zur Aufschlüsselung. Eine Summe ohne den
-             Weg zu ihren Bestandteilen ist eine Behauptung — hier ist sie
-             nachprüfbar: ein Klick, und darunter stehen die Kunden. -->
-        <a class="karte zt-umsatz" href="/umsatz" title="Alle Abschlüsse nach Monat ansehen">
-          <div class="zt-umsatz-haupt">
-            <span class="kachel-label">Umsatz ${esc(monatName)}</span>
-            <div class="zt-umsatz-zahl">${eur(z.umsatz.monat)}</div>
-            <div class="zt-umsatz-fuss">
-              <span class="caption">${z.umsatz.anzahl_monat} ${z.umsatz.anzahl_monat === 1 ? "Abschluss" : "Abschlüsse"}</span>
-              ${wachstum === null
-                ? `<span class="caption zt-punkt">${esc(vormonatName)} ohne Umsatz</span>`
-                : `<span class="trend ${wachstum >= 0 ? "auf" : "ab"} klein">${wachstum >= 0 ? "↗" : "↘"} ${Math.abs(wachstum)} % zu ${esc(vormonatName)}</span>`}
-            </div>
-          </div>
-          <div class="zt-umsatz-seite">
-            <div class="zt-umsatz-neben">
-              <span class="kachel-mini-titel">${esc(vormonatName)}</span>
-              <div class="zt-umsatz-neben-zahl">${eur(z.umsatz.vormonat)}</div>
-            </div>
-            <div class="zt-umsatz-neben stark">
-              <span class="kachel-mini-titel">Insgesamt</span>
-              <div class="zt-umsatz-neben-zahl">${eur(z.umsatz.gesamt)}</div>
-              <span class="kachel-mini-ziel">${z.umsatz.anzahl_gesamt} Abschlüsse · Ø ${eur(schnitt)}/Monat</span>
-            </div>
-          </div>
-        </a>
-
-        <div class="karte zt-kurve">
-          <div class="karte-kopf"><div><h2>Umsatzentwicklung</h2>
-            <div class="sub">Zwölf Monate — gewonnene Deals je Monat</div></div>
-            <a href="/crm" class="caption">CRM →</a></div>
-          <div class="chart-flaeche" style="height:200px">
-            <div class="chart-y">${[kurve.max, kurve.max * .75, kurve.max * .5, kurve.max * .25, 0]
-              .map((v, i) => `<span style="top:${kurve.gitter[i]}px">${eurK(v)}</span>`).join("")}</div>
-            <svg viewBox="0 0 800 200" preserveAspectRatio="none" style="width:100%;height:180px">
-              <defs>
-                <linearGradient id="ztfl" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="var(--blau-600)" stop-opacity=".38"/>
-                  <stop offset="45%" stop-color="var(--blau-500)" stop-opacity=".16"/>
-                  <stop offset="100%" stop-color="var(--blau-400)" stop-opacity="0"/></linearGradient>
-                <linearGradient id="ztln" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stop-color="var(--blau-400)"/>
-                  <stop offset="100%" stop-color="var(--blau-900)"/></linearGradient>
-              </defs>
-              ${kurve.gitter.map((y) => `<line x1="0" y1="${y}" x2="800" y2="${y}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 6"/>`).join("")}
-              <path d="${kurve.flaeche}" fill="url(#ztfl)"/>
-              <path d="${kurve.linie}" fill="none" stroke="url(#ztln)" stroke-width="2.5" stroke-linecap="round"/>
-              ${kurve.pkt.map((p) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" fill="var(--surface-fest, #fff)" stroke="var(--blau-600)" stroke-width="2.5"/>`).join("")}
-            </svg>
-            <div class="chart-achse">${z.verlauf.map((v) =>
-              `<span class="caption">${MON[Number(v.monat.slice(5, 7)) - 1]}</span>`).join("")}</div>
-          </div>
-        </div>
-
-        <div class="karte zt-vorn">
-          <div class="karte-kopf"><div><h2>Blick nach vorn</h2>
-            <div class="sub">Was in der offenen Pipeline steckt</div></div></div>
-          <div class="forecast">
-            <div class="forecast-label">${ZT.waage} Forecast</div>
-            <div class="forecast-zahl">${eur(z.forecast)}</div>
-            <div class="forecast-sub">gewichtet nach Phasen-Wahrscheinlichkeit</div>
-          </div>
-          <div class="kennliste">
-            <div class="kennzeile">${ZT.trend}<span>Pipeline offen</span><b>${eur(z.pipeline_wert)}</b></div>
-            <div class="kennzeile">${ZT.schichten}<span>Offene Deals</span><b>${z.offene_deals}</b></div>
-            <div class="kennzeile">${ZT.euro}<span>Ø Deal-Größe</span><b>${z.offene_deals ? eur(z.pipeline_wert / z.offene_deals) : "—"}</b></div>
-            <div class="kennzeile">${ZT.kalenderKlein}<span>Nächste 30 Tage</span><b>${z.erwartet30 ? eur(z.erwartet30) : "—"}</b></div>
-            <div class="kennzeile">${ZT.ziel}<span>Kunden · Leads</span><b>${z.kunden} · ${z.leads}</b></div>
-          </div>
-        </div>
-      </div>`;
-    } catch (e) {
-      console.error("Zentrale-Zahlen:", e.message);
-      geldBlock = `<div class="hinweis warn" style="margin-bottom:16px">${ZT.warnung}<div>
-        Umsatz und Forecast sind gerade nicht abrufbar — die CRM-Datenbank antwortet nicht.</div></div>`;
-    }
-  } else if (datenbank) {
-    geldBlock = `<div class="hinweis info" style="margin-bottom:16px">${ZT.info}<div>
-      <strong>Melde dich persönlich an</strong>, dann stehen hier Umsatz, Entwicklung und Forecast —
-      an deinem Konto hängen die Zeilenrechte in der Datenbank.
-      <a href="/crm/anmelden">Jetzt anmelden →</a></div></div>`;
+  const crm = require("./lib/crm.js");
+  try {
+    // zentraleZahlen liefert Umsatz, Zwoelf-Monats-Verlauf und den gewichteten
+    // Forecast; kennzahlen() legt die Zaehlstaende daneben, die dort nicht
+    // drinstehen (Wiedervorlagen, gewonnen/verloren im Monat).
+    const [z, kz, todos] = await Promise.all([
+      crm.zentraleZahlen(nutzer),
+      crm.kennzahlen(nutzer),
+      crm.todosHeute(nutzer).catch(() => []),
+    ]);
+    d.z = z; d.kz = kz; d.todos = todos || [];
+  } catch (e) {
+    console.error("Zentrale-Zahlen:", e.message);
+    d.fehler = "Umsatz, Aufgaben und Pipeline sind gerade nicht abrufbar — die CRM-Datenbank antwortet nicht.";
+    return d;
   }
 
-  res.send(layout("Zentrale", "zentrale-start", `
-    <div class="seiten-kopf">
-      <div><p class="sub">${heute}${nutzer ? " · " + esc(nutzer.name.split(" ")[0]) : ""}</p></div>
-      <!-- Die Knöpfe starten eure eigenen Abläufe: Briefing, Mail-Triage,
-           Lead-Lauf, Alexandra. Nichts davon gehört auf die Zentrale von
-           jemandem, der diese Bereiche gar nicht hat — ein Knopf, der ins
-           Leere führt, ist schlimmer als kein Knopf. -->
-      <div class="zt-tasten">
-        ${admin ? `
-        <form method="post" action="/briefing/neu"><button class="dunkel">${ICON.sonne} Briefing erstellen</button></form>
-        <form method="post" action="/skill/mail-triage"><button class="sekundaer">${ZT.post} Mail-Triage starten</button></form>` : ""}
-        ${darf("leads") ? `<a class="knopf sekundaer" href="/leads">${ICON.leads} Lead-Lauf</a>` : ""}
-        ${darf("chat") ? `<a class="knopf sekundaer" href="/chat">${ICON.funke} Alexandra fragen</a>` : ""}
+  // Cold Calling. Ohne Adminrechte NUR die eigene Liste: sonst stehen bei
+  // Jannik die Anrufe, die Ioannis gefuehrt hat, als seine da (der Fehler vom
+  // 29.07., siehe Kommentar an crm.anrufStatistik).
+  if (darf("crm")) {
+    try { d.anrufe = await crm.anrufStatistik(nutzer, admin ? {} : { besitzer: nutzer.id }); }
+    catch (e) { console.error("Zentrale-Anrufe:", e.message); }
+  }
+
+  // Die Aufschluesselung je Person gibt es nur fuer die Geschaeftsfuehrung —
+  // dieselbe Regel wie bei /crm/team (nurAdmin in der Rail).
+  if (admin && darf("crm")) {
+    try {
+      const team = await crm.teamZahlen(nutzer);
+      d.team = team || [];
+      const je = await Promise.all(d.team.map((p) =>
+        crm.anrufStatistik(nutzer, { besitzer: p.id }).catch(() => null)));
+      d.team.forEach((p, i) => { d.anrufeJePerson[p.id] = je[i]; });
+    } catch (e) { console.error("Zentrale-Team:", e.message); }
+  }
+
+  // Buchhaltung: dieselbe Rechtepruefung wie in /api/buchhaltung/stats.
+  if (admin) {
+    try { d.finanzen = await require("./lib/buchhaltung.js").kennzahlen(nutzer); }
+    catch (e) { console.error("Zentrale-Finanzen:", e.message); }
+  }
+  return d;
+}
+
+// Aus den Rohdaten die Groessen, die das Pult anzeigt. Alles hier ist eine
+// Rechnung auf echten Werten — nichts wird geschaetzt und nichts gefuellt.
+function hudWerte(d) {
+  const z = d.z, kz = d.kz, f = d.finanzen;
+  const verlauf = z ? z.verlauf : [];
+  const monat = z ? z.umsatz.monat : 0;
+  const vormonat = z ? z.umsatz.vormonat : 0;
+
+  // Die Skala der Messuhr ist der beste Monat der letzten zwoelf. Bewusst kein
+  // erfundenes Monatsziel: ein Zeiger, der gegen eine ausgedachte Marke laeuft,
+  // behauptet etwas ueber die Firma, das niemand festgelegt hat. Der beste
+  // bisherige Monat ist eine Zahl, die es wirklich gibt — und der Zeiger sagt
+  // damit "so gut wie je" statt "Ziel erreicht".
+  const skala = Math.max(monat, vormonat, ...verlauf.map((v) => v.wert), 0);
+  const uhrAnteil = skala > 0 ? Math.min(1, monat / skala) : 0;
+  const vormonatAnteil = skala > 0 ? Math.min(1, vormonat / skala) : 0;
+
+  // Veraenderung zum Vormonat. Ohne Vormonatsumsatz gibt es keinen Prozentwert
+  // — "+100 %" auf eine Null ist keine Aussage, sondern eine Division, die
+  // zufaellig durchgeht.
+  const wachstum = vormonat > 0 ? Math.round(((monat - vormonat) / vormonat) * 100) : null;
+
+  const nach = (d.anrufe && d.anrufe.nach) || {};
+  const anrufeGesamt = Object.keys(nach).reduce((n, k) => n + (nach[k].gesamt || 0), 0);
+  const anrufeHeute = Object.keys(nach).reduce((n, k) => n + (nach[k].heute || 0), 0);
+  const callMax = Math.max(1, ...HUD_CALLS.map((c) => (nach[c.schluessel] || {}).gesamt || 0));
+
+  const t = (z && z.todos) || { offen: 0, heute: 0, ueberfaellig: 0, heute_erledigt: 0 };
+  const tagesLast = t.heute + t.heute_erledigt;
+  const tagesAnteil = tagesLast > 0 ? t.heute_erledigt / tagesLast : 0;
+
+  const histMax = Math.max(1, ...verlauf.map((v) => v.wert));
+
+  return {
+    skala, uhrAnteil, vormonatAnteil, wachstum, verlauf, histMax,
+    nach, anrufeGesamt, anrufeHeute, callMax, todos: t, tagesLast, tagesAnteil,
+    // Die flache Werteliste: genau diese Schluessel stehen als data-wert an den
+    // Zahlen im HTML, und genau sie schickt /api/hud/zentrale beim Nachzug.
+    werte: {
+      umsatz_monat: monat,
+      umsatz_vormonat: vormonat,
+      umsatz_gesamt: z ? z.umsatz.gesamt : 0,
+      abschluesse_monat: z ? z.umsatz.anzahl_monat : 0,
+      abschluesse_gesamt: z ? z.umsatz.anzahl_gesamt : 0,
+      forecast: z ? z.forecast : 0,
+      erwartet30: z ? z.erwartet30 : 0,
+      pipeline_wert: z ? z.pipeline_wert : 0,
+      offene_deals: z ? z.offene_deals : 0,
+      kunden: z ? z.kunden : 0,
+      leads: z ? z.leads : 0,
+      gewonnen_monat: kz ? kz.gewonnen_monat : 0,
+      verloren_monat: kz ? kz.verloren_monat : 0,
+      wiedervorlagen: kz ? kz.wiedervorlagen : 0,
+      todos_heute: t.heute,
+      todos_offen: t.offen,
+      todos_ueberfaellig: t.ueberfaellig,
+      todos_erledigt: t.heute_erledigt,
+      anrufe_gesamt: anrufeGesamt,
+      anrufe_heute: anrufeHeute,
+      gebucht_gesamt: (nach.gebucht || {}).gesamt || 0,
+      absagen_gesamt: (nach.absage || {}).gesamt || 0,
+      fin_einnahmen: f ? f.einnahmen_monat : 0,
+      fin_ausgaben: f ? f.ausgaben_monat : 0,
+      fin_ergebnis: f ? f.ergebnis_monat : 0,
+      fin_offen: f ? f.offen_summe : 0,
+      fin_ueberfaellig: f ? f.ueberfaellig : 0,
+      fin_belege: f ? f.belege_offen : 0,
+    },
+  };
+}
+
+// Eine grosse Zahl im Pult. data-ziel = der Wert, von dem aus hud-zentrale.js
+// hochzaehlt; data-wert = der Name, unter dem der Nachzug sie wiederfindet.
+function hudZ(schluessel, wert, art, klasse) {
+  const text = art === "eur" ? eur(wert) : art === "eurk" ? eurK(wert) : hudZahl(wert);
+  return `<span class="hud-zahl${klasse ? " " + klasse : ""}" data-wert="${schluessel}"` +
+    ` data-ziel="${Number(wert) || 0}" data-format="${art || "zahl"}">${text}</span>`;
+}
+// Eine Zahl mitten im Satz: zaehlt nicht hoch (kein data-ziel), wird beim
+// Nachzug aber mit aktualisiert — sonst stuende neben einer frischen Summe
+// eine alte Stueckzahl.
+function hudN(schluessel, wert, art) {
+  const text = art === "eur" ? eur(wert) : art === "eurk" ? eurK(wert) : hudZahl(wert);
+  return `<span data-wert="${schluessel}" data-format="${art || "zahl"}">${text}</span>`;
+}
+
+// --- Die beweglichen Stuecke. Seite und Nachzug bauen sie mit denselben
+//     Funktionen, damit es keine zweite Fassung derselben Liste gibt. ---
+
+function hudTodoListe(d) {
+  if (!d.nutzer || !d.datenbank) {
+    return `<div class="hud-leer">${ZT.info}<div><b>Ohne Anmeldung keine Aufgaben</b>
+      Die Aufgaben hängen an deinem persönlichen Konto.</div></div>`;
+  }
+  if (!d.todos.length) {
+    const offen = d.z ? d.z.todos.offen : 0;
+    return `<div class="hud-leer">${ZT.haken}<div><b>Nichts eingeplant</b>
+      ${offen ? `${offen} Aufgaben sind offen, aber keine für heute vorgemerkt.` : "Alles erledigt."}</div></div>`;
+  }
+  const heute = new Date(); heute.setHours(0, 0, 0, 0);
+  const zeilen = d.todos.slice(0, 7).map((t) => {
+    const spaet = Boolean(t.faellig && new Date(t.faellig) < heute);
+    const sparte = ["webdesign", "performance", "ki"].includes(t.sparte) ? t.sparte : "ohne";
+    const unter = [t.firma_name, t.geschaeftsfuehrer, t.ort, t.dringlichkeit]
+      .filter(Boolean).map((x) => esc(x)).join(" · ");
+    const stempel = t.faellig ? `${spaet ? "SEIT" : "BIS"} ${hudTag(t.faellig)}` : "HEUTE";
+    // Die Zeile fuehrt in die Kundenakte, ersatzweise in die Aufgabenliste.
+    // Darf sie weder das eine noch das andere oeffnen, wird sie KEIN Link:
+    // ein Klick, der auf der Zentrale wieder landet, ist eine Sackgasse mit
+    // Zeigefinger-Cursor.
+    const ziel = d.darf("crm") && t.firma_id ? `/crm/firma/${t.firma_id}` : d.darf("todos") ? "/todos" : null;
+    const inneres = `<span class="hud-marke-punkt ${sparte}" aria-hidden="true"></span>
+      <span class="hud-todo-text"><strong>${esc(t.titel)}</strong>${unter ? `<span>${unter}</span>` : ""}</span>
+      <span class="hud-stempel ${spaet ? "spaet" : "jetzt"}">${stempel}</span>`;
+    return ziel ? `<a class="hud-todo-zeile" href="${ziel}">${inneres}</a>`
+                : `<div class="hud-todo-zeile">${inneres}</div>`;
+  }).join("");
+  const rest = d.todos.length - 7;
+  if (rest <= 0) return zeilen;
+  const mehr = `<span class="hud-marke-punkt ohne" aria-hidden="true"></span>
+    <span class="hud-todo-text"><strong>${rest} weitere Aufgaben für heute</strong></span>
+    <span class="hud-stempel">ALLE</span>`;
+  return zeilen + (d.darf("todos")
+    ? `<a class="hud-todo-zeile" href="/todos">${mehr}</a>`
+    : `<div class="hud-todo-zeile">${mehr}</div>`);
+}
+
+// Die roten Zeilen unten. Was hier steht, ist wirklich fällig — überfällig
+// heisst überfällig. Ist nichts offen, sagt die Zeile das ebenso deutlich,
+// statt einfach zu verschwinden: eine leere Flaeche liesse offen, ob geprueft
+// wurde oder nur nichts geladen hat.
+function hudAlarme(d) {
+  const zeilen = [];
+  const zeile = (klasse, ikon, text, ziel) => zeilen.push(ziel
+    ? `<a class="hud-alarm-zeile ${klasse}" href="${ziel}">${ikon}<span>${text}</span><span>ANSEHEN</span></a>`
+    : `<div class="hud-alarm-zeile ${klasse}">${ikon}<span>${text}</span><span></span></div>`);
+
+  if (d.z && d.z.todos.ueberfaellig) {
+    zeile("", ZT.warnung, `<b>${d.z.todos.ueberfaellig}</b> Aufgaben überfällig`,
+      d.darf("todos") ? "/todos" : null);
+  }
+  if (d.kz && d.kz.wiedervorlagen) {
+    zeile("gelb", HUD_IKON.telefon, `<b>${d.kz.wiedervorlagen}</b> Wiedervorlagen fällig`,
+      d.darf("crm") ? "/crm/leads" : null);
+  }
+  // d.finanzen gibt es nur fuer die Geschaeftsfuehrung — fuer alle anderen ist
+  // es oben gar nicht erst geholt worden.
+  if (d.finanzen && d.finanzen.ueberfaellig) {
+    zeile("", ICON.beleg, `<b>${d.finanzen.ueberfaellig}</b> Rechnungen überfällig`, "/buchhaltung");
+  }
+  if (d.finanzen && d.finanzen.belege_offen) {
+    zeile("gelb", ICON.beleg, `<b>${d.finanzen.belege_offen}</b> Belege ohne Buchung`, "/buchhaltung");
+  }
+  if (d.fehler) zeile("", ZT.warnung, esc(d.fehler), null);
+  if (!zeilen.length) zeile("ruhig", ZT.haken, "<b>Ruhig</b> — nichts überfällig, nichts unerledigt", null);
+  return zeilen.join("");
+}
+
+function hudTeamKoerper(d) {
+  if (!d.team.length) return "";
+  const leer = (x) => (Number(x) ? "" : ' class="null"');
+  return d.team.map((p) => {
+    const n = (d.anrufeJePerson[p.id] && d.anrufeJePerson[p.id].nach) || {};
+    const gebucht = (n.gebucht || {}).gesamt || 0;
+    const absagen = (n.absage || {}).gesamt || 0;
+    return `<tr>
+      <td title="${esc(p.name)}">${esc(p.name)}</td>
+      <td${leer(p.anrufe_heute)}>${hudZahl(p.anrufe_heute)}</td>
+      <td${leer(gebucht)}>${hudZahl(gebucht)}</td>
+      <td${leer(absagen)}>${hudZahl(absagen)}</td>
+      <td${leer(p.kunden)}>${hudZahl(p.kunden)}</td>
+      <td${leer(p.umsatz_monat)}>${eurK(p.umsatz_monat)}</td>
+    </tr>`;
+  }).join("");
+}
+
+function hudHistSaeulen(d, w) {
+  if (!w.verlauf.length) return "";
+  const letzter = w.verlauf[w.verlauf.length - 1];
+  return w.verlauf.map((v) => {
+    const nr = Number(v.monat.slice(5, 7)) - 1;
+    const anteil = w.histMax > 0 ? v.wert / w.histMax : 0;
+    // Ein Monat mit Umsatz bekommt mindestens eine leuchtende Zelle: sonst
+    // saehe ein kleiner Abschluss aus wie gar keiner.
+    const an = v.wert > 0 ? Math.max(1, Math.round(anteil * HUD_ZELLEN)) : 0;
+    let zellen = "";
+    for (let i = 0; i < HUD_ZELLEN; i++) zellen += `<i class="hud-hist-zelle${i < an ? " an" : ""}"></i>`;
+    return `<div class="hud-hist-saeule${v === letzter ? " jetzt" : ""}"
+      title="${MONATSKUERZEL[nr] || esc(v.monat)}: ${eur(v.wert)}">
+      <div class="hud-hist-zellen">${zellen}</div>
+      <div class="hud-hist-monat">${MONATSKUERZEL[nr] || "?"}</div></div>`;
+  }).join("");
+}
+
+// Das Kennwertband im Kopf und der Lauftext unten. Beide laufen als Schleife —
+// der Inhalt steht darum zweimal hintereinander, sonst reisst die Schleife
+// sichtbar ab. Fuer Vorleseprogramme sind sie ausgeblendet: jede Zahl darin
+// steht weiter unten noch einmal als richtiger Wert.
+function hudBand(d, w) {
+  if (!d.z) {
+    const eine = `<span class="hud-chip">FLOWSTATE OS <b>ZENTRALE</b></span>`;
+    return eine + eine;
+  }
+  const v = w.werte;
+  const teile = [];
+  const chip = (label, wert, trend) => teile.push(`<span class="hud-chip">${label} <b>${wert}</b>${trend || ""}</span>`);
+  chip("UMSATZ MONAT", eur(v.umsatz_monat), w.wachstum === null ? ""
+    : ` <span class="${w.wachstum >= 0 ? "j-auf" : "j-ab"}">${w.wachstum >= 0 ? "+" : "−"}${Math.abs(w.wachstum)} %</span>`);
+  chip("KUNDEN", hudZahl(v.kunden));
+  chip("LEADS", hudZahl(v.leads));
+  chip("OFFENE DEALS", hudZahl(v.offene_deals));
+  // Nullwerte laufen nicht im Band mit: "PIPELINE 0 €" alle vierzig Sekunden
+  // sagt nichts, was die Ablesung unten rechts nicht genauer sagt. Sobald
+  // Summen in den Deals stehen, sind die Chips von selbst wieder da.
+  if (v.pipeline_wert > 0) chip("PIPELINE", eurK(v.pipeline_wert));
+  if (v.forecast > 0) chip("FORECAST", eurK(v.forecast));
+  if (v.gebucht_gesamt) chip("ERSTGESPRÄCHE", hudZahl(v.gebucht_gesamt));
+  chip("AUFGABEN HEUTE", hudZahl(v.todos_heute));
+  if (v.todos_ueberfaellig) chip("ÜBERFÄLLIG", `<span class="j-ab">${hudZahl(v.todos_ueberfaellig)}</span>`);
+  if (d.anrufe) chip("ANRUFE HEUTE", hudZahl(v.anrufe_heute));
+  if (v.wiedervorlagen) chip("WIEDERVORLAGEN", hudZahl(v.wiedervorlagen));
+  const eine = teile.join("");
+  return eine + eine;
+}
+
+function hudTicker(d, w) {
+  const zeilen = [];
+  if (d.z) {
+    const v = w.werte;
+    const monatName = new Date().toLocaleDateString("de-DE", { month: "long" }).toUpperCase();
+    zeilen.push(`UMSATZ ${monatName} <b>${eur(v.umsatz_monat)}</b> aus <b>${hudZahl(v.abschluesse_monat)}</b> Abschlüssen`);
+    zeilen.push(`UMSATZ INSGESAMT <b>${eur(v.umsatz_gesamt)}</b> aus <b>${hudZahl(v.abschluesse_gesamt)}</b> Abschlüssen`);
+    // Ohne hinterlegte Summen sagt "PIPELINE 0 €" weniger als der Grund dafuer.
+    if (v.pipeline_wert > 0) {
+      zeilen.push(`PIPELINE <b>${eur(v.pipeline_wert)}</b> in <b>${hudZahl(v.offene_deals)}</b> offenen Deals`);
+      zeilen.push(`FORECAST <b>${eur(v.forecast)}</b> gewichtet nach Phase`);
+    } else if (v.offene_deals) {
+      zeilen.push(`PIPELINE <b>${hudZahl(v.offene_deals)}</b> offene Deals · noch ohne hinterlegte Summe`);
+    }
+    if (v.erwartet30) zeilen.push(`NÄCHSTE 30 TAGE <b>${eur(v.erwartet30)}</b> erwartet`);
+    zeilen.push(`KUNDEN <b>${hudZahl(v.kunden)}</b> · LEADS <b>${hudZahl(v.leads)}</b>`);
+    zeilen.push(`GEWONNEN DIESEN MONAT <b>${hudZahl(v.gewonnen_monat)}</b> · VERLOREN <b>${hudZahl(v.verloren_monat)}</b>`);
+    zeilen.push(`AUFGABEN HEUTE <b>${hudZahl(v.todos_heute)}</b> offen · <b>${hudZahl(v.todos_erledigt)}</b> erledigt`);
+    if (d.anrufe) zeilen.push(`COLD CALLS <b>${hudZahl(v.anrufe_gesamt)}</b> gesamt · <b>${hudZahl(v.anrufe_heute)}</b> heute`);
+    if (d.finanzen) zeilen.push(`EINNAHMEN DIESEN MONAT <b>${eur(v.fin_einnahmen)}</b> · AUSGABEN <b>${eur(v.fin_ausgaben)}</b>`);
+  } else {
+    zeilen.push("FLOWSTATE OS · <b>ZENTRALE</b> · Melde dich persönlich an, dann stehen hier die Zahlen");
+  }
+  const eine = zeilen.map((t) => `<span>${t}</span>`).join("");
+  return eine + eine;
+}
+
+function hudStuecke(d, w) {
+  return {
+    todos: hudTodoListe(d),
+    alarme: hudAlarme(d),
+    team: hudTeamKoerper(d),
+    band: hudBand(d, w),
+    ticker: hudTicker(d, w),
+    hist: hudHistSaeulen(d, w),
+  };
+}
+
+// --- Die Instrumente. Beide werden serverseitig im ENDZUSTAND gezeichnet;
+//     hud-zentrale.js setzt sie kurz auf Anfang und faehrt sie hoch. Ohne
+//     Skript steht der richtige Wert da, nur ohne Anlauf. ---
+
+// Messuhr-Geometrie: 270 Grad Skala, Start unten links (135 Grad), Ende unten
+// rechts. 0 Grad zeigt nach rechts, y waechst nach unten — SVG-Koordinaten.
+function hudUhrPunkt(grad, r) {
+  const b = (grad * Math.PI) / 180;
+  return [100 + r * Math.cos(b), 100 + r * Math.sin(b)];
+}
+function hudUhrBogen(anteil, r) {
+  const spanne = 270 * Math.max(0, Math.min(1, anteil));
+  const a = hudUhrPunkt(135, r), b = hudUhrPunkt(135 + spanne, r);
+  return `M${a[0].toFixed(2)},${a[1].toFixed(2)} A${r},${r} 0 ${spanne > 180 ? 1 : 0} 1 ${b[0].toFixed(2)},${b[1].toFixed(2)}`;
+}
+
+function hudMessuhr(w) {
+  const striche = [];
+  for (let i = 0; i <= 40; i++) {
+    const gross = i % 4 === 0;
+    const g = 135 + (270 * i) / 40;
+    const a = hudUhrPunkt(g, gross ? 62 : 66), b = hudUhrPunkt(g, 71);
+    striche.push(`<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}"
+      stroke="${gross ? "var(--j-blau-hell)" : "var(--j-linie-hell)"}" stroke-width="${gross ? 1.6 : 1}"/>`);
+  }
+  const vm1 = hudUhrPunkt(135 + 270 * w.vormonatAnteil, 74);
+  const vm2 = hudUhrPunkt(135 + 270 * w.vormonatAnteil, 90);
+  return `<svg id="hud-uhr-svg" viewBox="0 0 200 200" data-anteil="${w.uhrAnteil.toFixed(4)}" role="img"
+    aria-label="Umsatz diesen Monat ${eur(w.werte.umsatz_monat)} auf einer Skala bis ${eur(w.skala)}">
+    <circle cx="100" cy="100" r="94" fill="none" stroke="var(--j-linie)"/>
+    <circle cx="100" cy="100" r="44" fill="none" stroke="var(--j-linie)" stroke-dasharray="2 5"/>
+    ${striche.join("")}
+    <path d="${hudUhrBogen(1, 78)}" fill="none" stroke="var(--j-linie)" stroke-width="7"/>
+    <path class="hud-uhr-bogen" d="${w.uhrAnteil > 0 ? hudUhrBogen(w.uhrAnteil, 78) : ""}" fill="none"
+      stroke="var(--j-blau)" stroke-width="7" style="filter:drop-shadow(0 0 6px rgba(75,141,248,.55))"/>
+    ${w.vormonatAnteil > 0 ? `<line x1="${vm1[0].toFixed(1)}" y1="${vm1[1].toFixed(1)}"
+      x2="${vm2[0].toFixed(1)}" y2="${vm2[1].toFixed(1)}" stroke="var(--j-gelb)" stroke-width="2"/>` : ""}
+    <g class="hud-uhr-zeiger" transform="rotate(${(135 + 270 * w.uhrAnteil).toFixed(2)} 100 100)">
+      <polygon points="50,96.8 84,99.4 84,100.6 50,103.2" fill="var(--j-blau-hell)"/>
+    </g>
+  </svg>`;
+}
+
+// Die Kugel: Tageslast. Der Ring aussen ist der Anteil der heute schon
+// erledigten Aufgaben, die Zahl in der Mitte, was noch offen ist.
+function hudKugel(w) {
+  const striche = [];
+  for (let i = 0; i < 60; i++) {
+    const lang = i % 5 === 0;
+    const a = hudUhrPunkt((360 * i) / 60, lang ? 88 : 91), b = hudUhrPunkt((360 * i) / 60, 95);
+    striche.push(`<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}"
+      stroke="var(--j-linie-hell)" stroke-width="${lang ? 1.4 : 0.8}"/>`);
+  }
+  const umfang = 2 * Math.PI * 80;
+  return `<svg viewBox="0 0 200 200" role="img"
+    aria-label="Tageslast: ${w.todos.heute_erledigt} von ${w.tagesLast} Aufgaben erledigt">
+    <defs>
+      <radialGradient id="hudKugel" cx="34%" cy="28%" r="78%">
+        <stop offset="0%" stop-color="#1E3F72"/>
+        <stop offset="52%" stop-color="#0B1A33"/>
+        <stop offset="100%" stop-color="#050A14"/>
+      </radialGradient>
+    </defs>
+    ${striche.join("")}
+    <circle cx="100" cy="100" r="80" fill="none" stroke="var(--j-linie)" stroke-width="4"/>
+    ${w.tagesAnteil > 0 ? `<circle cx="100" cy="100" r="80" fill="none" stroke="var(--j-blau)" stroke-width="4"
+      stroke-dasharray="${(umfang * w.tagesAnteil).toFixed(1)} ${umfang.toFixed(1)}"
+      transform="rotate(-90 100 100)" style="filter:drop-shadow(0 0 7px rgba(75,141,248,.6))"/>` : ""}
+    <circle cx="100" cy="100" r="66" fill="url(#hudKugel)" stroke="var(--j-linie-hell)"/>
+    <g class="hud-orb-netz" opacity=".5">
+      <ellipse cx="100" cy="100" rx="66" ry="22" fill="none" stroke="var(--j-blau-tief)"/>
+      <ellipse cx="100" cy="100" rx="66" ry="44" fill="none" stroke="var(--j-blau-tief)"/>
+      <ellipse cx="100" cy="100" rx="22" ry="66" fill="none" stroke="var(--j-blau-tief)"/>
+      <ellipse cx="100" cy="100" rx="44" ry="66" fill="none" stroke="var(--j-blau-tief)"/>
+      <circle cx="100" cy="100" r="66" fill="none" stroke="var(--j-linie-akzent)"/>
+    </g>
+  </svg>`;
+}
+
+// ---------------------------------------------------------------- Die Seite
+app.get("/", async (req, res) => {
+  const jetzt = new Date();
+  const heute = jetzt.toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const nutzer = (req.session && req.session.crm) || null;
+  // Wer nur mit dem gemeinsamen Passwort da ist, gilt fuer die KNOEPFE als
+  // Geschaeftsfuehrung (unveraendert gegenueber vorher): die Bereiche fragen
+  // selbst nach der Anmeldung. Fuer die ZAHLEN gilt das nicht — dafuer braucht
+  // es ein Konto, an dem die Zeilenrechte haengen.
+  const knopfAdmin = !nutzer || nutzer.rolle === "admin";
+  const darf = (id) => require("./lib/schale.js").darfModul(nutzer, id);
+  const datenbank = Boolean(process.env.DATABASE_URL);
+
+  const d = await hudDaten(req);
+  const w = hudWerte(d);
+  const s = hudStuecke(d, w);
+  const zahlen = Boolean(d.z);
+
+  const monatName = jetzt.toLocaleDateString("de-DE", { month: "long" });
+  const vormonatName = (() => {
+    const x = new Date(); x.setDate(1); x.setMonth(x.getMonth() - 1);
+    return x.toLocaleDateString("de-DE", { month: "long" });
+  })();
+
+  // Wie breit welches Panel steht. Wird gerechnet statt festgelegt, weil je
+  // nach Rechten Panels wegfallen — und eine Reihe, die auf neun statt zwoelf
+  // Spalten aufgeht, laesst rechts ein Loch stehen.
+  const callsDa = darf("crm");
+  const teamDa = d.team.length > 0;
+  const finDa = Boolean(d.finanzen);
+  const sHist = callsDa ? 6 : 9;
+  const sLog = callsDa ? 3 : 3;
+  const sTeam = teamDa && finDa ? 5 : teamDa ? 8 : 0;
+  const sFin = finDa && teamDa ? 3 : finDa ? 4 : 0;
+  // Die rechte Fussspalte traegt Pipeline-Ablesung und Meldezeilen. Sie nimmt,
+  // was Team und Buchhaltung uebriglassen — vier von zwoelf, wenn beide da
+  // sind, sonst mehr. Vorher stand dort nur die Alarmleiste, eine Zeile hoch:
+  // rechts unten blieb ein Loch, und genau dort hoert das Bild auf.
+  const sRechts = teamDa && finDa ? 4 : teamDa ? 4 : finDa ? 8 : 12;
+
+  const weg = (ziel, wort) => `<a class="hud-weg" href="${ziel}">${wort} ${HUD_IKON.pfeil}</a>`;
+  const titel = (label, rechts) => `<div class="hud-titel"><span class="j-label">${label}</span>
+    <span class="hud-titel-fuell"></span>${rechts || ""}</div>`;
+
+  // --- Kopfzeile: Marke links, durchlaufendes Kennwertband rechts ---
+  const kopf = `
+    <header class="hud-kopf">
+      <div class="hud-marke">
+        <span class="hud-puls" aria-hidden="true"></span>
+        <h1>Jarvis <i>//</i> Command Center</h1>
       </div>
-    </div>
-    ${req.query.gestartet ? `<div class="hinweis info" style="margin-bottom:16px">${ZT.info}<div>
+      <span class="hud-datum">${esc(heute)}${nutzer ? " · " + esc(nutzer.name.split(" ")[0]) : ""}
+        · <span id="hud-uhrzeit">${esc(jetzt.toLocaleTimeString("de-DE"))}</span></span>
+      <div class="hud-band" aria-hidden="true"><div class="hud-band-lauf" id="hud-band-lauf">${s.band}</div></div>
+    </header>`;
+
+  // --- Kugel: Tageslast ---
+  const kugel = `
+    <section class="j-panel hud-orb hud-s3">
+      ${titel("Tageslast", darf("todos") ? weg("/todos", "To-Dos") : "")}
+      <div class="hud-orb-buehne">
+        ${hudKugel(w)}
+        <div class="hud-orb-mitte">
+          ${hudZ("todos_heute", w.werte.todos_heute, "zahl")}
+          <span class="j-label">offen heute</span>
+        </div>
+      </div>
+      <div class="hud-orb-fuss">
+        <span class="hud-mikro">Erledigt<br><b>${hudN("todos_erledigt", w.werte.todos_erledigt)}</b> von ${hudZahl(w.tagesLast)}</span>
+        <span class="hud-mikro" style="text-align:right">Offen gesamt<br><b>${hudN("todos_offen", w.werte.todos_offen)}</b></span>
+      </div>
+    </section>`;
+
+  // --- Das Wichtigste: was heute ansteht ---
+  const todoPanel = `
+    <section class="j-panel hud-todo hud-s6">
+      ${titel("Anstehend heute", darf("todos") ? weg("/todos", "Alle Aufgaben") : "")}
+      <div class="hud-todo-kopf">
+        ${hudZ("todos_heute", w.werte.todos_heute, "zahl")}
+        <div class="hud-todo-kopf-text">
+          <span class="j-label">Aufgaben für heute</span>
+          <span class="hud-mikro">${w.werte.todos_ueberfaellig
+            ? `<b class="j-ab">${hudN("todos_ueberfaellig", w.werte.todos_ueberfaellig)} überfällig</b> · ` : ""}
+            <b>${hudN("todos_offen", w.werte.todos_offen)}</b> offen insgesamt ·
+            <b>${hudN("todos_erledigt", w.werte.todos_erledigt)}</b> heute erledigt</span>
+        </div>
+      </div>
+      <div class="hud-todo-liste" id="hud-todo-liste">${s.todos}</div>
+    </section>`;
+
+  // --- Messuhr: Monatsumsatz gegen den besten Monat der letzten zwoelf ---
+  const uhrPanel = `
+    <section class="j-panel hud-uhr hud-s3">
+      ${titel("Umsatz " + esc(monatName), weg("/umsatz", "Aufschlüsselung"))}
+      <div class="hud-uhr-buehne">
+        ${hudMessuhr(w)}
+        <div class="hud-uhr-mitte">
+          ${hudZ("umsatz_monat", w.werte.umsatz_monat, "eur")}
+          <span class="j-label">${hudN("abschluesse_monat", w.werte.abschluesse_monat)}
+            ${w.werte.abschluesse_monat === 1 ? "Abschluss" : "Abschlüsse"}</span>
+        </div>
+      </div>
+      <div class="hud-uhr-fuss">
+        <span class="hud-mikro">Skala 0 – <b>${eur(w.skala)}</b> · bester Monat der letzten zwölf</span>
+        <span class="hud-mikro">${esc(vormonatName)} <b>${hudN("umsatz_vormonat", w.werte.umsatz_vormonat, "eur")}</b>${
+          w.wachstum === null ? " · kein Vergleich möglich"
+            : ` · <b class="${w.wachstum >= 0 ? "j-auf" : "j-ab"}">${w.wachstum >= 0 ? "+" : "−"}${Math.abs(w.wachstum)} %</b>`}</span>
+      </div>
+    </section>`;
+
+  // --- Cold Calling ---
+  const callPanel = callsDa ? `
+    <section class="j-panel hud-calls hud-s3">
+      ${titel(d.admin ? "Cold Calling" : "Deine Anrufe", weg("/crm/leads", "Liste"))}
+      ${d.anrufe && w.anrufeGesamt ? `
+      <div class="hud-balken-liste">
+        ${HUD_CALLS.map((c) => {
+          const x = w.nach[c.schluessel] || { gesamt: 0, heute: 0 };
+          const anteil = w.callMax > 0 ? x.gesamt / w.callMax : 0;
+          return `<div class="hud-balken-zeile">
+            <div class="hud-balken-kopf"><span class="j-label">${c.titel}</span>
+              <span class="hud-zahl">${hudZahl(x.gesamt)}${x.heute
+                ? ` <span class="j-auf" style="font-size:11px">+${hudZahl(x.heute)} heute</span>` : ""}</span></div>
+            <div class="hud-balken-spur"><div class="hud-balken-fuell ${c.ton}"
+              data-schluessel="${c.schluessel}" data-anteil="${anteil.toFixed(4)}"
+              style="width:${(anteil * 100).toFixed(2)}%"></div></div>
+          </div>`;
+        }).join("")}
+      </div>
+      <div class="hud-balken-fuss hud-mikro">
+        <b>${hudN("anrufe_gesamt", w.anrufeGesamt)}</b> Anrufe an <b>${hudZahl(d.anrufe.tage)}</b> Tagen${
+          d.anrufe.tage ? ` · Ø <b>${(w.anrufeGesamt / d.anrufe.tage).toFixed(1).replace(".", ",")}</b> pro Tag` : ""} ·
+        heute <b>${hudN("anrufe_heute", w.anrufeHeute)}</b>
+      </div>` : `<div class="hud-leer">${HUD_IKON.telefon}<div><b>Keine Anrufe erfasst</b>
+        Sobald in der Lead-Liste ein Ergebnis gesetzt wird, steht es hier.</div></div>`}
+    </section>` : "";
+
+  // --- Histogramm: zwoelf Monate Umsatz ---
+  const histPanel = `
+    <section class="j-panel hud-hist hud-s${sHist}">
+      ${titel("Umsatz zwölf Monate", weg("/umsatz", "Nach Monat"))}
+      <div class="hud-hist-feld">
+        <div class="hud-hist-achse">
+          <span>${eurK(w.histMax)}</span><span>${eurK(w.histMax * 0.75)}</span>
+          <span>${eurK(w.histMax * 0.5)}</span><span>${eurK(w.histMax * 0.25)}</span><span>0</span>
+        </div>
+        <div class="hud-hist-saeulen" id="hud-hist-saeulen">${s.hist}</div>
+      </div>
+      <div class="hud-hist-fuss">
+        <span class="hud-mikro">Insgesamt<br>${hudZ("umsatz_gesamt", w.werte.umsatz_gesamt, "eur")}</span>
+        <span class="hud-mikro">Abschlüsse<br>${hudZ("abschluesse_gesamt", w.werte.abschluesse_gesamt, "zahl")}</span>
+        <span class="hud-mikro">Gewonnen ${esc(monatName)}<br>${hudZ("gewonnen_monat", w.werte.gewonnen_monat, "zahl")}</span>
+        <span class="hud-mikro">Verloren ${esc(monatName)}<br>${hudZ("verloren_monat", w.werte.verloren_monat, "zahl")}</span>
+      </div>
+    </section>`;
+
+  // --- Termine und Briefing. Beide holen sich ihren Inhalt selbst: der
+  //     Kalender haengt an Google, das Briefing an einer Datei im Vault —
+  //     keins von beidem soll den ersten Aufbau der Seite aufhalten. ---
+  const logPanel = `
+    <div class="hud-log hud-s${zahlen ? sLog : 6}">
+      <section class="j-panel hud-log-termine">
+        ${titel('Termine · <span id="hud-termine-tag">Heute</span>', `<span class="hud-nav">
+          <button type="button" onclick="hudTagWechseln(-1)" title="Ein Tag zurück" aria-label="Ein Tag zurück">${ZT.links}</button>
+          <button type="button" onclick="hudTagWechseln(1)" title="Ein Tag vor" aria-label="Ein Tag vor">${ZT.rechts}</button>
+        </span>${darf("kalender") ? weg("/kalender", "Kalender") : ""}`)}
+        <div class="hud-zeilen" id="hud-termine"><div class="hud-leer">${ICON.kalender}<b>Lädt</b></div></div>
+      </section>
+      <section class="j-panel hud-log-briefing">
+        ${titel('Tages-Briefing <span id="hud-briefing-stand"></span>', darf("chat") ? weg("/chat", "Alexandra") : "")}
+        <div id="hud-briefing"><div class="hud-leer">${ICON.funke}<b>Lädt</b></div></div>
+      </section>
+    </div>`;
+
+  // --- Die grossen Zahlen: die Fragen, die man auf eine Startseite mitbringt
+  //     — wie viele Kunden, wie viel ist durchgelaufen, was ist in Arbeit.
+  //
+  //     Welche sechs das sind, steht NICHT fest. Bis zum 19.08. standen
+  //     Pipeline und Forecast fest in der Reihe; bei uns sind in den offenen
+  //     Deals derzeit keine Summen hinterlegt, und dann standen dort zwei
+  //     riesige "0 €" nebeneinander. Die Zahlen stimmten — aber zwei leere
+  //     Felder in Kameragroesse lesen sich als Ausfall, nicht als Befund.
+  //
+  //     Erfunden wird deshalb nichts. Ein Wert, der nichts zu sagen hat, tritt
+  //     zurueck: er wandert klein in die Pipeline-Ablesung unten rechts (dort
+  //     steht auch, WARUM er null ist), und in die Reihe rueckt ein Wert nach,
+  //     der wirklich Inhalt hat. Sind Pipeline und Forecast gefuellt — auf dem
+  //     Server sind sie das —, stehen sie wie bisher gross in der Reihe. ---
+  const kachel = (label, inhalt, unter, ziel) => {
+    const inneres = `<span class="j-label">${label}</span>${inhalt}
+      <span class="hud-mikro hud-kachel-fuss">${unter}</span>`;
+    return ziel ? `<a class="j-panel hud-kachel" href="${ziel}">${inneres}</a>`
+                : `<div class="j-panel hud-kachel">${inneres}</div>`;
+  };
+  const crmZiel = (pfad) => (darf("crm") ? pfad : null);
+  const v = w.werte;
+  const pipeStumm = v.pipeline_wert <= 0;   // offene Deals ohne hinterlegte Summe
+
+  const kachelKopf = [
+    kachel("Kunden gesamt", hudZ("kunden", v.kunden, "zahl"),
+      `${hudZahl(v.gewonnen_monat)} diesen Monat gewonnen`, crmZiel("/crm/kunden")),
+    kachel("Leads", hudZ("leads", v.leads, "zahl"),
+      v.wiedervorlagen ? `${hudZahl(v.wiedervorlagen)} Wiedervorlagen fällig` : "keine Wiedervorlagen fällig",
+      crmZiel("/crm/leads")),
+    kachel("Offene Deals", hudZ("offene_deals", v.offene_deals, "zahl"),
+      !v.offene_deals ? "nichts offen"
+        : pipeStumm ? "noch ohne hinterlegte Summe"
+          : `Ø ${eur(v.pipeline_wert / v.offene_deals)} je Deal`,
+      crmZiel("/crm")),
+  ];
+  const kachelMitte = [
+    v.pipeline_wert > 0 ? kachel("Pipeline offen", hudZ("pipeline_wert", v.pipeline_wert, "eur"),
+      "Summe aller offenen Deals", crmZiel("/crm")) : "",
+    v.forecast > 0 ? kachel("Forecast", hudZ("forecast", v.forecast, "eur"),
+      v.erwartet30 ? `${eur(v.erwartet30)} in den nächsten 30 Tagen` : "gewichtet nach Phase",
+      crmZiel("/crm")) : "",
+    v.gebucht_gesamt ? kachel("Erstgespräche", hudZ("gebucht_gesamt", v.gebucht_gesamt, "zahl"),
+      `aus ${hudZahl(v.anrufe_gesamt)} Anrufen`, crmZiel("/crm/leads")) : "",
+    v.anrufe_gesamt && !v.gebucht_gesamt ? kachel("Anrufe gesamt", hudZ("anrufe_gesamt", v.anrufe_gesamt, "zahl"),
+      `${hudZahl(v.anrufe_heute)} heute`, crmZiel("/crm/leads")) : "",
+    v.todos_offen ? kachel("Aufgaben offen", hudZ("todos_offen", v.todos_offen, "zahl"),
+      v.todos_ueberfaellig ? `${hudZahl(v.todos_ueberfaellig)} davon überfällig` : "nichts überfällig",
+      darf("todos") ? "/todos" : null) : "",
+    v.gewonnen_monat ? kachel("Gewonnen " + esc(monatName), hudZ("gewonnen_monat", v.gewonnen_monat, "zahl"),
+      v.verloren_monat ? `${hudZahl(v.verloren_monat)} verloren` : "nichts verloren", crmZiel("/crm")) : "",
+  ].filter(Boolean);
+  const kachelFuss = kachel("Umsatz insgesamt", hudZ("umsatz_gesamt", v.umsatz_gesamt, "eur"),
+    `${hudZahl(v.abschluesse_gesamt)} Abschlüsse`, "/umsatz");
+
+  const kachelListe = kachelKopf
+    .concat(kachelMitte.slice(0, Math.max(0, 6 - kachelKopf.length - 1)))
+    .concat([kachelFuss]);
+  const kacheln = `
+    <section class="hud-kacheln hud-s12" style="--kachel-n:${kachelListe.length}">
+      ${kachelListe.join("")}
+    </section>`;
+
+  // --- Team: Cold Calling und Umsatz je Person. Nur fuer die
+  //     Geschaeftsfuehrung, dieselbe Regel wie /crm/team. ---
+  const teamPanel = teamDa ? `
+    <section class="j-panel hud-team hud-s${sTeam}">
+      ${titel("Team · " + esc(monatName), weg("/crm/team", "Team-Leistung"))}
+      <div class="hud-tabelle-huelle">
+        <table class="hud-tabelle">
+          <thead><tr><th>Person</th><th>Anrufe heute</th><th>Erstgespräche</th>
+            <th>Absagen</th><th>Kunden</th><th>Umsatz Monat</th></tr></thead>
+          <tbody id="hud-team-koerper">${s.team}</tbody>
+        </table>
+      </div>
+    </section>` : "";
+
+  // --- Buchhaltung. Wird oben nur fuer die Geschaeftsfuehrung geholt. ---
+  const finanzPanel = finDa ? `
+    <section class="j-panel hud-finanz hud-s${sFin}">
+      ${titel("Buchhaltung " + esc(monatName), weg("/buchhaltung", "Öffnen"))}
+      <div class="hud-paare">
+        <div class="hud-paar"><span class="j-label">Einnahmen</span>${hudZ("fin_einnahmen", d.finanzen.einnahmen_monat, "eur")}</div>
+        <div class="hud-paar"><span class="j-label">Ausgaben</span>${hudZ("fin_ausgaben", d.finanzen.ausgaben_monat, "eur")}</div>
+        <div class="hud-paar"><span class="j-label">Ergebnis</span>
+          <b class="${d.finanzen.ergebnis_monat < 0 ? "j-ab" : "j-auf"}">${eur(d.finanzen.ergebnis_monat)}</b></div>
+        <div class="hud-paar"><span class="j-label">Offene Rechnungen</span>
+          <b>${hudZahl(d.finanzen.offen_anzahl)} · ${eur(d.finanzen.offen_summe)}</b></div>
+      </div>
+      <div class="hud-mikro" style="margin-top:9px">Einnahmen zählen erst, wenn sie bezahlt sind.</div>
+    </section>` : "";
+
+  // data-post=1 erlaubt hud-zentrale.js, Mail-Triage und offene Entscheidungen
+  // nachzutragen — die haengen an Dateien, nicht an der Datenbank, und sollen
+  // den ersten Aufbau nicht aufhalten.
+  const alarmPanel = `<section class="hud-alarm" id="hud-alarm"
+    data-post="${knopfAdmin ? "1" : "0"}">${s.alarme}</section>`;
+
+  // --- Pipeline und Prognose als Ablesung statt als zwei riesige Nullen.
+  //     Die Zahlen sind dieselben; nur stehen sie hier neben der Stueckzahl,
+  //     die sie erklaert, und mit dem Satz darunter, warum nichts drinsteht.
+  //     Kommt Wert in die Deals, wandern beide von selbst wieder gross nach
+  //     oben in die Kachelreihe (siehe kachelMitte). ---
+  const pipePanel = `
+    <section class="j-panel hud-pipe">
+      ${titel("Pipeline · Prognose", crmZiel("/crm") ? weg("/crm", "Deals") : "")}
+      <div class="hud-paare">
+        <div class="hud-paar"><span class="j-label">Offene Deals</span>
+          ${hudZ("offene_deals", v.offene_deals, "zahl")}</div>
+        <div class="hud-paar"><span class="j-label">Pipeline offen</span>
+          ${hudZ("pipeline_wert", v.pipeline_wert, "eur")}</div>
+        <div class="hud-paar"><span class="j-label">Forecast</span>
+          ${hudZ("forecast", v.forecast, "eur")}</div>
+        <div class="hud-paar"><span class="j-label">Nächste 30 Tage</span>
+          ${hudZ("erwartet30", v.erwartet30, "eur")}</div>
+      </div>
+      <div class="hud-mikro hud-pipe-fuss">${pipeStumm
+        ? `In den <b>${hudZahl(v.offene_deals)}</b> offenen Deals steht noch keine Summe —
+           darum ist die Pipeline null und nicht geschätzt.`
+        : "Forecast ist die Pipeline, gewichtet nach Phase."}</div>
+    </section>`;
+
+  // Rechte Fussspalte: Ablesung oben, Meldezeilen darunter. Ohne Zahlen (kein
+  // Konto) gibt es nichts abzulesen — dann bleibt nur die Meldespalte.
+  const rechtsSpalte = `<div class="hud-rechts hud-s${zahlen ? sRechts : 6}">
+    ${zahlen ? pipePanel : ""}${alarmPanel}</div>`;
+
+  // --- Die Wege in die anderen Bereiche. Eigene Leiste, weil die Zentrale der
+  //     Einstiegspunkt bleibt: von hier kommt man ueberall hin, auch wenn die
+  //     Rail eingeklappt ist. Jeder Punkt wird vorher geprueft. ---
+  const modul = (ziel, ikon, wort) => `<a class="hud-modul" href="${ziel}">${ikon}${wort}</a>`;
+  const wege = [
+    knopfAdmin ? `<form method="post" action="/briefing/neu"><button class="hud-modul tat" type="submit">${ICON.sonne}Briefing erstellen</button></form>` : "",
+    knopfAdmin ? `<form method="post" action="/skill/mail-triage"><button class="hud-modul tat" type="submit">${ZT.post}Mail-Triage starten</button></form>` : "",
+    darf("chat") ? modul("/chat", ICON.funke, "Alexandra") : "",
+    darf("sprache") ? modul("/sprache", ICON.megafon, "Sprache") : "",
+    darf("leads") ? modul("/leads", ICON.leads, "Lead-Maschine") : "",
+    darf("crm") ? modul("/crm", ICON.kunden, "Kunden &amp; CRM") : "",
+    darf("todos") ? modul("/todos", ICON.todo, "To-Dos") : "",
+    darf("kalender") ? modul("/kalender", ICON.kalender, "Kalender") : "",
+    knopfAdmin && datenbank ? modul("/buchhaltung", ICON.euro, "Buchhaltung") : "",
+    darf("angebote") ? modul("/angebote", ICON.beleg, "Angebote") : "",
+    datenbank && darf("content") ? modul("/content", ICON.projekte, "Content") : "",
+    datenbank && darf("marketing") ? modul("/marketing", ICON.marketing, "Marketing") : "",
+    darf("wissen") ? modul("/wissen", ICON.wissen, "Wissen") : "",
+    darf("agenten") ? modul("/agenten", ICON.agenten, "Agenten") : "",
+    darf("einstellungen") ? modul("/einstellungen", ICON.zahnrad, "Einstellungen") : "",
+  ].filter(Boolean);
+  // Darf jemand ueberhaupt keinen anderen Bereich, bleibt die Leiste weg statt
+  // als leerer Strich stehenzubleiben.
+  const module = wege.length
+    ? `<nav class="hud-module hud-s12" aria-label="Bereiche">${wege.join("")}</nav>` : "";
+
+  // Die Huelle .hud-ticker-saum traegt die Maske, die den Lauftext an beiden
+  // Enden ausblendet — auf dem Lauf selbst liefe sie mit ihm mit.
+  const ticker = `<footer class="hud-ticker hud-s12" aria-hidden="true">
+    <div class="hud-ticker-saum"><div class="hud-ticker-lauf" id="hud-ticker-lauf">${s.ticker}</div></div></footer>`;
+
+  const hinweise = `
+    ${req.query.gestartet ? `<div class="hud-hinweis">${ZT.info}<div>
       <strong>${esc(req.query.gestartet)}</strong> läuft — Alexandra arbeitet im Hintergrund.
       Das Ergebnis erscheint hier, lad die Seite in ein paar Minuten neu.</div></div>` : ""}
+    ${datenbank && !nutzer ? `<div class="hud-hinweis">${ZT.info}<div>
+      <strong>Melde dich persönlich an</strong>, dann stehen hier Umsatz, Aufgaben, Pipeline und Team —
+      an deinem Konto hängen die Zeilenrechte in der Datenbank.
+      <a href="/crm/anmelden">Jetzt anmelden →</a></div></div>` : ""}
+    ${d.fehler ? `<div class="hud-hinweis warn">${ZT.warnung}<div>${esc(d.fehler)}</div></div>` : ""}`;
 
-    ${geldBlock}
+  // Ohne Zahlen (kein Konto, keine Datenbank, Datenbank stumm) bleibt das Pult
+  // nicht halb leer stehen: dann laufen nur die Teile, die es trotzdem gibt.
+  // Eine Seite mit sechs Loechern sieht kaputt aus, obwohl sie nur weniger weiss.
+  const pult = zahlen
+    ? kopf + hinweise + kugel + todoPanel + uhrPanel + callPanel + histPanel + logPanel +
+      kacheln + teamPanel + finanzPanel + rechtsSpalte + module + ticker
+    : kopf + hinweise + logPanel + rechtsSpalte + module + ticker;
 
-    <div class="karte" style="margin-bottom:16px"><div class="karte-kopf"><div>
-      <h2>Tages-Briefing</h2><div class="sub">Was Alexandra für heute zusammengestellt hat</div></div>
-      <a href="/chat" class="caption">Alexandra fragen →</a></div>
-      <div data-load="/api/briefing"><p class="caption">Lädt …</p></div></div>
+  const inhalt = `
+    <div class="hud startet" id="hud">${pult}</div>
+    <noscript><style>.hud.startet > * { opacity: 1 !important; }</style></noscript>
+    <script src="/lib/gsap.min.js${hudStempel("/lib/gsap.min.js")}" defer></script>
+    <script src="/lib/hud-zentrale.js${hudStempel("/lib/hud-zentrale.js")}" defer></script>
+    <script>
+      // Notbremse: faellt hud-zentrale.js aus (Ladefehler, alter Browser), holt
+      // diese Zeile das Pult nach gut einer Sekunde trotzdem ins Bild. Eine
+      // Startanimation darf nie der Grund sein, dass jemand nichts sieht.
+      setTimeout(function () {
+        var h = document.getElementById("hud");
+        if (h && !h.classList.contains("laeuft")) h.classList.remove("startet");
+      }, 1200);
+    </script>`;
 
-    <div class="zt-raster">
-      <div class="karte"><div class="karte-kopf"><div>
-        <h2>Kalender</h2><div class="sub" id="cal-label">Heute</div></div>
-        <span class="zt-kopf-rechts">
-          <span class="zt-nav">
-            <button type="button" onclick="calShift(-1)" title="Ein Tag zurück">${ZT.links}</button>
-            <button type="button" onclick="calShift(1)" title="Ein Tag vor">${ZT.rechts}</button></span>
-          <a href="/kalender" class="caption">öffnen →</a></span></div>
-        <div id="cal-body"><p class="caption">Lädt …</p></div></div>
-      ${datenbank && darf("todos") ? karte("To-Dos", "Was heute ansteht", "/api/todos/stats", "/todos", "öffnen") : ""}
-      ${admin ? karte("Mail-Triage", "Vier Körbe, sortiert von Alexandra", "/api/mail", null) : ""}
-      ${admin ? karte("Was braucht mich?", "Freigaben und Entscheidungen", "/api/inbox", null) : ""}
-      ${darf("crm") ? karte("Kunden &amp; CRM", "Wie der Monat ausgeht", "/api/crm/stats", "/crm", "öffnen") : ""}
-      ${datenbank && admin ? karte("Buchhaltung", "Der laufende Monat", "/api/buchhaltung/stats", "/buchhaltung", "öffnen") : ""}
-      ${datenbank && darf("content") ? karte("Content", "Was wir selbst posten", "/api/content/stats", "/content", "öffnen") : ""}
-      ${datenbank && darf("marketing") ? karte("Marketing", "Eingekaufte Reichweite", "/api/marketing/stats", "/marketing", "öffnen") : ""}
-    </div>`, req));
+  // body.jarvis holt die gemeinsame HUD-Sprache (public/jarvis.css),
+  // body.hud-zentrale das Pult selbst (public/jarvis-hud.css). Beide werden
+  // HIER gesetzt und nicht in lib/schale.js: die Schale gehoert allen Seiten,
+  // und diese eine soll dort keine Sonderregel hinterlassen. Damit faellt
+  // zugleich crm-dashboard-design weg — die Graphit-Palette der Arbeitsseiten
+  // haette gegen das Pult gearbeitet.
+  const seite = layout("Zentrale", "zentrale-start", inhalt, req)
+    .replace(/<body[^>]*>/, () => `<body class="jarvis hud-zentrale">\n${HUD_VERTRAG}`);
+  res.send(seite);
 });
 
 // --- Umsatz aufgeschluesselt: was hinter der Zahl auf der Zentrale steckt ---
@@ -1735,6 +2379,44 @@ function layout(title, active, content, req) {
     }
   </script></body></html>`;
 }
+
+// --- Nachzug fuer das Command Center (19.08.2026) ---
+//
+// Die Zentrale laedt sich nicht neu, sie zieht nach: alle 45 Sekunden holt
+// hud-zentrale.js hier die Zahlen und die Listen, die sich geaendert haben
+// koennen, und faehrt sie im Bild nach. Ein Seiten-Neuladen wuerde beim
+// Abfilmen die Startanimation erneut ausloesen und die Kamera zuruecksetzen.
+//
+// Gebaut wird die Antwort mit DENSELBEN Funktionen wie die Seite selbst
+// (hudDaten / hudWerte / hudStuecke). Deshalb kommen hier auch fertige
+// HTML-Stuecke heraus und nicht nur Rohdaten: gaebe es eine zweite Fassung
+// der Aufgabenliste im Browser, waere die naechste Aenderung an einer Zeile
+// eine Aenderung an zwei Stellen — und die zweite wird vergessen.
+//
+// Die Rechte stecken in hudDaten(): ohne persoenliches Konto keine Zahlen,
+// ohne Adminrolle keine Buchhaltung und keine Team-Aufschluesselung.
+app.get("/api/hud/zentrale", async (req, res) => {
+  try {
+    const d = await hudDaten(req);
+    const w = hudWerte(d);
+    const s = hudStuecke(d, w);
+    res.json({
+      ok: true,
+      angemeldet: Boolean(d.nutzer),
+      stand: new Date().toLocaleTimeString("de-DE"),
+      werte: w.werte,
+      uhr_anteil: w.uhrAnteil,
+      balken: HUD_CALLS.map((c) => ({
+        schluessel: c.schluessel,
+        anteil: w.callMax > 0 ? ((w.nach[c.schluessel] || {}).gesamt || 0) / w.callMax : 0,
+      })),
+      html: s,
+    });
+  } catch (e) {
+    console.error("HUD-Nachzug:", e.message);
+    res.json({ ok: false, hint: "Nachzug nicht möglich." });
+  }
+});
 
 // Fehlerbehandlung. Steht ganz unten, nach allen Routen — nur dann sieht sie
 // deren Fehler.

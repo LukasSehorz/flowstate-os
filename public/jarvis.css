@@ -1,0 +1,206 @@
+/* ====================================================================
+   JARVIS — gemeinsame Design-Sprache fuer die Sprachseite und die Zentrale
+   ====================================================================
+
+   Wofuer das hier ist (18.08.2026): Beide Seiten werden abgefilmt und als
+   Meta-Anzeige geschaltet. Sie muessen auf einem grossen Bildschirm aus zwei
+   Metern Entfernung tragen — deshalb tiefes Schwarzblau, leuchtende Kanten,
+   dauerhafte Bewegung und dichte Mikrotypografie. Bedienbar bleiben sie
+   trotzdem: es sind echte Firmenzahlen, keine Kulisse.
+
+   Warum eine eigene Datei und nicht crm.css: Der HUD gilt fuer GENAU zwei
+   Seiten (body.jarvis). Alles andere — Anrufliste, Kunden, Buchhaltung —
+   bleibt unangetastet hell, weil man dort stundenlang Tabellen liest.
+
+   Die Palette ist der Referenz entnommen und von Orange auf unser Blau
+   gedreht. Uebernommen wurde die STRUKTUR: fast schwarzer Grund, ein einziger
+   leuchtender Akzent, Linien unter 1px Wirkung, Alarmfarben nur als kleine
+   Chips. Nicht uebernommen wurde der Orangeton — der Akzent ist #4B8DF8,
+   dasselbe Blau wie im restlichen OS.
+   ==================================================================== */
+
+body.jarvis {
+  /* --- Grund und Flaechen: vier Stufen, alle mit Blaustich (B-R ~ +14) --- */
+  --j-grund: #04070E;
+  --j-grund-2: #070C16;
+  --j-flaeche: #0A111F;
+  --j-flaeche-2: #0E1828;
+
+  /* --- Linien. Im HUD traegt die Linie die Struktur, nicht der Schatten. --- */
+  --j-linie: #12233D;
+  --j-linie-hell: #1D3760;
+  --j-linie-akzent: rgba(75, 141, 248, .38);
+
+  /* --- Akzent: unser Blau, in drei Helligkeiten fuer Kante/Flaeche/Glut --- */
+  --j-blau: #4B8DF8;
+  --j-blau-hell: #93BEFF;
+  --j-blau-glut: #2563EB;
+  --j-blau-tief: #16345B;
+  --j-cyan: #38BDF8;
+
+  /* --- Schrift: hell genug fuer Kamera, drei Stufen statt Grau-in-Grau.
+         Die dritte Stufe lag bis 19.08. bei #566D91 und traf damit auf dem
+         Panelgrund nur 3,3:1 — zu wenig fuer 10-px-Beschriftungen und fuer
+         die Null-Zellen der Team-Tabelle. Jetzt 5,0:1: immer noch deutlich
+         zurueckgenommen, aber lesbar, auch aus zwei Metern. --- */
+  --j-text: #DEE9F8;
+  --j-text-2: #8FA6C4;
+  --j-text-3: #6E86A8;
+
+  /* --- Signal. Sparsam: im Bild sind das wenige Quadratzentimeter. --- */
+  --j-rot: #FF5A6E;
+  --j-gruen: #3DD68C;
+  --j-gelb: #F5B843;
+
+  /* --- Glut. Kein Deko-Halo: immer zusammen mit einer echten Kante. --- */
+  --j-glut-klein: 0 0 10px rgba(75, 141, 248, .45);
+  --j-glut-gross: 0 0 28px rgba(75, 141, 248, .32);
+  --j-tiefe: 0 18px 44px rgba(0, 0, 0, .55);
+
+  /* --- Schrift-Familien. Die Dateien liegen selbstgehostet in
+         public/lib/schrift/ — kein Aufruf an fremde Server, das Dashboard
+         laeuft auf unserem VPS. --- */
+  --j-display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --j-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* --- Bewegung. Ein Takt fuer die ganze Seite. --- */
+  --j-takt: 5200ms;
+  --j-schnell: 220ms cubic-bezier(.16, 1, .3, 1);
+
+  background: var(--j-grund);
+  color: var(--j-text);
+  font-family: var(--j-display);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Der Grund ist nicht flach: ein feines Raster, darueber ein Lichtkegel von
+   oben. Beides sehr schwach — im Video sieht man es, im Standbild kaum. */
+body.jarvis::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    linear-gradient(rgba(75, 141, 248, .045) 1px, transparent 1px) 0 0 / 100% 44px,
+    linear-gradient(90deg, rgba(75, 141, 248, .045) 1px, transparent 1px) 0 0 / 44px 100%,
+    radial-gradient(120% 70% at 50% -10%, rgba(37, 99, 235, .16), transparent 62%);
+  mask-image: radial-gradient(130% 90% at 50% 30%, #000 40%, transparent 100%);
+}
+
+/* ---------------------------------------------------------------- Bausteine */
+
+/* Panel: die Grundeinheit. Kein Karten-Schatten, sondern Kante plus Innenlicht
+   — so sieht ein Messgeraet aus, nicht eine Notizkarte. */
+.j-panel {
+  position: relative;
+  background: linear-gradient(180deg, var(--j-flaeche) 0%, var(--j-grund-2) 100%);
+  border: 1px solid var(--j-linie);
+  box-shadow: inset 0 1px 0 rgba(147, 190, 255, .06);
+  padding: 14px 16px;
+  z-index: 1;
+}
+
+/* Die vier Winkel an den Ecken sind das Erkennungszeichen des Looks. Sie
+   sitzen als Ausschnitt AUF der Kante, nicht daneben. */
+.j-panel::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--j-blau), var(--j-blau)) 0 0 / 12px 1px no-repeat,
+    linear-gradient(var(--j-blau), var(--j-blau)) 0 0 / 1px 12px no-repeat,
+    linear-gradient(var(--j-blau), var(--j-blau)) 100% 0 / 12px 1px no-repeat,
+    linear-gradient(var(--j-blau), var(--j-blau)) 100% 0 / 1px 12px no-repeat,
+    linear-gradient(var(--j-blau), var(--j-blau)) 0 100% / 12px 1px no-repeat,
+    linear-gradient(var(--j-blau), var(--j-blau)) 0 100% / 1px 12px no-repeat,
+    linear-gradient(var(--j-blau), var(--j-blau)) 100% 100% / 12px 1px no-repeat,
+    linear-gradient(var(--j-blau), var(--j-blau)) 100% 100% / 1px 12px no-repeat;
+  opacity: .55;
+}
+
+/* Mikro-Label: die kleine Zeile ueber jedem Wert. Gross getrackt, damit sie
+   auf Distanz als Beschriftung lesbar bleibt und nicht als Text mitliest. */
+.j-label {
+  font-family: var(--j-mono);
+  font-size: 10px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--j-text-3);
+  line-height: 1;
+}
+
+/* Zahlen. Tabellarisch, damit tickende Werte nicht springen — das faellt im
+   Video sofort auf. */
+.j-wert {
+  font-family: var(--j-display);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -.02em;
+  color: var(--j-text);
+  line-height: 1;
+}
+.j-wert-gross { font-size: clamp(28px, 3.4vw, 54px); font-weight: 600; }
+.j-wert-mittel { font-size: clamp(20px, 2vw, 30px); font-weight: 600; }
+
+.j-einheit { color: var(--j-text-3); font-size: .5em; margin-left: .25em; }
+
+/* Zustandsfarben als Textklasse — im Referenzbild traegt die Farbe die
+   Aussage, nicht ein Abzeichen drumherum. */
+.j-auf { color: var(--j-gruen); }
+.j-ab { color: var(--j-rot); }
+.j-halt { color: var(--j-gelb); }
+
+/* ------------------------------------------------ Die Kopfleiste des OS
+
+   Beide Jarvis-Seiten sind FEST DUNKEL — sie werden gefilmt. Der Hell/Dunkel-
+   Umschalter und der "Weiss"-Knopf aus lib/schale.js aendern hier deshalb
+   nichts. Ein Knopf, der nichts tut, ist eine Luege; auf diesen zwei Seiten
+   steht er darum nicht. Auf jeder anderen Seite bleibt er unveraendert.
+   (Stand bis 19.08. nur fuer die Zentrale — die Sprachseite zeigte beide
+   Knoepfe weiter. Die Regel gehoert an die gemeinsame Stelle.) */
+body.jarvis .thema-schalter,
+body.jarvis .weiss-schalter { display: none; }
+
+/* Die Kopfleiste kommt aus lib/schale.js und ist auf eine Zeile gebaut: Datum,
+   Stoppuhr, zwei Knoepfe und der Name stehen alle mit white-space:nowrap
+   nebeneinander. Auf dem Handy sind das rund 740 px in einem 390 px breiten
+   Fenster — die Seite bekam dadurch einen waagerechten Bildlauf, und im
+   Bild lag die halbe Oberflaeche neben dem Fenster. Hier darf sie umbrechen.
+   Geaendert wird nur die Umbruchregel, kein Inhalt und keine Farbe. */
+@media (max-width: 900px) {
+  body.jarvis .topbar { flex-wrap: wrap; gap: 10px 14px; padding: 10px 12px; }
+  body.jarvis .topbar-rechts { flex-wrap: wrap; justify-content: flex-end; gap: 8px 12px; min-width: 0; }
+  body.jarvis .stoppuhr { padding: 5px 6px 5px 12px; gap: 8px; }
+  body.jarvis .stoppuhr-zeit { min-width: 0; }
+  body.jarvis .datum-chip { font-size: 12px; }
+}
+
+/* Browser-Oberflaechen mitgestalten: Auswahl, Bildlaufleiste und Fokusring
+   kommen sonst vom Betriebssystem und passen zu keinem Design. */
+body.jarvis ::selection { background: rgba(75, 141, 248, .32); color: #fff; }
+body.jarvis ::-webkit-scrollbar { width: 10px; height: 10px; }
+body.jarvis ::-webkit-scrollbar-track { background: var(--j-grund-2); }
+body.jarvis ::-webkit-scrollbar-thumb {
+  background: var(--j-linie-hell);
+  border: 2px solid var(--j-grund-2);
+}
+body.jarvis ::-webkit-scrollbar-thumb:hover { background: var(--j-blau-tief); }
+body.jarvis :focus-visible {
+  outline: 1px solid var(--j-blau);
+  outline-offset: 2px;
+  box-shadow: var(--j-glut-klein);
+}
+
+/* Wer Bewegung abbestellt hat, bekommt die Seite ruhig — die Zahlen bleiben
+   dieselben. Gilt fuer beide Seiten und alle Agenten-Bausteine. */
+@media (prefers-reduced-motion: reduce) {
+  body.jarvis *,
+  body.jarvis *::before,
+  body.jarvis *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

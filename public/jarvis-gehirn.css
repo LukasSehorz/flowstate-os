@@ -1,0 +1,534 @@
+/* ====================================================================
+   JARVIS — Partikelgehirn (Sprachseite /sprache)
+   ====================================================================
+
+   Wofuer das hier ist (19.08.2026): Die Sprachseite wird abgefilmt und als
+   Meta-Anzeige geschaltet. Sie muss aus zwei Metern Entfernung auf einem
+   grossen Bildschirm tragen — und gleichzeitig ein echtes Bedienelement
+   bleiben: Alexandra ist eine Sprachassistentin, die man anspricht.
+
+   Die alte Kugel (SVG-Ringe + Pegelbalken) ist raus. An ihrer Stelle steht
+   ein Gehirn aus mehreren tausend feinen Faeden auf einem Canvas —
+   gezeichnet von /lib/jarvis-gehirn.js. Diese Datei baut die BUEHNE drumherum:
+   Grund, Rahmen, Ablesungen, Bedienleiste.
+
+   Warum eine eigene Datei: Sie wird zwar auf JEDER Seite geladen (siehe
+   lib/schale.js), faerbt aber nur unter body.jarvis-buehne — und diese Klasse
+   setzt ausschliesslich /sprache. Ohne sie ist die Datei wirkungslos.
+
+   Die Farben kommen ALLE aus public/jarvis.css (--j-*). Hier wird keine
+   zweite Palette erfunden; nur ein paar Buehnen-Masse kommen dazu.
+   ==================================================================== */
+
+/* -------------------------------------------------------------- Schriften
+   Selbstgehostet unter /lib/schrift/ — das Dashboard laeuft auf unserem VPS
+   und soll beim Laden keinen fremden Server anfassen (weder Google noch ein
+   CDN). Nur die Schnitte latin + latin-ext; alles andere braucht ein
+   deutsches Dashboard nicht und kostet nur Bytes.
+
+   Die @font-face-Regeln stehen hier und nicht in jarvis.css, weil jarvis.css
+   die gemeinsame Design-Sprache beschreibt und diese Datei die Dateien
+   mitbringt. Beide werden ohnehin ueberall geladen — die Schriften stehen
+   damit auch der Zentrale (body.jarvis) zur Verfuegung.
+
+   font-display: swap — bis die woff2 da ist, steht der System-Stack. Auf
+   einer Seite, die dauerhaft laeuft, ist ein kurzer Umbruch harmloser als
+   drei Sekunden unsichtbarer Text. */
+
+@font-face {
+  font-family: "Chakra Petch"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("/lib/schrift/chakra-petch-400-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Chakra Petch"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("/lib/schrift/chakra-petch-400-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Chakra Petch"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("/lib/schrift/chakra-petch-500-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Chakra Petch"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("/lib/schrift/chakra-petch-500-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Chakra Petch"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("/lib/schrift/chakra-petch-600-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Chakra Petch"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("/lib/schrift/chakra-petch-600-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Chakra Petch"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("/lib/schrift/chakra-petch-700-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Chakra Petch"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("/lib/schrift/chakra-petch-700-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* JetBrains Mono liefert Google als EINE variable Datei fuer alle Schnitte —
+   deshalb hier nur zwei Dateien und eine Gewichtsspanne statt vier Kopien. */
+@font-face {
+  font-family: "JetBrains Mono"; font-style: normal; font-weight: 100 800; font-display: swap;
+  src: url("/lib/schrift/jetbrains-mono-var-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "JetBrains Mono"; font-style: normal; font-weight: 100 800; font-display: swap;
+  src: url("/lib/schrift/jetbrains-mono-var-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ================================================================
+   Die Seite ist FEST DUNKEL — unabhaengig vom Hell/Dunkel-Schalter
+   ================================================================
+   Der Rest des OS haengt an --background/--surface/--foreground aus crm.css.
+   Auf der Sprachbuehne wuerden die hellen Werte die Schiene und die Kopfleiste
+   weiss stehen lassen, waehrend die Buehne schwarz ist — im Video sieht das
+   aus wie zwei Programme uebereinander.
+
+   Die Selektoren tragen absichtlich zwei Attribute (html[data-theme] …), weil
+   der "Weiss"-Modus in crm.css mit :root[data-weiss="1"] (0,2,0) gewichtet ist.
+   Eine blosse Klasse am body verloere gegen ihn. */
+html body.jarvis-buehne,
+html[data-theme] body.jarvis-buehne,
+html[data-weiss="1"] body.jarvis-buehne {
+  --background: #04070E;
+  --surface: #070C16;
+  --surface-2: #0A111F;
+  --surface-3: #0E1828;
+  --border: #12233D;
+  --border-stark: #1D3760;
+  --foreground: #DEE9F8;
+  --text-secondary: #A6BAD6;
+  --text-muted: #8FA6C4;
+  --primary: #4B8DF8;
+  --primary-hover: #93BEFF;
+  --primary-soft: #0F2038;
+  --s1: 0 1px 2px rgba(0, 0, 0, .5);
+  --s2: 0 2px 10px rgba(0, 0, 0, .55);
+  --s3: 0 18px 44px rgba(0, 0, 0, .7);
+  background: #04070E;
+  color: #DEE9F8;
+}
+
+/* Der Hauptbereich gibt seine Polsterung ab: die Buehne laeuft randlos bis an
+   die Schiene und die Kopfleiste. Randlos ist hier kein Geschmack, sondern
+   Bedingung — ein 26px-Rahmen um ein leuchtendes Gehirn liest sich im Video
+   als Fehler. */
+body.jarvis-buehne .inhalt { min-height: 100vh; }
+body.jarvis-buehne main { padding: 0; flex: 1; display: flex; min-height: 0; }
+body.jarvis-buehne .topbar { border-bottom: 1px solid var(--j-linie); }
+
+/* ================================================================
+   Die Buehne
+   ================================================================ */
+
+.gh {
+  --gh-ruhig: cubic-bezier(.16, 1, .3, 1);
+  position: relative;
+  isolation: isolate;
+  flex: 1;
+  min-width: 0;
+  min-height: calc(100vh - 132px);
+  overflow: hidden;
+  background: #04070E;
+  display: grid;
+  /* Drei Zeilen: Kopfablesungen, Gehirn, Fussablesungen. Das Gehirn bekommt
+     die ganze mittlere Zeile — es ist die Hauptsache, alles andere sitzt am
+     Rand und darf nicht mit ihm um Platz streiten. */
+  grid-template-rows: auto 1fr auto;
+  grid-template-columns: 1fr;
+}
+@media (max-width: 900px) { .gh { min-height: calc(100vh - 96px); } }
+
+/* Das Canvas liegt hinter allem und fuellt die ganze Buehne. Es malt seinen
+   Grund selbst (mit leichter Nachleuchtspur), deshalb keine CSS-Verlaeufe
+   darunter — die waeren nach zwei Bildern zugedeckt. */
+.gh-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  display: block;
+}
+
+/* Raster + Vignette liegen UEBER dem Canvas, weil das Canvas seinen Grund
+   selbst deckt. Sehr schwach: im bewegten Bild sichtbar, im Standbild kaum. */
+.gh-raster {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(75, 141, 248, .05) 1px, transparent 1px) 0 0 / 100% 48px,
+    linear-gradient(90deg, rgba(75, 141, 248, .05) 1px, transparent 1px) 0 0 / 48px 100%;
+  mask-image: radial-gradient(115% 85% at 50% 50%, transparent 34%, #000 100%);
+  -webkit-mask-image: radial-gradient(115% 85% at 50% 50%, transparent 34%, #000 100%);
+}
+.gh-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(78% 68% at 50% 48%, transparent 42%, rgba(0, 0, 0, .72) 100%);
+}
+
+/* Der Messgeraete-Rahmen: vier Winkel in den Ecken, dasselbe Zeichen wie
+   .j-panel in jarvis.css — nur um die ganze Buehne statt um eine Kachel. */
+.gh-rahmen {
+  position: absolute;
+  inset: 14px;
+  z-index: 2;
+  pointer-events: none;
+  color: var(--j-blau);
+  opacity: .5;
+}
+.gh-rahmen svg { position: absolute; width: 26px; height: 26px; overflow: visible; }
+.gh-rahmen svg:nth-child(1) { top: 0; left: 0; }
+.gh-rahmen svg:nth-child(2) { top: 0; right: 0; transform: scaleX(-1); }
+.gh-rahmen svg:nth-child(3) { bottom: 0; left: 0; transform: scaleY(-1); }
+.gh-rahmen svg:nth-child(4) { bottom: 0; right: 0; transform: scale(-1); }
+
+/* ---------------------------------------------------------- Kopf und Fuss */
+
+.gh-kopf {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px 34px;
+  pointer-events: none;
+}
+/* Der Fuss ist ein Stapel: Hinweiszeile, Bedienleiste, Ablesungen. In dieser
+   Reihenfolge, weil das Auge vom Gehirn nach unten laeuft und zuerst wissen
+   will, was gerade passiert — und erst dann, was es druecken kann. */
+.gh-fuss {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 34px 24px;
+  pointer-events: none;
+}
+.gh-fussleiste {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+}
+.gh-kopf > *, .gh-fuss > *, .gh-fussleiste > * { pointer-events: auto; }
+/* Die mittlere Zeile gehoert dem Gehirn allein. */
+.gh-mitte { position: relative; z-index: 3; display: grid; place-items: center; min-height: 0; }
+@media (max-width: 760px) {
+  .gh-kopf { padding: 16px 18px; gap: 12px; }
+  .gh-fuss { padding: 10px 18px 18px; gap: 12px; }
+  .gh-fussleiste { gap: 12px; }
+}
+
+/* Die Anzeigezeile. Sie traegt #kugel-wort — in Ruhe "ALEXANDRA", sonst das,
+   was gerade passiert ("HÖRT ZU", "DENKT NACH", "SPRICHT"). Die Zeile kommt
+   unveraendert aus public/sprache.js; hier bekommt sie nur eine Buehne.
+   min-height friert die Hoehe ein, damit der laengste Zustandstext die
+   Kopfzeile nicht umbricht und alles darunter verschiebt. */
+.gh-marke { display: flex; flex-direction: column; gap: 9px; }
+#kugel-wort {
+  display: block;
+  font-family: var(--j-display);
+  font-weight: 600;
+  font-size: clamp(26px, 3.4vw, 58px);
+  letter-spacing: .06em;
+  line-height: .96;
+  min-height: 1em;
+  color: var(--j-text);
+  text-shadow: 0 0 26px rgba(75, 141, 248, .45);
+}
+.gh-marke .j-label { color: var(--j-text-2); }
+
+/* Eine Haarlinie mit einem wandernden Lichtpunkt: das ist das einzige Stueck
+   Dauerbewegung ausserhalb des Gehirns, und es zeigt, dass die Seite lebt,
+   auch wenn gerade nichts gesagt wird. */
+.gh-spur {
+  position: relative;
+  height: 1px;
+  width: clamp(140px, 18vw, 280px);
+  background: linear-gradient(90deg, var(--j-linie-hell), transparent);
+}
+.gh-spur::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 26px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--j-blau-hell), transparent);
+  animation: gh-lauf 4200ms cubic-bezier(.45, 0, .55, 1) infinite;
+}
+@keyframes gh-lauf { from { transform: translateX(-26px); } to { transform: translateX(clamp(140px, 18vw, 280px)); } }
+
+/* Ablesungen rechts oben / in den Fussecken. Ein Block = Label + Wert.
+   Bewusst KEINE Karten: das Referenzbild kennt nur Linien und Licht. */
+.gh-block { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.gh-block.rechts { align-items: flex-end; text-align: right; }
+.gh-block .j-label { color: var(--j-text-2); }
+.gh-block b {
+  font-family: var(--j-display);
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: .01em;
+  color: var(--j-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Zustandslampe. Die Farbe kommt vom data-zustand am #kugel (siehe unten) —
+   eine Quelle fuer die Wahrheit, kein zweiter Zustand im CSS. */
+.gh-lampe {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+.gh-lampe i {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--gh-signal, var(--j-blau));
+  box-shadow: 0 0 12px var(--gh-signal, var(--j-blau));
+  flex: none;
+}
+#zustand-text {
+  display: inline;
+  font-family: var(--j-display);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--j-text);
+}
+
+/* Der Pegel: 28 Striche, live aus dem Mikro bzw. aus Alexandras Stimme.
+   Die Hoehe setzt /lib/jarvis-gehirn.js pro Bild — keine Fantasieanimation,
+   ohne Ton stehen alle Striche flach. */
+.gh-pegel { display: flex; align-items: flex-end; gap: 3px; height: 26px; }
+.gh-pegel span {
+  width: 2px;
+  height: 2px;
+  background: var(--gh-signal, var(--j-blau));
+  opacity: .75;
+  transform-origin: bottom;
+  will-change: height;
+}
+
+/* ------------------------------------------------------------ Das Gehirn */
+
+/* #kugel ist der Klickbereich ueber dem Gehirn. Sichtbar ist hier nichts —
+   gezeichnet wird auf dem Canvas dahinter. Die Flaeche ist quadratisch und
+   folgt der Groesse des Gehirns, damit man nicht ins Leere klickt. */
+#kugel {
+  position: relative;
+  z-index: 3;
+  width: min(64vmin, 660px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 600ms var(--gh-ruhig);
+}
+#kugel:active { transform: scale(.985); }
+#kugel:focus-visible {
+  outline: 1px solid var(--j-blau);
+  outline-offset: 10px;
+  box-shadow: var(--j-glut-gross);
+}
+/* Der Pegelgeber: 40 unsichtbare Linien, die public/sprache.js Bild fuer Bild
+   mit dem echten Frequenzband beschriftet (style.transform = scale(...)).
+   Sie muessen INNERHALB von #kugel liegen, weil die dortige Schleife genau da
+   sucht. /lib/jarvis-gehirn.js liest sie wieder aus — so haengt das Gehirn am
+   vorhandenen Pegel, ohne dass public/sprache.js angefasst werden musste. */
+.gh-pegelquelle { position: absolute; width: 0; height: 0; overflow: hidden; opacity: 0; }
+
+/* Die Hinweiszeile unter dem Gehirn ("Ich höre …", "Nichts verstanden — sag's
+   nochmal."). Text kommt aus public/sprache.js. */
+#kugel-hinweis {
+  position: relative;
+  z-index: 3;
+  max-width: 46ch;
+  text-align: center;
+  font-family: var(--j-display);
+  font-size: clamp(13px, 1.15vw, 17px);
+  letter-spacing: .05em;
+  color: var(--j-text-2);
+  text-wrap: balance;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------- Bedienleiste */
+
+.gh-leiste {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--j-linie);
+  background: rgba(7, 12, 22, .72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgba(147, 190, 255, .07), 0 14px 34px rgba(0, 0, 0, .55);
+}
+
+/* Die vier Knoepfe. Die Beschriftung schreibt public/sprache.js teilweise um
+   ("Pause" -> "Weiter", "↻" -> "frischt auf…"), deshalb steckt das Symbol in
+   einer CSS-Maske und nicht als <svg> im Knopf: ein textContent-Wechsel wuerde
+   ein Kind-Element loeschen, eine Maske ueberlebt ihn. */
+.vx-tool {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--j-text-2);
+  font-family: var(--j-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  padding: 9px 14px 9px 34px;
+  cursor: pointer;
+  position: relative;
+  transition: color 180ms, background-color 180ms, border-color 180ms;
+}
+.vx-tool::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  margin-top: -8px;
+  width: 16px;
+  height: 16px;
+  background-color: currentColor;
+  mask-repeat: no-repeat; mask-position: center; mask-size: 16px 16px;
+  -webkit-mask-repeat: no-repeat; -webkit-mask-position: center; -webkit-mask-size: 16px 16px;
+}
+.vx-tool:hover { color: var(--j-text); background: rgba(75, 141, 248, .10); border-color: var(--j-linie-akzent); }
+.vx-tool:disabled { color: var(--j-text-3); cursor: default; background: transparent; border-color: transparent; }
+/* "an" setzt public/sprache.js: am Wake-Knopf heisst es "laeuft", am
+   Pause-Knopf "Pause laeuft gerade" (der Knopf zeigt dann "Weiter"). */
+.vx-tool.an { color: var(--j-text); background: rgba(75, 141, 248, .16); border-color: var(--j-linie-akzent); }
+
+/* Wake: drei Bogen, wie eine Schallwelle, die ankommt. */
+#btn-wake::before {
+  mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M4 5.4a5.5 5.5 0 0 1 0 5.2'/%3E%3Cpath d='M7.2 3.4a9 9 0 0 1 0 9.2'/%3E%3Cpath d='M10.4 1.6a12.5 12.5 0 0 1 0 12.8'/%3E%3Ccircle cx='1.6' cy='8' r='.9' fill='%23000' stroke='none'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M4 5.4a5.5 5.5 0 0 1 0 5.2'/%3E%3Cpath d='M7.2 3.4a9 9 0 0 1 0 9.2'/%3E%3Cpath d='M10.4 1.6a12.5 12.5 0 0 1 0 12.8'/%3E%3Ccircle cx='1.6' cy='8' r='.9' fill='%23000' stroke='none'/%3E%3C/svg%3E");
+}
+/* Pause: zwei Balken. Laeuft die Pause bereits (.an), zeigt der Knopf
+   "Weiter" — dann muss auch das Symbol das Weiterlaufen zeigen. */
+#btn-pause::before {
+  mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='4.4' y='2.8' width='2.6' height='10.4' rx='1.3'/%3E%3Crect x='9' y='2.8' width='2.6' height='10.4' rx='1.3'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='4.4' y='2.8' width='2.6' height='10.4' rx='1.3'/%3E%3Crect x='9' y='2.8' width='2.6' height='10.4' rx='1.3'/%3E%3C/svg%3E");
+}
+#btn-pause.an::before {
+  mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.6 3.1a1 1 0 0 1 1.53-.85l7 4.9a1 1 0 0 1 0 1.7l-7 4.9A1 1 0 0 1 4.6 12.9z'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.6 3.1a1 1 0 0 1 1.53-.85l7 4.9a1 1 0 0 1 0 1.7l-7 4.9A1 1 0 0 1 4.6 12.9z'/%3E%3C/svg%3E");
+}
+#btn-stop::before {
+  mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3.4' y='3.4' width='9.2' height='9.2' rx='1.8'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3.4' y='3.4' width='9.2' height='9.2' rx='1.8'/%3E%3C/svg%3E");
+}
+#btn-frisch::before {
+  mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13.4 8a5.4 5.4 0 1 1-1.6-3.8'/%3E%3Cpath d='M13.6 1.9v3.1h-3.1'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13.4 8a5.4 5.4 0 1 1-1.6-3.8'/%3E%3Cpath d='M13.6 1.9v3.1h-3.1'/%3E%3C/svg%3E");
+}
+
+/* Der Punkt im Wake-Knopf zeigt, ob der Dauerlauscher WIRKLICH laeuft —
+   public/sprache.js setzt .an, sobald die Erkennung gestartet ist. */
+.vx-dot {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--j-linie-hell);
+  transition: background 300ms, box-shadow 300ms;
+}
+.vx-dot.an { background: var(--j-gruen); box-shadow: 0 0 9px var(--j-gruen); }
+#btn-wake { position: relative; }
+
+/* Stimme-Ausgabe: reine Ablesung, kein Knopf. */
+.vx-voice {
+  font-family: var(--j-mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  color: var(--j-text-2);
+}
+
+/* ================================================================
+   Zustaende — das Gehirn zeichnet das Canvas, hier faerbt nur die Randanzeige
+   ================================================================
+   Eine Variable, --gh-signal, faerbt Lampe und Pegel. Sie haengt an genau
+   demselben data-zustand, das public/sprache.js schreibt. */
+#kugel { --gh-signal: var(--j-blau); }
+#kugel[data-zustand="lauschen"] { --gh-signal: var(--j-cyan); }
+#kugel[data-zustand="denken"] { --gh-signal: var(--j-gelb); }
+#kugel[data-zustand="sprechen"] { --gh-signal: var(--j-blau-hell); }
+#kugel[data-zustand="pause"] { --gh-signal: var(--j-text-3); }
+
+/* Die Randanzeige braucht die Farbe ausserhalb von #kugel — deshalb spiegelt
+   die Buehne das Attribut (gesetzt von /lib/jarvis-gehirn.js). */
+.gh { --gh-signal: var(--j-blau); }
+.gh[data-zustand="lauschen"] { --gh-signal: var(--j-cyan); }
+.gh[data-zustand="denken"] { --gh-signal: var(--j-gelb); }
+.gh[data-zustand="sprechen"] { --gh-signal: var(--j-blau-hell); }
+.gh[data-zustand="pause"] { --gh-signal: var(--j-text-3); }
+
+/* ================================================================
+   Der eine komponierte Moment: das Erwachen
+   ================================================================
+   Beim Laden faehrt das Gehirn aus einer Streuwolke zusammen (das macht das
+   Canvas), und WAEHREND es das tut, ziehen die Ablesungen von aussen nach.
+   Ein Vorgang, gestaffelt — nicht vier Effekte nebeneinander.
+
+   Startwert ist der ENDZUSTAND: laeuft die Animation nicht (reduzierte
+   Bewegung, alter Browser), steht sofort alles fertig da. */
+@keyframes gh-auf {
+  from { opacity: 0; transform: translateY(10px); filter: blur(6px); }
+}
+@keyframes gh-auf-rechts {
+  from { opacity: 0; transform: translateX(14px); filter: blur(6px); }
+}
+.gh-marke { animation: gh-auf 900ms var(--gh-ruhig) 340ms both; }
+.gh-kopf .gh-block { animation: gh-auf-rechts 900ms var(--gh-ruhig) 520ms both; }
+.gh-fussleiste .gh-block { animation: gh-auf 900ms var(--gh-ruhig) 900ms both; }
+#kugel-hinweis { animation: gh-auf 900ms var(--gh-ruhig) 1080ms both; }
+.gh-leiste { animation: gh-auf 900ms var(--gh-ruhig) 1220ms both; }
+.gh-rahmen { animation: gh-auf 1200ms var(--gh-ruhig) 200ms both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gh-spur::after { animation: none; opacity: .5; }
+}

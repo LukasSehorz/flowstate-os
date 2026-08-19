@@ -1,0 +1,887 @@
+/* ====================================================================
+   JARVIS HUD — die Zentrale als Steuerpult (19.08.2026)
+   ====================================================================
+
+   Wofuer: Die Startseite wird abgefilmt und als Meta-Anzeige geschaltet.
+   Sie muss aus zwei Metern Entfernung auf einem grossen Bildschirm tragen —
+   dicht, leuchtend, in Bewegung. Gleichzeitig sind es ECHTE Firmenzahlen:
+   nichts hier ist Kulisse, jede Flaeche zeigt einen Wert aus der Datenbank
+   oder bleibt ehrlich leer.
+
+   Diese Datei gilt NUR fuer body.hud-zentrale. Die Tokens (--j-*) kommen aus
+   public/jarvis.css, die Bausteine .j-panel / .j-label / .j-wert ebenso —
+   hier steht keine zweite Palette, nur der Bauplan des Pults.
+
+   Warum fast alles auf .hud-zentrale gescopet ist und nicht auf .jarvis:
+   body.jarvis tragen ZWEI Seiten (Sprache und Zentrale). Was hier steht,
+   soll die Sprachseite nicht anfassen.
+
+   Aufbau des Rasters (bewusst ungleich, kein Kachelteppich):
+     kopf   — Titel + durchlaufendes Kennwertband
+     orb    — Tageslast als Kugel        todo — was heute ansteht (das Wichtigste)
+     uhr    — Messuhr Monatsumsatz
+     calls  — Cold Calling als Balken    hist — Umsatz zwoelf Monate
+     log    — Termine + Briefing
+     kach   — sechs grosse Zahlen (CRM)
+     team   — Cold Calling je Person     fin  — Buchhaltung (nur Admin)
+     rechts — Pipeline-Ablesung + rote Meldezeilen
+     mod    — Wege in die anderen Bereiche
+     tick   — Lauftext
+   ==================================================================== */
+
+/* ---------------------------------------------------------------- Rahmen */
+
+/* Die Seite ist FEST DUNKEL — der Hell/Dunkel-Schalter des OS gilt hier nicht.
+   Grund: sie wird gefilmt. Ein Video, das je nach gespeicherter Einstellung
+   des Aufnehmenden weiss anfaengt, ist unbrauchbar. Darum steht der Grund
+   direkt auf dem body und nicht ueber --background aus crm.css. */
+body.hud-zentrale {
+  background: var(--j-grund);
+  background-attachment: fixed;
+  color: var(--j-text);
+}
+
+/* Die Rail und die Kopfleiste kommen aus lib/schale.js und sind hell. Sie
+   bleiben stehen (die Zentrale ist der Einstiegspunkt, die Navigation gehoert
+   dazu), ziehen sich hier aber die Farben des Pults an. */
+body.hud-zentrale .rail {
+  background: linear-gradient(180deg, var(--j-flaeche) 0%, var(--j-grund-2) 100%);
+  border-color: var(--j-linie);
+  border-radius: 4px;
+  color: var(--j-text-2);
+  box-shadow: 0 22px 50px -18px #000, inset 0 1px 0 rgba(147, 190, 255, .07);
+}
+body.hud-zentrale .rail a { color: var(--j-text-2); border-radius: 3px; }
+body.hud-zentrale .rail a:hover { background: rgba(75, 141, 248, .12); color: var(--j-text); }
+body.hud-zentrale .rail a.aktiv,
+body.hud-zentrale .rail a.offen { color: var(--j-blau-hell); }
+body.hud-zentrale .rail a.aktiv {
+  background: rgba(75, 141, 248, .14);
+  box-shadow: inset 0 0 0 1px var(--j-linie-akzent);
+}
+body.hud-zentrale .rail-gruppe { color: var(--j-text-2); font-family: var(--j-mono); letter-spacing: .14em; }
+body.hud-zentrale .rail-marke .rail-wort { color: var(--j-text); }
+body.hud-zentrale .rail-logo,
+body.hud-zentrale .rail-avatar {
+  background: linear-gradient(158deg, var(--j-blau) 0%, var(--j-blau-glut) 100%);
+  color: #04070E;
+  border-radius: 4px;
+}
+body.hud-zentrale .rail-nutzer { border-top-color: var(--j-linie); }
+body.hud-zentrale .rail-nutzer .rail-wort span:first-child { color: var(--j-text); }
+body.hud-zentrale .rail-nutzer .rail-wort span:last-child { color: var(--j-text-2) !important; }
+
+body.hud-zentrale .topbar {
+  background: linear-gradient(180deg, var(--j-flaeche) 0%, var(--j-grund-2) 100%);
+  border: 1px solid var(--j-linie);
+  border-radius: 4px;
+  box-shadow: inset 0 1px 0 rgba(147, 190, 255, .06);
+}
+body.hud-zentrale .topbar-titel { font-family: var(--j-display); letter-spacing: .04em; color: var(--j-text); }
+body.hud-zentrale .datum-chip,
+body.hud-zentrale .stoppuhr {
+  background: var(--j-grund-2);
+  border: 1px solid var(--j-linie);
+  border-radius: 3px;
+  color: var(--j-text-2);
+  font-family: var(--j-mono);
+  font-size: 11px;
+}
+body.hud-zentrale .stoppuhr-zeit { color: var(--j-blau-hell); }
+body.hud-zentrale .topbar button,
+body.hud-zentrale .topbar .weiss-schalter { color: var(--j-text-2); border-color: var(--j-linie); }
+body.hud-zentrale .topbar button:hover { color: var(--j-text); }
+body.hud-zentrale .nutzer-name { color: var(--j-text); }
+body.hud-zentrale .avatar {
+  background: linear-gradient(160deg, var(--j-blau), var(--j-blau-glut));
+  color: #04070E;
+}
+/* Hell/Dunkel- und Weiss-Schalter sind ausgeblendet — die Regel steht jetzt
+   in public/jarvis.css unter body.jarvis, weil sie fuer BEIDE gefilmten
+   Seiten gilt und auf der Sprachseite bis 19.08. gefehlt hat. */
+
+body.hud-zentrale main { padding: 12px 14px 20px 0; }
+
+/* ---------------------------------------------------------------- Raster */
+
+/* Zwoelf Spalten, und jedes Panel sagt selbst, wie viele es davon nimmt.
+   Bewusst KEIN grid-template-areas: halbe Panels fallen je nach Rechten weg
+   (keine Buchhaltung, kein CRM, kein Team), und ein festes Feldschema haette
+   dann Loecher an Stellen, an denen nie etwas stand. Mit Spannweiten in der
+   Dokumentreihenfolge schliesst sich die Reihe von selbst — der Server rechnet
+   die Weiten aus, damit jede Zeile auf zwoelf aufgeht. */
+.hud {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-content: start;
+}
+.hud > * { grid-column: span 12; min-width: 0; }
+.hud-s3  { grid-column: span 3 !important; }
+.hud-s4  { grid-column: span 4 !important; }
+.hud-s5  { grid-column: span 5 !important; }
+.hud-s6  { grid-column: span 6 !important; }
+.hud-s8  { grid-column: span 8 !important; }
+.hud-s9  { grid-column: span 9 !important; }
+.hud-s12 { grid-column: span 12 !important; }
+
+.hud-log { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+
+/* Die rechte Spalte der Fusszeile: Pipeline-Ablesung ueber den Meldezeilen.
+   Vorher stand dort NUR die Alarmleiste — eine Zeile hoch, darunter 120 px
+   Nichts, genau an der Stelle, an der das Bild aus zwei Metern aufhoert. */
+.hud-rechts { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.hud-rechts > .hud-alarm { flex: 0 0 auto; }
+/* Steht die Spalte allein (kein Team, keine Buchhaltung), legt sie sich in die
+   Breite statt eine schmale Saeule zu bilden. */
+.hud-rechts.hud-s12 { flex-direction: row; align-items: stretch; }
+.hud-rechts.hud-s12 > * { flex: 1 1 0; min-width: 0; }
+
+/* Wie viele Kacheln in der Reihe stehen, rechnet der Server aus: er laesst
+   Werte weg, die nichts zu sagen haben (siehe kachelListe in server.js).
+   Deshalb kommt die Spaltenzahl als Variable und nicht als feste 6. */
+.hud-kacheln { display: grid; gap: 10px; grid-template-columns: repeat(var(--kachel-n, 6), minmax(0, 1fr)); }
+
+/* Panels im Pult sind eckig, nicht rund: ein Messgeraet hat Kanten. */
+.hud .j-panel { border-radius: 2px; padding: 11px 13px; min-width: 0; }
+
+/* Zeichen ohne eigene Groesse waeren 300x150 gross (HTML-Standard fuer <svg>
+   ohne width/height). Diese Zeile faengt jedes Zeichen ab, das keine eigene
+   Regel hat — die Instrumente weiter unten setzen ihre Groesse selbst. */
+.hud svg { width: 14px; height: 14px; }
+
+/* ------------------------------------------------------- Panel-Innenleben */
+
+/* Kopfzeile jedes Panels: Beschriftung links, Weg nach rechts, feine Linie
+   darunter. Immer gleich — damit man beim Ueberfliegen weiss, wo man ist. */
+.hud-titel {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 7px;
+  margin-bottom: 9px;
+  border-bottom: 1px solid var(--j-linie);
+}
+.hud-titel .j-label { flex: 0 0 auto; }
+.hud-titel .hud-titel-fuell { flex: 1 1 auto; min-width: 0; }
+.hud-titel .hud-nav { align-self: center; margin-right: 8px; }
+.hud-titel .j-label span { color: var(--j-blau-hell); }
+.hud-weg {
+  font-family: var(--j-mono);
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--j-blau-hell);
+  white-space: nowrap;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.hud-weg:hover { color: #fff; text-decoration: none; }
+.hud-weg svg { width: 11px; height: 11px; }
+
+/* Die Mikro-Beschriftung heller als der Token-Standard: --j-text-3 liegt auf
+   dem Panelgrund bei 3,6:1 und ist damit fuer 10-px-Text zu schwach. Der Wert
+   traegt die Aussage, aber lesen koennen muss man die Beschriftung auch. */
+body.hud-zentrale .j-label { color: var(--j-text-2); }
+
+.hud-mikro {
+  font-family: var(--j-mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  color: var(--j-text-2);
+  line-height: 1.5;
+}
+.hud-mikro b { color: var(--j-text); font-weight: 600; }
+/* Steht eine echte Kennzahl in einer Mikro-Zeile (Fuss des Histogramms), traegt
+   sie ihre eigene Groesse — sonst waere die Zahl so klein wie ihre Beschriftung. */
+.hud-mikro .hud-zahl { display: inline-block; font-size: 17px; font-weight: 600; margin-top: 3px; }
+
+/* Zahlen mit tabellarischen Ziffern — sonst springt die Breite beim Hochzaehlen
+   und im Video sieht man es sofort zucken. */
+.hud-zahl {
+  font-family: var(--j-display);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -.02em;
+  line-height: 1;
+  color: var(--j-text);
+}
+
+/* ---------------------------------------------------------------- Kopfzeile */
+
+.hud-kopf {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  border: 1px solid var(--j-linie);
+  border-left: 0;
+  border-right: 0;
+  padding: 9px 2px;
+  min-width: 0;
+}
+.hud-marke { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+.hud-marke h1 {
+  font-family: var(--j-display);
+  font-size: clamp(15px, 1.35vw, 21px);
+  font-weight: 600;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--j-text);
+  white-space: nowrap;
+}
+.hud-marke h1 i { color: var(--j-blau); font-style: normal; }
+/* Der Punkt links pulst — er sagt "die Verbindung steht" und ist der einzige
+   Dauerlaeufer in der Kopfzeile. */
+.hud-puls {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--j-blau);
+  box-shadow: var(--j-glut-klein);
+  flex: 0 0 auto;
+  animation: hud-puls 2.4s ease-in-out infinite;
+}
+@keyframes hud-puls {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .35; transform: scale(.72); }
+}
+.hud-datum {
+  font-family: var(--j-mono);
+  font-size: 10.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--j-text-2);
+  white-space: nowrap;
+}
+
+/* Das Kennwertband: laeuft von rechts nach links durch, Inhalt zweimal
+   hintereinander, damit die Schleife ohne Sprung schliesst.
+
+   Die Kanten sind MASKIERT, nicht ueberdeckt. Vorher lag dort ein Verlauf in
+   --j-grund darueber: er verdeckte nur ueber 5 % der Breite, sodass am rechten
+   Rand ein halbes Wort stehenblieb ("UM…"). Eine Maske loest den Text ueber
+   90 px wirklich auf — und sie funktioniert unabhaengig davon, was hinter dem
+   Band liegt. */
+.hud-band {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+  --j-saum: linear-gradient(90deg, transparent 0, #000 72px, #000 calc(100% - 104px), transparent 100%);
+  mask-image: var(--j-saum);
+  -webkit-mask-image: var(--j-saum);
+}
+.hud-band-lauf {
+  display: flex;
+  gap: 26px;
+  width: max-content;
+  animation: hud-band 42s linear infinite;
+}
+.hud-band:hover .hud-band-lauf { animation-play-state: paused; }
+@keyframes hud-band { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.hud-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  font-family: var(--j-mono);
+  font-size: 11px;
+  letter-spacing: .06em;
+  white-space: nowrap;
+  color: var(--j-text-2);
+}
+.hud-chip b { color: var(--j-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.hud-chip .j-auf, .hud-chip .j-ab { font-weight: 600; }
+
+/* ---------------------------------------------------------------- Kugel */
+
+.hud-orb { display: flex; flex-direction: column; }
+.hud-orb-buehne {
+  position: relative;
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  padding: 6px 0 2px;
+  min-height: 190px;
+}
+.hud-orb-buehne svg { width: 100%; max-width: 210px; height: auto; display: block; }
+/* Die Meridiane drehen sich langsam — das ist die Ruhe im Bild, gegen die die
+   Zahlen ticken. */
+.hud-orb-netz { animation: hud-dreh 26s linear infinite; transform-origin: 100px 100px; }
+@keyframes hud-dreh { to { transform: rotate(360deg); } }
+.hud-orb-mitte {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 5px;
+  text-align: center;
+  pointer-events: none;
+}
+.hud-orb-mitte .hud-zahl { font-size: clamp(30px, 3.2vw, 46px); font-weight: 600; }
+.hud-orb-fuss { display: flex; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid var(--j-linie); }
+
+/* ---------------------------------------------------------------- To-Dos */
+
+.hud-todo { display: flex; flex-direction: column; min-height: 0; }
+.hud-todo-kopf { display: flex; align-items: flex-end; gap: 18px; margin-bottom: 10px; }
+.hud-todo-kopf .hud-zahl { font-size: clamp(38px, 4.6vw, 68px); font-weight: 600; }
+.hud-todo-kopf-text { display: grid; gap: 5px; padding-bottom: 6px; }
+.hud-todo-liste { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-height: 0; }
+.hud-todo-zeile {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  background: rgba(75, 141, 248, .035);
+  text-decoration: none;
+  color: inherit;
+  transition: background var(--j-schnell), transform var(--j-schnell);
+}
+.hud-todo-zeile:nth-child(even) { background: rgba(75, 141, 248, .015); }
+/* Nur der Link reagiert. Wem der Bereich fehlt, bekommt die Zeile als reinen
+   Text — und dann darf sie sich auch nicht wie ein Knopf verhalten. */
+a.hud-todo-zeile:hover,
+a.hud-todo-zeile:nth-child(even):hover {
+  background: rgba(75, 141, 248, .12);
+  text-decoration: none;
+  transform: translateX(2px);
+}
+/* Sparten-Marke: ein gezeichnetes Quadrat, kein farbiger Rand am Kasten. */
+.hud-marke-punkt { width: 8px; height: 8px; background: var(--j-blau); box-shadow: 0 0 7px rgba(75, 141, 248, .6); }
+.hud-marke-punkt.webdesign { background: var(--j-blau); }
+.hud-marke-punkt.performance { background: var(--j-gelb); box-shadow: 0 0 7px rgba(245, 184, 67, .55); }
+.hud-marke-punkt.ki { background: var(--j-cyan); box-shadow: 0 0 7px rgba(56, 189, 248, .55); }
+.hud-marke-punkt.ohne { background: var(--j-text-3); box-shadow: none; }
+.hud-todo-text { min-width: 0; }
+.hud-todo-text strong {
+  display: block;
+  font-family: var(--j-display);
+  font-size: 13.5px;
+  font-weight: 550;
+  color: var(--j-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hud-todo-text span {
+  display: block;
+  font-family: var(--j-mono);
+  font-size: 10px;
+  letter-spacing: .06em;
+  color: var(--j-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+.hud-stempel {
+  font-family: var(--j-mono);
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--j-text-2);
+  border: 1px solid var(--j-linie-hell);
+  padding: 3px 7px;
+}
+.hud-stempel.spaet { color: var(--j-rot); border-color: rgba(255, 90, 110, .45); background: rgba(255, 90, 110, .08); }
+.hud-stempel.jetzt { color: var(--j-blau-hell); border-color: var(--j-linie-akzent); background: rgba(75, 141, 248, .1); }
+
+/* Leerzustand: sagt, was los ist, und wohin es weitergeht. Kein trauriges
+   Icon-mit-Satz, sondern der Befund in derselben Mikrotypografie.
+   "Kalender offline" und "Kein Briefing" stehen lokal fast immer da — auf dem
+   Server sind sie gefuellt. Ein GESTRICHELTER Rahmen liest sich an dieser
+   Stelle als unfertiger Platzhalter; deshalb jetzt eine durchgezogene Kante
+   und eine feine Schraffur: das ist die Anzeige "hier liegt gerade kein
+   Signal an", nicht "hier fehlt noch etwas". */
+.hud-leer {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 15px 13px;
+  border: 1px solid var(--j-linie);
+  background:
+    repeating-linear-gradient(135deg,
+      rgba(75, 141, 248, .045) 0 1px, transparent 1px 9px);
+  color: var(--j-text-2);
+  font-family: var(--j-mono);
+  font-size: 11px;
+  letter-spacing: .06em;
+  line-height: 1.6;
+}
+.hud-leer svg { width: 18px; height: 18px; color: var(--j-text-3); flex: 0 0 auto; }
+.hud-leer b {
+  color: var(--j-text);
+  display: block;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+/* ---------------------------------------------------------------- Messuhr */
+
+.hud-uhr { display: flex; flex-direction: column; }
+.hud-uhr-buehne { position: relative; flex: 1 1 auto; display: grid; place-items: center; min-height: 190px; }
+.hud-uhr-buehne svg { width: 100%; max-width: 230px; height: auto; display: block; }
+/* Die Zahl sitzt in der Mitte der Uhr. Der Zeiger reicht bewusst nicht bis zum
+   Drehpunkt — er laeuft von r=50 nach aussen —, damit sie frei steht. */
+.hud-uhr-mitte {
+  position: absolute;
+  left: 0; right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  text-align: center;
+  pointer-events: none;
+}
+/* Die Zahl in der Messuhr ist die Hauptaussage des Panels und war mit 34 px
+   auf dem grossen Bildschirm die kleinste der grossen Zahlen. */
+.hud-uhr-mitte .hud-zahl { font-size: clamp(24px, 2.6vw, 42px); font-weight: 600; }
+.hud-uhr-fuss { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--j-linie); }
+.hud-uhr-zeiger { transform-origin: 100px 100px; }
+
+/* ------------------------------------------------------------- Cold Calling */
+
+.hud-balken-liste { display: grid; gap: 9px; }
+.hud-balken-zeile { display: grid; gap: 4px; }
+.hud-balken-kopf { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.hud-balken-kopf .hud-zahl { font-size: 15px; font-weight: 600; }
+.hud-balken-spur {
+  position: relative;
+  height: 8px;
+  background: var(--j-grund);
+  border: 1px solid var(--j-linie);
+  overflow: hidden;
+}
+/* Der Balken ist gerastert, nicht glatt: ein Messgeraet zeigt Stufen. */
+.hud-balken-fuell {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background:
+    repeating-linear-gradient(90deg, var(--j-blau) 0 4px, transparent 4px 6px),
+    linear-gradient(90deg, var(--j-blau-tief), var(--j-blau-glut));
+  box-shadow: var(--j-glut-klein);
+}
+.hud-balken-fuell.gruen {
+  background: repeating-linear-gradient(90deg, var(--j-gruen) 0 4px, transparent 4px 6px), linear-gradient(90deg, #14523A, #1E7A55);
+  box-shadow: 0 0 10px rgba(61, 214, 140, .4);
+}
+.hud-balken-fuell.rot {
+  background: repeating-linear-gradient(90deg, var(--j-rot) 0 4px, transparent 4px 6px), linear-gradient(90deg, #5A1A24, #8E2233);
+  box-shadow: 0 0 10px rgba(255, 90, 110, .35);
+}
+.hud-balken-fuell.gelb {
+  background: repeating-linear-gradient(90deg, var(--j-gelb) 0 4px, transparent 4px 6px), linear-gradient(90deg, #4E3A12, #8A671F);
+  box-shadow: 0 0 10px rgba(245, 184, 67, .35);
+}
+.hud-balken-fuss { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--j-linie); }
+
+/* ---------------------------------------------------------------- Histogramm */
+
+.hud-hist { display: flex; flex-direction: column; }
+.hud-hist-feld {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 180px;
+}
+.hud-hist-achse {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-family: var(--j-mono);
+  font-size: 9.5px;
+  letter-spacing: .04em;
+  color: var(--j-text-2);
+  padding-bottom: 16px;
+}
+.hud-hist-saeulen { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 5px; align-items: end; }
+.hud-hist-saeule { display: flex; flex-direction: column; height: 100%; gap: 4px; min-width: 0; }
+.hud-hist-zellen {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  min-height: 0;
+}
+.hud-hist-zelle { flex: 1 1 0; background: rgba(75, 141, 248, .075); }
+.hud-hist-zelle.an { background: var(--j-blau-tief); }
+.hud-hist-saeule.jetzt .hud-hist-zelle.an { background: var(--j-blau); box-shadow: 0 0 6px rgba(75, 141, 248, .5); }
+/* Die oberste leuchtende Zelle ist die Spitze der Saeule und darum am
+   hellsten — das ist die Ablesekante. Gefunden wird sie als die letzte mit
+   .an: entweder folgt darueber eine dunkle, oder die Saeule ist voll. */
+.hud-hist-saeule .hud-hist-zelle.an:has(+ .hud-hist-zelle:not(.an)),
+.hud-hist-saeule .hud-hist-zelle.an:last-child { background: var(--j-blau-hell); }
+.hud-hist-monat {
+  font-family: var(--j-mono);
+  font-size: 9.5px;
+  letter-spacing: .05em;
+  text-align: center;
+  color: var(--j-text-2);
+  text-transform: uppercase;
+}
+.hud-hist-saeule.jetzt .hud-hist-monat { color: var(--j-blau-hell); }
+.hud-hist-fuss { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--j-linie); }
+
+/* ---------------------------------------------------------------- Protokoll */
+
+.hud-log > .j-panel { display: flex; flex-direction: column; min-height: 0; }
+.hud-log-termine { flex: 1 1 auto; }
+.hud-log-briefing { flex: 0 1 auto; }
+.hud-zeilen { display: flex; flex-direction: column; gap: 1px; overflow: auto; max-height: 210px; }
+.hud-zeile {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 9px;
+  align-items: baseline;
+  padding: 5px 6px;
+  font-family: var(--j-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  background: rgba(75, 141, 248, .03);
+}
+.hud-zeile:nth-child(even) { background: transparent; }
+.hud-zeile time { color: var(--j-blau-hell); letter-spacing: .06em; white-space: nowrap; }
+.hud-zeile time.ganz { color: var(--j-text-2); font-size: 9.5px; }
+.hud-zeile-text { min-width: 0; color: var(--j-text); overflow: hidden; text-overflow: ellipsis; }
+.hud-zeile-text i { display: block; font-style: normal; color: var(--j-text-2); font-size: 10px; letter-spacing: .05em; }
+.hud-zeile.vorbei time, .hud-zeile.vorbei .hud-zeile-text { color: var(--j-text-2); }
+.hud-zeile.vorbei .hud-zeile-text i { color: var(--j-text-3); }
+
+.hud-nav { display: inline-flex; gap: 2px; }
+.hud-nav button {
+  background: var(--j-grund);
+  border: 1px solid var(--j-linie);
+  color: var(--j-text-2);
+  width: 22px; height: 20px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+}
+.hud-nav button:hover { color: var(--j-blau-hell); border-color: var(--j-linie-hell); background: rgba(75, 141, 248, .1); }
+.hud-nav button svg { width: 12px; height: 12px; }
+
+/* Das Briefing ist Fliesstext aus dem Vault — hier klein, mit eigener Rolle. */
+.hud-briefing-text {
+  font-family: var(--j-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--j-text-2);
+  max-height: 128px;
+  overflow: auto;
+}
+.hud-briefing-text h1, .hud-briefing-text h2, .hud-briefing-text h3 {
+  font-family: var(--j-display);
+  font-size: 12px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--j-blau-hell);
+  margin: 9px 0 4px;
+}
+.hud-briefing-text ul, .hud-briefing-text ol { padding-left: 16px; margin: 4px 0; }
+.hud-briefing-text li { margin: 2px 0; }
+.hud-briefing-text p { margin: 4px 0; }
+.hud-briefing-text strong { color: var(--j-text); }
+.hud-briefing-text a { color: var(--j-blau-hell); }
+
+/* ---------------------------------------------------------------- Kacheln */
+
+.hud-kachel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color var(--j-schnell), box-shadow var(--j-schnell);
+}
+a.hud-kachel:hover { text-decoration: none; border-color: var(--j-linie-hell); box-shadow: var(--j-glut-gross); }
+a.hud-kachel:hover .hud-zahl { color: var(--j-blau-hell); }
+.hud-kachel .hud-zahl { font-size: clamp(24px, 2.7vw, 42px); font-weight: 600; }
+.hud-kachel-fuss { margin-top: auto; }
+
+/* ---------------------------------------------------------------- Team */
+
+.hud-tabelle { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.hud-tabelle th {
+  font-family: var(--j-mono);
+  font-size: 9.5px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--j-text-2);
+  font-weight: 500;
+  text-align: right;
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--j-linie);
+  white-space: nowrap;
+}
+.hud-tabelle th:first-child, .hud-tabelle td:first-child { text-align: left; }
+.hud-tabelle td {
+  font-family: var(--j-mono);
+  font-size: 12.5px;
+  color: var(--j-text);
+  text-align: right;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(18, 35, 61, .55);
+  white-space: nowrap;
+}
+.hud-tabelle td:first-child {
+  font-family: var(--j-display);
+  font-size: 13px;
+  letter-spacing: .01em;
+  max-width: 0;
+  width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hud-tabelle tr:last-child td { border-bottom: 0; }
+.hud-tabelle td.null { color: var(--j-text-3); }
+.hud-tabelle-huelle { overflow-x: auto; }
+
+/* ---------------------------------------------------------------- Finanzen */
+
+.hud-paare { display: grid; gap: 7px; }
+.hud-paar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(18, 35, 61, .55);
+}
+.hud-paar:last-child { border-bottom: 0; }
+.hud-paar b { font-family: var(--j-mono); font-size: 13px; font-weight: 600; color: var(--j-text); font-variant-numeric: tabular-nums; }
+.hud-paar .hud-zahl { font-size: 17px; font-weight: 600; }
+
+/* ------------------------------------------------------- Pipeline · Prognose
+
+   Zwei Werte dieser Seite koennen ehrlich 0 sein: Pipeline und Forecast. Als
+   zwei riesige "0 €" nebeneinander in der Kachelreihe sahen sie aus wie ein
+   Ausfall. Hier stehen sie klein, neben der Stueckzahl, die sie erklaert —
+   und darunter der Satz, WARUM dort nichts steht. */
+.hud-pipe { display: flex; flex-direction: column; }
+.hud-pipe .hud-paare { flex: 1 1 auto; align-content: start; }
+.hud-pipe-fuss { margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--j-linie); }
+
+/* ---------------------------------------------------------------- Alarme */
+
+.hud-alarm { display: flex; flex-direction: column; gap: 6px; }
+.hud-alarm-zeile {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 11px;
+  border: 1px solid rgba(255, 90, 110, .38);
+  background: linear-gradient(90deg, rgba(255, 90, 110, .13), rgba(255, 90, 110, .03));
+  font-family: var(--j-mono);
+  font-size: 11px;
+  letter-spacing: .06em;
+  color: var(--j-rot);
+  text-decoration: none;
+  animation: hud-alarm-glut 3.4s ease-in-out infinite;
+}
+a.hud-alarm-zeile:hover { text-decoration: none; border-color: var(--j-rot); background: rgba(255, 90, 110, .2); }
+.hud-alarm-zeile svg { width: 15px; height: 15px; }
+.hud-alarm-zeile b { color: #FFD3D9; font-weight: 600; }
+.hud-alarm-zeile.gelb {
+  border-color: rgba(245, 184, 67, .38);
+  background: linear-gradient(90deg, rgba(245, 184, 67, .12), rgba(245, 184, 67, .03));
+  color: var(--j-gelb);
+  animation: none;
+}
+.hud-alarm-zeile.gelb b { color: #FFE6B8; }
+.hud-alarm-zeile.ruhig {
+  border-color: rgba(61, 214, 140, .32);
+  background: linear-gradient(90deg, rgba(61, 214, 140, .1), rgba(61, 214, 140, .02));
+  color: var(--j-gruen);
+  animation: none;
+}
+.hud-alarm-zeile.ruhig b { color: #C7F5DF; }
+@keyframes hud-alarm-glut {
+  0%, 100% { border-color: rgba(255, 90, 110, .38); box-shadow: none; }
+  50% { border-color: rgba(255, 90, 110, .72); box-shadow: 0 0 16px rgba(255, 90, 110, .18); }
+}
+
+/* ---------------------------------------------------------------- Module */
+
+.hud-module {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  border-top: 1px solid var(--j-linie);
+  padding-top: 9px;
+}
+.hud-modul {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--j-linie);
+  background: var(--j-grund-2);
+  color: var(--j-text-2);
+  font-family: var(--j-mono);
+  font-size: 10.5px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--j-schnell), border-color var(--j-schnell), background var(--j-schnell);
+}
+.hud-modul:hover {
+  text-decoration: none;
+  color: var(--j-blau-hell);
+  border-color: var(--j-linie-akzent);
+  background: rgba(75, 141, 248, .1);
+}
+.hud-modul svg { width: 14px; height: 14px; }
+.hud-modul.tat { color: var(--j-text); border-color: var(--j-linie-hell); }
+.hud-modul.tat:hover { color: #fff; box-shadow: var(--j-glut-klein); }
+.hud-module form { margin: 0; display: inline-flex; }
+.hud-module button.hud-modul { border-radius: 0; box-shadow: none; height: auto; }
+
+/* ---------------------------------------------------------------- Lauftext */
+
+.hud-ticker {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--j-linie);
+  border-left: 0; border-right: 0;
+  background: linear-gradient(90deg, rgba(75, 141, 248, .06), transparent 60%);
+  padding: 7px 0;
+}
+/* Dieselbe Saum-Maske wie im Kopfband: der Lauftext soll an beiden Enden
+   ausblenden, nicht mitten im Wort an der Kante abreissen. Sie sitzt auf einer
+   eigenen Huelle — nicht auf der Leiste (deren Kante soll durchlaufen) und
+   nicht auf dem Lauf selbst (der wird verschoben, die Maske liefe mit). */
+.hud-ticker-saum {
+  overflow: hidden;
+  --j-saum: linear-gradient(90deg, transparent 0, #000 56px, #000 calc(100% - 96px), transparent 100%);
+  mask-image: var(--j-saum);
+  -webkit-mask-image: var(--j-saum);
+}
+.hud-ticker-lauf {
+  display: flex;
+  gap: 40px;
+  width: max-content;
+  animation: hud-band 58s linear infinite;
+  font-family: var(--j-mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  color: var(--j-text-2);
+  white-space: nowrap;
+}
+.hud-ticker-lauf b { color: var(--j-text); font-weight: 600; }
+.hud-ticker-lauf span { display: inline-flex; gap: 10px; align-items: baseline; }
+.hud-ticker:hover .hud-ticker-lauf { animation-play-state: paused; }
+
+/* ---------------------------------------------------------------- Hinweise */
+
+.hud-hinweis {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--j-linie-akzent);
+  background: linear-gradient(90deg, rgba(75, 141, 248, .12), transparent 70%);
+  color: var(--j-text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.hud-hinweis svg { width: 18px; height: 18px; color: var(--j-blau); flex: 0 0 auto; margin-top: 1px; }
+.hud-hinweis strong { color: #fff; }
+.hud-hinweis a { color: var(--j-blau-hell); }
+.hud-hinweis.warn { border-color: rgba(255, 90, 110, .4); background: linear-gradient(90deg, rgba(255, 90, 110, .12), transparent 70%); }
+.hud-hinweis.warn svg { color: var(--j-rot); }
+
+/* ------------------------------------------------------------ Startzustand */
+
+/* Vor dem Start sind die Panels leicht abgesenkt und blass; hud-zentrale.js
+   faehrt sie in einer Reihenfolge herein. Laeuft das Skript nicht (Fehler,
+   abgeschaltetes JavaScript), sorgt die Regel darunter dafuer, dass trotzdem
+   alles sichtbar ist — eine Seite, die ohne Animation leer bleibt, waere ein
+   schlechter Tausch. */
+.hud.startet > * { opacity: .001; }
+.hud.laeuft > * { opacity: 1; }
+
+/* -------------------------------------------------------------- Schmalere */
+
+@media (max-width: 1560px) {
+  .hud-kacheln { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Ab hier passt die Dreierzeile nicht mehr: die Messuhr braucht Durchmesser,
+   die Aufgabenliste Breite. Die Reihen werden zu Zweierreihen umgelegt — die
+   Reihenfolge im Dokument bleibt, es aendern sich nur die Weiten.
+   Die Regeln sind zweifach qualifiziert (.hud > .x), damit sie die
+   Spannweiten-Klassen des Servers ueberschreiben. */
+@media (max-width: 1400px) {
+  .hud > .hud-orb   { grid-column: span 4 !important; }
+  .hud > .hud-todo  { grid-column: span 8 !important; }
+  .hud > .hud-uhr   { grid-column: span 4 !important; }
+  .hud > .hud-calls { grid-column: span 8 !important; }
+  .hud > .hud-hist  { grid-column: span 8 !important; }
+  .hud > .hud-log   { grid-column: span 4 !important; }
+  .hud > .hud-team,
+  .hud > .hud-finanz { grid-column: span 6 !important; }
+  /* Auf dem Laptop nimmt die rechte Spalte die ganze Breite und legt ihre
+     beiden Teile nebeneinander — sonst bliebe je nach Rechten eine halbe
+     Reihe leer stehen. */
+  .hud > .hud-rechts { grid-column: span 12 !important; flex-direction: row; align-items: stretch; }
+  .hud > .hud-rechts > * { flex: 1 1 0; min-width: 0; }
+  .hud > .hud-alarm { grid-column: span 12 !important; }
+  .hud-kacheln { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  body.hud-zentrale main { padding: 10px 10px 24px 0; }
+  .hud { grid-template-columns: minmax(0, 1fr); }
+  /* Alles untereinander. Die Panels stehen hier EINZELN und nicht nur als
+     ".hud > *": der Block fuer 1400 px gilt auch noch bei 390 px, und seine
+     zweifach qualifizierten Regeln (.hud > .hud-orb) haetten sonst gewonnen —
+     eine Regel mit hoeherer Gewichtung schlaegt eine spaetere mit niedrigerer.
+     Genau daran lag es, dass die Zentrale auf dem Handy Panels in
+     Drittelbreite nebeneinander stellte und rechts aus dem Fenster lief. */
+  .hud > *,
+  .hud > .hud-orb, .hud > .hud-todo, .hud > .hud-uhr, .hud > .hud-calls,
+  .hud > .hud-hist, .hud > .hud-log, .hud > .hud-team, .hud > .hud-finanz,
+  .hud > .hud-rechts, .hud > .hud-kacheln, .hud > .hud-alarm {
+    grid-column: 1 / -1 !important;
+  }
+  /* Panelkopfzeilen duerfen umbrechen: Beschriftung und Weg stehen sonst mit
+     white-space:nowrap nebeneinander und schieben das Panel auf. */
+  .hud-titel { flex-wrap: wrap; row-gap: 4px; }
+  .hud-titel .hud-titel-fuell { flex-basis: 0; }
+  .hud-kacheln { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hud-kopf { flex-direction: column; align-items: flex-start; gap: 9px; }
+  .hud-band { width: 100%; --j-saum: linear-gradient(90deg, #000 0, #000 calc(100% - 48px), transparent 100%); }
+  .hud-ticker-saum { --j-saum: linear-gradient(90deg, #000 0, #000 calc(100% - 48px), transparent 100%); }
+  .hud-marke h1 { letter-spacing: .14em; }
+  .hud-todo-kopf .hud-zahl { font-size: 46px; }
+  /* Die Datumszeile ist auf dem Handy laenger als das Fenster breit ist. */
+  .hud-datum { white-space: normal; line-height: 1.6; }
+  .hud > .hud-rechts { flex-direction: column; }
+  .hud-tabelle-huelle { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .hud-modul { font-size: 10px; padding: 7px 10px; }
+}
+
+/* Wer Bewegung abbestellt hat, bekommt das Pult still — die Zahlen bleiben
+   dieselben. jarvis.css kuerzt die Dauern schon; hier kommen die Laeufer dazu,
+   die sonst in einer Endlosschleife stehenbleiben wuerden. */
+@media (prefers-reduced-motion: reduce) {
+  .hud-band-lauf, .hud-ticker-lauf, .hud-orb-netz, .hud-puls { animation: none !important; }
+  .hud-band-lauf, .hud-ticker-lauf { width: 100%; overflow: hidden; flex-wrap: wrap; }
+  .hud.startet > * { opacity: 1; }
+}
