@@ -575,12 +575,24 @@
         : zustand === "lauschen" ? analyser : null;
       if (quelle) {
         quelle.getByteFrequencyData(daten);
-        striche.forEach((s, i) => {
-          const v = daten[i % daten.length] / 255;
-          s.style.transform = `scale(${(1 + v * 1.5).toFixed(3)})`;
-        });
+        // Direkte Leitung (19.08.): Das Partikelgehirn liest die Frequenzdaten
+        // hier ab. Bis dahin lief der Pegel ueber 40 SVG-Linien — geschrieben
+        // als style.transform, 60 Mal je Sekunde, und drueben wieder als Text
+        // ausgelesen und geparst. Gemessen kostete allein dieser Umweg rund
+        // 24 Bilder je Sekunde: In "hoeren" und "sprechen" lief das Gehirn mit
+        // 34, in "ruhe" mit 58.
+        window.__pegelDaten = daten;
+        // Die Linien werden nur noch beschrieben, wenn KEIN Gehirn laeuft —
+        // also fuer die alte Kugeldarstellung. Sie setzt window.__gehirn nicht.
+        if (!window.__gehirn) {
+          striche.forEach((s, i) => {
+            const v = daten[i % daten.length] / 255;
+            s.style.transform = `scale(${(1 + v * 1.5).toFixed(3)})`;
+          });
+        }
       } else {
-        striche.forEach((s) => (s.style.transform = ""));
+        window.__pegelDaten = null;
+        if (!window.__gehirn) striche.forEach((s) => (s.style.transform = ""));
       }
       requestAnimationFrame(tick);
     };

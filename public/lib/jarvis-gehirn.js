@@ -168,7 +168,7 @@
   // ab, denen das zu viel ist.
   function fadenZahl() {
     var w = window.innerWidth, kerne = navigator.hardwareConcurrency || 4;
-    var n = w < 620 ? 2400 : w < 1000 ? 4800 : w < 1500 ? 7800 : 11000;
+    var n = w < 620 ? 2000 : w < 1000 ? 3800 : w < 1500 ? 5800 : 7600;
     if (kerne <= 4) n = Math.round(n * 0.70);
     return n;
   }
@@ -331,9 +331,12 @@
 
   var Z = {
     ruhe: { dreh: 0.052, atmen: 0.020, atemHz: 0.13, grund: 0.44, tilgen: 0.34, impuls: 0.45, tempo: 0.16, dichte: 1.0, breite: 0.30, aussen: 0.00, welle: 0.00, kuehl: 0.00, glut: 0.98 },
-    lauschen: { dreh: 0.028, atmen: 0.012, atemHz: 0.34, grund: 0.54, tilgen: 0.32, impuls: 0.34, tempo: 0.46, dichte: 1.4, breite: 0.40, aussen: 1.00, welle: 0.00, kuehl: 0.55, glut: 0.90 },
+    // lauschen bekam am 19.08. eine eigene Ringwelle (0.55). Vorher war welle
+    // hier 0 — die Stimme des Sprechenden bewegte also nichts ausser den
+    // Fadenspitzen, und das sah man aus zwei Metern nicht.
+    lauschen: { dreh: 0.028, atmen: 0.012, atemHz: 0.34, grund: 0.54, tilgen: 0.32, impuls: 0.34, tempo: 0.46, dichte: 1.4, breite: 0.40, aussen: 0.75, welle: 0.18, kuehl: 0.55, glut: 0.90 },
     denken: { dreh: 0.255, atmen: 0.008, atemHz: 0.80, grund: 0.48, tilgen: 0.19, impuls: 1.45, tempo: 1.55, dichte: 3.4, breite: 0.11, aussen: 0.00, welle: 0.00, kuehl: -0.15, glut: 0.78 },
-    sprechen: { dreh: 0.095, atmen: 0.024, atemHz: 0.55, grund: 0.58, tilgen: 0.30, impuls: 0.55, tempo: 0.75, dichte: 1.2, breite: 0.34, aussen: 0.18, welle: 1.00, kuehl: 0.18, glut: 1.00 },
+    sprechen: { dreh: 0.095, atmen: 0.024, atemHz: 0.55, grund: 0.58, tilgen: 0.30, impuls: 0.55, tempo: 0.75, dichte: 1.2, breite: 0.34, aussen: 0.22, welle: 0.42, kuehl: 0.18, glut: 1.00 },
     pause: { dreh: 0.009, atmen: 0.004, atemHz: 0.07, grund: 0.24, tilgen: 0.44, impuls: 0.08, tempo: 0.10, dichte: 1.0, breite: 0.50, aussen: 0.00, welle: 0.00, kuehl: -1.00, glut: 0.26 },
   };
 
@@ -364,19 +367,42 @@
   var balken = buehne.querySelectorAll(".gh-pegel span");
   var pegel = 0, pegelTief = 0;
 
+  // Der Ausschlag der Signalbalken wird nur noch bei jedem ZWEITEN Bild
+  // geschrieben (19.08.). Sie sind Beiwerk am unteren Rand; ob sie mit 60 oder
+  // 30 Bildern zappeln, sieht niemand — die Haelfte der DOM-Arbeit im
+  // Pegel-Pfad dagegen schon.
+  var balkenTakt = 0;
+
   function pegelLesen() {
-    var n = pegelLinien.length;
+    // Erster Weg: die Frequenzdaten direkt aus public/sprache.js. Kein DOM,
+    // kein Textparsen — nur ein Byte-Feld lesen.
+    var d = window.__pegelDaten;
+    var n = d && d.length ? Math.min(d.length, 40) : pegelLinien.length;
     if (!n) return 0;
+    var malen = (++balkenTakt & 1) === 0;
     var summe = 0, tief = 0, tn = 0;
     for (var i = 0; i < n; i++) {
-      var t = pegelLinien[i].style.transform;
-      var v = t ? (parseFloat(t.slice(6)) - 1) / 1.5 : 0;
+      var v;
+      if (d) {
+        v = d[i] / 255;
+      } else {
+        // Rueckfall auf die alte Leitung ueber die SVG-Linien. Bleibt drin,
+        // damit das Gehirn auch dann etwas anzeigt, wenn sprache.js nicht
+        // laedt oder eine aeltere Fassung ausgeliefert wird.
+        var t = pegelLinien[i].style.transform;
+        v = t ? (parseFloat(t.slice(6)) - 1) / 1.5 : 0;
+      }
       if (!(v > 0)) v = 0; else if (v > 1) v = 1;
       summe += v;
       if (i < 10) { tief += v; tn++; }
-      if (i < balken.length) balken[i].style.height = (2 + v * 24).toFixed(1) + "px";
+      // scaleY statt height: siehe Begruendung in public/jarvis-gehirn.css.
+      if (malen && i < balken.length) {
+        balken[i].style.transform = "scaleY(" + (0.08 + v * 0.92).toFixed(3) + ")";
+      }
     }
-    for (var j = n; j < balken.length; j++) balken[j].style.height = "2px";
+    if (malen) {
+      for (var j = n; j < balken.length; j++) balken[j].style.transform = "scaleY(.08)";
+    }
     pegelTief = tn ? tief / tn : 0;
     return summe / n;
   }
@@ -388,7 +414,18 @@
   function messen() {
     var r = buehne.getBoundingClientRect();
     if (!r.width || !r.height) return;
-    dpr = Math.min(window.devicePixelRatio || 1, r.width * r.height > 2.6e6 ? 1.5 : 2);
+    // Pixeldichte. Der groesste Hebel fuer die Fluessigkeit ueberhaupt — und
+    // am 19.08. der Grund fuers Ruckeln: Auf einem Retina-Bildschirm stand
+    // hier 2, also die VIERFACHE Flaeche. Gemessen wurden dabei 8 bis 14
+    // Bilder je Sekunde.
+    //
+    // Ein Fadenwerk aus weichen, additiv gezeichneten Strichen gewinnt durch
+    // die doppelte Dichte fast nichts — es gibt keine harten Kanten, die
+    // schaerfer wuerden. Deshalb 1.35 als Obergrenze und 1.15 auf grossen
+    // Flaechen. Das spart rund die Haelfte der zu fuellenden Pixel und ist im
+    // Bild nicht zu unterscheiden.
+    var flaeche = r.width * r.height;
+    dpr = Math.min(window.devicePixelRatio || 1, flaeche > 1.6e6 ? 1.15 : 1.35);
     breite = r.width; hoehe = r.height;
     leinwand.width = Math.round(breite * dpr);
     leinwand.height = Math.round(hoehe * dpr);
@@ -483,7 +520,13 @@
     var roh = pegelLesen();
     // Anstieg schnell, Abfall traege: so zuckt das Gehirn auf ein Wort an und
     // faellt danach weich zurueck, statt zu flimmern.
-    pegel += (roh - pegel) * (roh > pegel ? 0.40 : 0.07);
+    //
+    // Am 19.08. nachgezogen (Wunsch Lukas: "wenn man mit Alexandra redet, soll
+    // es sich bewegen"): Der Abfall lag bei 0.07 und war damit so traege, dass
+    // zwischen zwei Woertern nichts zurueckschwang — das Gehirn stand auf einem
+    // Mittelwert, statt zu atmen. Anstieg noch etwas schneller, Abfall knapp
+    // doppelt so flott. Kostet nichts: es sind Zahlen, keine Striche.
+    pegel += (roh - pegel) * (roh > pegel ? 0.55 : 0.13);
 
     if (!sanft) {
       zeit += dt;
@@ -502,7 +545,12 @@
     ctx.fillRect(0, 0, breite, hoehe);
     ctx.globalCompositeOperation = "lighter";
 
-    var atem = 1 + P.atmen * sinL(zeit * P.atemHz * TAU) + 0.030 * pegel * P.welle;
+    // Der Pegel-Anteil lag bis 19.08. bei 0.030 und haing ausserdem allein an
+    // P.welle — also nur waehrend SIE spricht. Wer selbst redete, sah das
+    // Gehirn unbewegt. Jetzt atmet es in jedem Zustand mit der Stimme mit
+    // (Grundanteil 0.40), und der Ausschlag ist rund dreimal so gross.
+    var atem = 1 + P.atmen * sinL(zeit * P.atemHz * TAU)
+      + 0.150 * pegel * (0.55 + P.welle);
     var neige = 0.34 + (sanft ? 0 : 0.045 * sinL(zeit * 0.055 * TAU));
     var cg = Math.cos(gier), sg = Math.sin(gier);
     var cn = Math.cos(neige), sn = Math.sin(neige);
@@ -510,7 +558,11 @@
 
     // ---- Glutzonen zuerst: sie liegen HINTER dem Fadenwerk und scheinen
     // hindurch. Genau der Eindruck aus der Referenz.
-    var glutStark = P.glut * (0.80 + 0.40 * pegelTief) * e;
+    // Die Glut folgt den tiefen Frequenzen — das ist der Teil, den man beim
+    // Sprechen am staerksten sieht. Vorher 0.80 + 0.40: der Unterschied
+    // zwischen Stille und Rede betrug ein Drittel und ging im Leuchten unter.
+    // Jetzt schlaegt sie gut doppelt so weit aus.
+    var glutStark = P.glut * (0.55 + 1.35 * pegelTief) * e;
     for (var q = 0; q < GLUT.length; q++) {
       var G = GLUT[q];
       var gx1 = G.x * cg + G.z * sg, gz1 = -G.x * sg + G.z * cg;
@@ -538,8 +590,12 @@
     if (Math.abs(P.kuehl - stufenStand) > 0.01) { stufenBauen(P.kuehl); stufenStand = P.kuehl; }
     for (var b0 = 0; b0 < NB; b0++) pfade[b0] = new Path2D();
 
-    var aussenA = P.aussen * pegel;
-    var welleA = P.welle * (0.014 + 0.055 * pegel);
+    // Fadenspitzen und Ringwelle: beide ebenfalls angehoben (19.08.). Die
+    // Ringwelle hatte einen Grundanteil von 0.014, der auch bei Stille lief —
+    // dadurch war kaum zu unterscheiden, ob gerade jemand spricht. Der Grund
+    // ist jetzt kleiner, der Pegel-Anteil deutlich groesser.
+    var aussenA = P.aussen * (0.15 + 1.10 * pegel);
+    var welleA = P.welle * (0.008 + 0.120 * pegel);
     var wellT = zeit * 6.4;
     var impT = zeit * P.tempo;
     var grundH = P.grund * (0.12 + 0.88 * e);
@@ -636,8 +692,24 @@
     bildZeit += (performance.now() - t0 - bildZeit) * 0.05;
     if (dt > 0) bildAbstand += (dt * 1000 - bildAbstand) * 0.04;
     window.__gehirn = { bildZeit: bildZeit, bildAbstand: bildAbstand, anteil: anteil, faeden: nF };
-    if (bildAbstand > 20.5 && anteil > 0.45) anteil = Math.max(0.45, anteil - 0.015);
-    else if (bildAbstand < 17.5 && anteil < 1) anteil = Math.min(1, anteil + 0.008);
+    // Die Bremse zieht ab 19.08. frueher, haerter und tiefer (Wunsch Lukas:
+    // "es darf nicht leggen"). Vorher regelte sie mit 0.015 je Bild herunter
+    // und stoppte bei 45 % der Faeden: Auf einem ausgelasteten Rechner
+    // brauchte sie ueber eine Sekunde bis zur Wirkung — genau die Sekunde, in
+    // der man das Ruckeln sieht. Jetzt greift sie in etwa einem Drittel der
+    // Zeit und darf bis auf 25 % heruntergehen. Hoch geht es weiter langsam:
+    // ein Bild, das zwischen dicht und duenn hin- und herspringt, ist
+    // schlimmer als ein dauerhaft duenneres.
+    // Zweistufig (19.08.): Bei leichtem Ruecklauf wird sanft ausgeduennt, bei
+    // echtem Ruckeln (ueber 28 ms, also unter 36 Bildern je Sekunde) faellt
+    // die Dichte sofort in grossen Schritten. Vorher regelte eine einzige
+    // sanfte Stufe, und auf einem ausgelasteten Rechner dauerte der Weg von
+    // voller auf halbe Dichte laenger als die Geduld des Zuschauers.
+    // Untergrenze 0.16: Ein duenneres Gehirn ist immer noch ein Gehirn, ein
+    // ruckelndes ist unbrauchbar.
+    if (bildAbstand > 28 && anteil > 0.16) anteil = Math.max(0.16, anteil - 0.10);
+    else if (bildAbstand > 19.5 && anteil > 0.16) anteil = Math.max(0.16, anteil - 0.035);
+    else if (bildAbstand < 16.8 && anteil < 1) anteil = Math.min(1, anteil + 0.005);
   }
 
   // ----------------------------------------------------------- Steuerung

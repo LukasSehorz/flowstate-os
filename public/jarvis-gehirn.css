@@ -336,13 +336,22 @@ body.jarvis-buehne .topbar { border-bottom: 1px solid var(--j-linie); }
    Die Hoehe setzt /lib/jarvis-gehirn.js pro Bild — keine Fantasieanimation,
    ohne Ton stehen alle Striche flach. */
 .gh-pegel { display: flex; align-items: flex-end; gap: 3px; height: 26px; }
+/* Die Balken haben ihre volle Hoehe fest und werden nur noch GESTAUCHT
+   (transform: scaleY), statt sie Bild fuer Bild in der Hoehe zu veraendern.
+   Der Unterschied ist nicht kosmetisch: Eine Hoehenaenderung zwingt den
+   Browser, das Layout neu zu rechnen — bei 40 Balken und 60 Bildern je
+   Sekunde 2400 Mal pro Sekunde. Am 19.08. gemessen: In den Zustaenden mit
+   Pegel ("hoeren", "sprechen") fiel die Bildrate dadurch auf 35, waehrend
+   sie ohne Pegel bei 57 lag. Eine Stauchung laeuft dagegen an Layout und
+   Anstrich vorbei. */
 .gh-pegel span {
   width: 2px;
-  height: 2px;
+  height: 26px;
   background: var(--gh-signal, var(--j-blau));
   opacity: .75;
   transform-origin: bottom;
-  will-change: height;
+  transform: scaleY(.08);
+  will-change: transform;
 }
 
 /* ------------------------------------------------------------ Das Gehirn */
