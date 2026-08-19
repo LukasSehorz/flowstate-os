@@ -335,7 +335,16 @@
     // hier 0 — die Stimme des Sprechenden bewegte also nichts ausser den
     // Fadenspitzen, und das sah man aus zwei Metern nicht.
     lauschen: { dreh: 0.028, atmen: 0.012, atemHz: 0.34, grund: 0.54, tilgen: 0.32, impuls: 0.34, tempo: 0.46, dichte: 1.4, breite: 0.40, aussen: 0.75, welle: 0.18, kuehl: 0.55, glut: 0.90 },
-    denken: { dreh: 0.255, atmen: 0.008, atemHz: 0.80, grund: 0.48, tilgen: 0.19, impuls: 1.45, tempo: 1.55, dichte: 3.4, breite: 0.11, aussen: 0.00, welle: 0.00, kuehl: -0.15, glut: 0.78 },
+    // "denken" war bis 19.08. der lauteste Zustand: 3,4 gleichzeitige Impulse,
+    // schmal (0.11) und schnell (1.55) — das las sich nicht als Nachdenken,
+    // sondern als Flimmern. Lukas: "zu wuselig, zu hektisch".
+    //
+    // Umgestellt auf WENIGE, BREITE, LANGSAME Wellen: ein Drittel der Impulse,
+    // doppelt so breit, halbes Tempo, halbe Drehung. Damit wandert sichtbar
+    // etwas durch das Fadenwerk, statt dass es zuckt. Die Nachleuchtspur ist
+    // kuerzer (tilgen hoeher) — lange Schweife waren der zweite Grund fuers
+    // Gewusel, weil sich alte und neue Impulse ueberlagerten.
+    denken: { dreh: 0.105, atmen: 0.010, atemHz: 0.38, grund: 0.50, tilgen: 0.30, impuls: 0.62, tempo: 0.58, dichte: 1.15, breite: 0.30, aussen: 0.00, welle: 0.00, kuehl: -0.15, glut: 0.84 },
     sprechen: { dreh: 0.095, atmen: 0.024, atemHz: 0.55, grund: 0.58, tilgen: 0.30, impuls: 0.55, tempo: 0.75, dichte: 1.2, breite: 0.34, aussen: 0.22, welle: 0.42, kuehl: 0.18, glut: 1.00 },
     pause: { dreh: 0.009, atmen: 0.004, atemHz: 0.07, grund: 0.24, tilgen: 0.44, impuls: 0.08, tempo: 0.10, dichte: 1.0, breite: 0.50, aussen: 0.00, welle: 0.00, kuehl: -1.00, glut: 0.26 },
   };
