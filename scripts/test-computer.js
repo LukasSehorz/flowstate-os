@@ -121,6 +121,43 @@ pruefe("Kein 'eins Stopp'", !/eins Stopp/.test(c.satzSprechen(c.angebotZerlegen(
 pruefe("Kein 'eins Stunden'", !/eins Stunden/.test(c.dauerSprechbar("1 Std. 45 Min.")),
   "war: " + c.dauerSprechbar("1 Std. 45 Min."));
 
+// --- Die Zusicherung selbst muss beissen ------------------------------------
+//
+// Agent 2 hat die VOLLSTAENDIGE gesprochene Antwort gemessen: 152 Woerter. Der
+// gute Satz war nur der Anfang, danach kam der Maschinenabzug. Eine einmalige
+// Messung haette das gefunden und beim naechsten Umbau wieder verloren —
+// deshalb prueft sprechtextPruefen() im Code, und dieser Test prueft den
+// Pruefer. Ein Waechter, der nichts ablehnt, ist kein Waechter.
+{
+  const gut = c.satzSprechen(c.angebotZerlegen(MIT_STOPP),
+    { ort: "Barcelona", hin: "2026-08-22", zurueck: "2026-08-25", grund: "" });
+  const p = c.sprechtextPruefen(gut);
+  pruefe(`Der gebaute Satz kommt durch (${p.woerter} Wörter)`, p.ok, p.maengel.join(" | "));
+
+  // Genau die Fassung, die live vorgelesen wurde — mit allem, was Agent 2 fand.
+  const alt = gut +
+    "\n\nDie drei günstigsten:\n1. 185 € · Iberia · 20:15–22:25 Uhr · 1 Stopp\n2. 196 €\n3. 232 €" +
+    "\n\nQuelle: Google Flüge (https://www.google.com/travel/flights?hl=de&q=x)." +
+    "\nGebucht hab ich nichts — das mach ich grundsätzlich nicht selbst.";
+  const q = c.sprechtextPruefen(alt);
+  pruefe("Die alte Fassung wird ABGELEHNT", !q.ok, "sie kam durch — der Wächter beißt nicht");
+  for (const [was, muster] of [
+    ["zu lang", /Wörter \(Grenze/],
+    ["Adresse", /Adresse/],
+    ["Nummernliste", /Nummernliste/],
+    ["doppeltes „Uhr“", /zweimal .Uhr/],
+    ["doppelte Absage", /Absage zweimal/],
+  ]) {
+    pruefe(`  … und zwar wegen: ${was}`, q.maengel.some((m) => muster.test(m)), q.maengel.join(" | "));
+  }
+
+  // Rohdaten und falsche Einzahl ebenso.
+  pruefe("Rohdaten werden abgelehnt",
+    !c.sprechtextPruefen("Iberia, 234 kg CO2e, +119 % (geschätzt)").ok, "");
+  pruefe("„eins Stopp“ wird abgelehnt",
+    !c.sprechtextPruefen("Der günstigste ist 185 Euro, eins Stopp in Madrid.").ok, "");
+}
+
 // --- Kalendertitel kuerzen --------------------------------------------------
 //
 // Echter Titel vom laufenden Server. Die Klammer ist Lukas' Notiz an sich

@@ -81,6 +81,10 @@ const TESTS = [
   // 20.08.2026: satzBauen() aus lib/daten-fragen.js — reine Rechnerei, kein
   // Netz. Dort ging eine richtige Zahl verloren, waehrend die Abfrage stimmte.
   "test-zahlensatz",
+  // 20.08.2026: der Waechter ueber dem Waechter. test-harnisch prueft, ob
+  // scripts/ads-proben.js bei kaputten Antworten ueberhaupt anschlaegt —
+  // test-guthaben, ob ein leeres Guthaben laut scheitert statt still.
+  "test-harnisch", "test-guthaben",
 ];
 for (const t of TESTS) {
   const p = path.join(wurzel, "scripts", t + ".js");

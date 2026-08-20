@@ -47,6 +47,26 @@ pruefe("Zahl je Beschriftung bleibt", /183 Ioannis/.test(c) && /90 Jannik/.test(
 const d = satzBauen("diesen Monat", ["gewonnen", "umsatz"], [{ gewonnen: 9, umsatz: "7000.00" }]);
 pruefe("Mehrere Kennzahlen: Geld traegt Euro", /7\.000\s*€/.test(d), d);
 
+// --- Keine SQL-Bezeichner im gesprochenen Satz ------------------------------
+//
+// Live gehoert: "Umsatz und gewonnene Deals im Juli 2026: 5.000 € umsatz,
+// 5 anzahl deals." Zweimal Umsatz, einmal davon als Datenbankfeld. Sichtbar
+// wurde es erst, seit Geldspalten in diesem Zweig ueberhaupt landen.
+const sql = satzBauen("Umsatz und gewonnene Deals im Juli 2026",
+  ["umsatz", "anzahl_deals"], [{ umsatz: "5000.00", anzahl_deals: 5 }]);
+console.log("   " + sql);
+for (const bez of ["umsatz", "anzahl_deals", "anzahl deals"]) {
+  pruefe(`Bezeichner „${bez}“ kommt nicht woertlich vor`, !sql.includes(bez), sql);
+}
+pruefe("Der Betrag steht trotzdem drin", /5\.000\s*€/.test(sql), sql);
+pruefe("Die Anzahl steht trotzdem drin", /(^| )5 Deals[ .,]/.test(sql), sql);
+
+// Unterstriche werden zu deutschen Woertern, das Substantiv gross.
+const mehr = satzBauen("was lief heute", ["neue_firmen", "neue_deals", "anrufe"],
+  [{ neue_firmen: 3, neue_deals: 2, anrufe: 11 }]);
+pruefe("Unterstriche verschwinden", !mehr.includes("_"), mehr);
+pruefe("Substantiv gross, Eigenschaftswort klein", /neue Firmen/.test(mehr), mehr);
+
 const e = satzBauen("neue Firmen heute", ["anzahl"], [{ anzahl: "273" }]);
 pruefe("Reine Anzahl bleibt reine Anzahl", e.startsWith("273 ") && !/€/.test(e), e);
 

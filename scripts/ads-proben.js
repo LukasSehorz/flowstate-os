@@ -125,20 +125,37 @@ const INTERN = /\b(hermes|sonnet|haiku|token|prompt|json|werkzeug\w*|lange_arbei
 // eine Liste von Kundennamen ist keine.
 const BETRAG = /(\d[\d.]*\s*(€|Euro)|(tausend|hundert|million)\w*\s*Euro)/i;
 
+// POSITIVE ERWARTUNGEN (20.08.2026).
+//
+// Bis hierher pruefte fast jedes Szenario nur, was NICHT vorkommen darf. Durch
+// diese Luecke ging "Die Flugsuche ist mir gerade weggebrochen" dreimal als
+// BESTANDEN durch: kein Panne-Wort, keine Zeitueberschreitung, also gruen —
+// obwohl kein einziger Preis geliefert wurde.
+//
+// Ein Test, der nur Verbote kennt, ist mit Schweigen zufrieden. Jedes Szenario
+// braucht deshalb einen Satz darueber, was in der Antwort STEHEN muss.
+const UHRZEIT = /(\d{1,2}:\d{2}|\d{1,2} Uhr|[a-zäöü]+ Uhr)/i;
+const ZAHL = /(\d|null|ein|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|kein)/i;
+// Die Flugsuche hat geliefert, wenn ein Preis dasteht — nicht, wenn sie nur
+// nicht gejammert hat.
+const FLUG_DA = /(\d[\d.]*\s*(€|Euro)|(hundert|tausend)\w*\s*Euro)/i;
+const FLUG_WEG = /(weggebrochen|nicht durchgelaufen|keinen Preis|kein Chrome|nicht verstanden)/i;
+
 const SZENARIEN = [
   // ============================================================ Creative 1
   {
     id: "c1-1", gruppe: "kern", titel: "Cold Calls, Erstgespraeche, Sales von gestern",
     zuege: [
+      // MUSS Zahlen nennen. "Dazu hab ich nichts" waere frueher durchgegangen.
       { frage: "Wie viele Cold Calls hat das Team gestern gemacht, wie viele davon wurden zu Erstgesprächen, und wie viele zu Sales?",
-        werkzeug: ["daten_fragen"], verboten: PANNE, maxMs: 30000 },
+        werkzeug: ["daten_fragen"], enthaelt: ZAHL, verboten: PANNE, maxMs: 30000 },
     ],
   },
   {
     id: "c1-2", gruppe: "kern", titel: "Umsatz Juli",
     zuege: [
       { frage: "Wie viel Umsatz wurde im Juli generiert?",
-        werkzeug: ["daten_fragen", "nachschlagen"], enthaelt: /\d/, verboten: PANNE, maxMs: 30000 },
+        enthaelt: BETRAG, verboten: PANNE, maxMs: 30000 },
     ],
   },
   {
@@ -154,8 +171,9 @@ const SZENARIEN = [
         enthaelt: /(1[.\s]?7\d\d|siebzehnhundert|tausendsiebenhundert)/i,
         verboten: /(Ioannis|Jannik|pro Mitarbeiter)/i,
         maxMs: 30000 },
+      // MUSS sagen, wie viele es geworden sind — "mach ich" allein ist nichts.
       { frage: "Das ist zu wenig. Such nochmal hundert weitere raus.",
-        werkzeug: ["leads_nachschub", "lange_arbeit"], verboten: PANNE, maxMs: 45000 },
+        werkzeug: ["leads_nachschub"], enthaelt: /(\d{2,}|hundert)/i, verboten: PANNE, maxMs: 45000 },
     ],
   },
 
@@ -164,21 +182,23 @@ const SZENARIEN = [
     id: "c2-1", gruppe: "kern", titel: "Neue Mails heute",
     zuege: [
       { frage: "Wie viele neue Mails kamen heute rein?",
-        werkzeug: ["mail_lesen"], maxMs: 35000 },
+        werkzeug: ["mail_lesen"], enthaelt: ZAHL, verboten: PANNE, maxMs: 35000 },
     ],
   },
   {
     id: "c2-2", gruppe: "kern", titel: "To-Dos fuer heute",
     zuege: [
-      { frage: "Was sind die To-Dos für heute?", verboten: PANNE, maxMs: 25000 },
+      { frage: "Was sind die To-Dos für heute?", enthaelt: ZAHL, verboten: PANNE, maxMs: 25000 },
     ],
   },
   {
     id: "c2-3", gruppe: "kern", titel: "Termine heute, einen loeschen, einen neuen", schreibt: true,
     zuege: [
-      { frage: "Was sind meine Termine heute?", verboten: PANNE, maxMs: 25000 },
+      // MUSS eine Uhrzeit nennen — "heute steht nichts an" waere sonst gleich gut.
+      { frage: "Was sind meine Termine heute?", enthaelt: UHRZEIT, verboten: PANNE, maxMs: 25000 },
       { frage: `Trag mir heute um 16 Uhr ${PRAEFIX} Probeaufnahme ein.`,
-        werkzeug: ["termin_eintragen"], maxMs: 30000 },
+        werkzeug: ["termin_eintragen"], enthaelt: /Steht|eingetragen/i,
+        verboten: /gehakt|nicht drin/i, maxMs: 30000 },
       // enthaelt/verboten statt nur werkzeug: Im Fernmodus gibt es kein
       // Sprachprotokoll, und genau dort ist der Fehler aufgetreten — der
       // Termin stand im Kalender, der STAND kannte ihn noch nicht, und die
@@ -191,11 +211,14 @@ const SZENARIEN = [
   {
     id: "c2-4", gruppe: "kern", titel: "WhatsApp an Jannik formulieren",
     zuege: [
+      // MUSS den Entwurf enthalten, nicht nur "mach ich".
       { frage: "Formulier eine WhatsApp an Jannik, dass wir morgen um zehn mit den Aufnahmen starten.",
-        werkzeug: ["whatsapp_senden"], verboten: PANNE, maxMs: 35000 },
+        werkzeug: ["whatsapp_senden"], enthaelt: /(Jannik|morgen|zehn|10)/i,
+        verboten: PANNE, maxMs: 35000 },
       // Bewusst NICHT bestaetigen: In der Aufnahme soll man die Rueckfrage
       // hoeren. Dass sie kommt, ist der Pruefpunkt.
-      { frage: "Nein, noch nicht schicken.", verboten: PANNE, maxMs: 25000 },
+      { frage: "Nein, noch nicht schicken.",
+        enthaelt: /(ok|gut|verworfen|liegt|warte|Bescheid|nicht)/i, verboten: PANNE, maxMs: 25000 },
     ],
   },
 
@@ -203,23 +226,31 @@ const SZENARIEN = [
   {
     id: "c3-1", gruppe: "kern", titel: "Erstgespraech auswerten und Angebot erstellen", schreibt: true,
     zuege: [
+      // MUSS die Firma aufgreifen. "Bei welcher Firma denn?" ist die Antwort,
+      // die live kam — der Name stand im Satz.
       { frage: "Werte das Erstgespräch mit der Zahnarztpraxis Bergmann aus und erstell mir auf dieser Basis ein Angebot.",
-        werkzeug: ["beleg_erstellen", "lange_arbeit", "nachschlagen", "gehirn_suchen"], maxMs: 60000 },
+        werkzeug: ["beleg_erstellen", "lange_arbeit", "nachschlagen", "gehirn_suchen"],
+        enthaelt: /Bergmann/i, verboten: /(welche[rn]? Firma|welchen Zusammenhang|fehlt mir der Zusammenhang)/i,
+        maxMs: 60000 },
     ],
   },
   {
     id: "c3-2", gruppe: "kern", titel: "Follow-up-Termin eintragen", schreibt: true,
     zuege: [
       { frage: `Trag einen Termin für das Follow-up ein, nächsten Dienstag um elf, nenn ihn ${PRAEFIX} Follow-up Bergmann.`,
-        werkzeug: ["termin_eintragen"], maxMs: 30000 },
+        werkzeug: ["termin_eintragen"], enthaelt: /Steht|eingetragen/i,
+        verboten: /gehakt|nicht drin/i, maxMs: 30000 },
     ],
   },
   {
     id: "c3-3", gruppe: "kern", titel: "Beleg einscannen + Ordner an die Steuerberaterin",
     zuege: [
-      { frage: "Ich hab einen Beleg zum Einscannen für die Buchhaltung — was muss ich tun?", maxMs: 30000 },
+      // MUSS einen Weg nennen. Ein blosses "kann ich nicht" ist die Antwort,
+      // die live kam.
+      { frage: "Ich hab einen Beleg zum Einscannen für die Buchhaltung — was muss ich tun?",
+        enthaelt: /(foto|hochlad|Telegram|schick|Buchhaltung|Beleg)/i, maxMs: 30000 },
       { frage: "Schick den kompletten Ordner mit den Rechnungen an unsere Steuerberaterin.",
-        maxMs: 45000 },
+        enthaelt: /(Monat|welche|Rechnung|Entwurf|Ordner|schick)/i, maxMs: 45000 },
     ],
   },
 
@@ -227,8 +258,9 @@ const SZENARIEN = [
   {
     id: "tt-1", gruppe: "kern", titel: "Morning Briefing",
     zuege: [
+      // Ein Briefing ohne eine einzige Zahl ist kein Briefing.
       { frage: "Guten Morgen — gib mir mein Morning Briefing.",
-        verboten: PANNE, maxMs: 40000 },
+        enthaelt: ZAHL, verboten: PANNE, maxMs: 40000 },
     ],
   },
 
@@ -236,22 +268,24 @@ const SZENARIEN = [
   {
     id: "cu-1", gruppe: "kern", titel: "Guenstigster Flug, abgestimmt mit dem Kalender",
     zuege: [
+      // MUSS einen Preis liefern. Genau hier ging "weggebrochen" dreimal als
+      // bestanden durch, weil nur Verbote geprueft wurden.
       { frage: "Buch mir den günstigsten Flieger nach Barcelona, abgestimmt mit meinem Terminkalender.",
-        werkzeug: ["computer_auftrag"], maxMs: 90000 },
+        werkzeug: ["computer_auftrag"], enthaelt: FLUG_DA, verboten: FLUG_WEG, maxMs: 90000 },
     ],
   },
   {
     id: "cu-2", gruppe: "computer", titel: "Flug ohne Kalenderbezug",
     zuege: [
       { frage: "Such mir den günstigsten Flug von München nach Lissabon im September.",
-        werkzeug: ["computer_auftrag"], maxMs: 90000 },
+        werkzeug: ["computer_auftrag"], enthaelt: FLUG_DA, verboten: FLUG_WEG, maxMs: 90000 },
     ],
   },
   {
     id: "cu-3", gruppe: "computer", titel: "Nachfassen auf einen Flugvorschlag",
     zuege: [
       { frage: "Such mir den günstigsten Flug nach Barcelona nächste Woche.",
-        werkzeug: ["computer_auftrag"], maxMs: 90000 },
+        werkzeug: ["computer_auftrag"], enthaelt: FLUG_DA, verboten: FLUG_WEG, maxMs: 90000 },
       { frage: "Und buch den gleich.", enthaelt: /(freigab|buch|selbst|nicht|Warenkorb|du)/i, maxMs: 40000 },
     ],
   },
@@ -285,11 +319,12 @@ const SZENARIEN = [
 
   // ==================================================== Varianten Kalender
   { id: "k-1", gruppe: "kalender", titel: "Termine morgen", zuege: [
-    { frage: "Was steht morgen an?", verboten: PANNE, maxMs: 25000 }] },
+    { frage: "Was steht morgen an?", enthaelt: UHRZEIT, verboten: PANNE, maxMs: 25000 }] },
   { id: "k-2", gruppe: "kalender", titel: "Naechster Termin", zuege: [
-    { frage: "Wann ist mein nächster Termin?", verboten: PANNE, maxMs: 25000 }] },
+    { frage: "Wann ist mein nächster Termin?", enthaelt: UHRZEIT, verboten: PANNE, maxMs: 25000 }] },
   { id: "k-3", gruppe: "kalender", titel: "Termin anlegen und verschieben", schreibt: true, zuege: [
-    { frage: `Trag mir morgen um neun ${PRAEFIX} Kamera-Check ein.`, werkzeug: ["termin_eintragen"], maxMs: 30000 },
+    { frage: `Trag mir morgen um neun ${PRAEFIX} Kamera-Check ein.`, werkzeug: ["termin_eintragen"],
+      enthaelt: /Steht|eingetragen/i, verboten: /gehakt|nicht drin/i, maxMs: 30000 },
     { frage: `Schieb ${PRAEFIX} Kamera-Check auf halb elf.`, werkzeug: ["termin_verschieben"],
       enthaelt: /(Verschoben|Geändert)/i, verboten: /finde keinen Termin/i, maxMs: 30000 },
     { frage: `Und sag ihn doch wieder ab.`, werkzeug: ["termin_absagen"],
@@ -310,7 +345,8 @@ const SZENARIEN = [
 
   // ==================================================== Varianten Aufgaben
   { id: "a-1", gruppe: "aufgaben", titel: "Aufgabe anlegen und abhaken", schreibt: true, zuege: [
-    { frage: `Setz ${PRAEFIX} Akkus laden auf die Liste.`, werkzeug: ["aufgabe_anlegen"], maxMs: 30000 },
+    { frage: `Setz ${PRAEFIX} Akkus laden auf die Liste.`, werkzeug: ["aufgabe_anlegen"],
+      enthaelt: /(steht|liste|notiert|drauf|eingetragen)/i, maxMs: 30000 },
     { frage: `${PRAEFIX} Akkus laden hab ich erledigt.`, werkzeug: ["aufgabe_erledigt"], maxMs: 30000 }] },
   { id: "a-2", gruppe: "aufgaben", titel: "Aufgabe mit Frist", schreibt: true, zuege: [
     { frage: `Erinner mich bis Freitag an ${PRAEFIX} Rechnung Bergmann.`, werkzeug: ["aufgabe_anlegen"], maxMs: 30000 }] },
@@ -344,7 +380,7 @@ const SZENARIEN = [
   // ==================================================== Varianten CRM
   { id: "c-1", gruppe: "crm", titel: "Lead anlegen", schreibt: true, zuege: [
     { frage: `Leg einen Lead an: ${PRAEFIX} Zahnarztpraxis Bergmann, München, kam über Empfehlung.`,
-      werkzeug: ["crm_lead"], maxMs: 35000 }] },
+      werkzeug: ["crm_lead"], enthaelt: /(angelegt|steht|drin|Bergmann)/i, maxMs: 35000 }] },
   { id: "c-2", gruppe: "crm", titel: "Notiz an einer Firma", schreibt: true, zuege: [
     { frage: `Leg einen Lead an: ${PRAEFIX} Praxis Nordlicht, Hamburg.`, werkzeug: ["crm_lead"], maxMs: 35000 },
     { frage: `Notier bei ${PRAEFIX} Praxis Nordlicht, dass sie erst im Oktober Budget haben.`,
@@ -361,7 +397,8 @@ const SZENARIEN = [
 
   // ==================================================== Varianten Buchhaltung
   { id: "b-1", gruppe: "buchhaltung", titel: "Naechste Rechnungsnummer", zuege: [
-    { frage: "Welche Rechnungsnummer kommt als nächstes dran?", werkzeug: ["beleg_nummer"], maxMs: 30000 }] },
+    { frage: "Welche Rechnungsnummer kommt als nächstes dran?", werkzeug: ["beleg_nummer"],
+      enthaelt: ZAHL, verboten: PANNE, maxMs: 30000 }] },
   { id: "b-2", gruppe: "buchhaltung", titel: "Angebot mit allen Angaben", schreibt: true, zuege: [
     { frage: `Schreib ein Angebot für ${PRAEFIX} Zahnarztpraxis Bergmann über 4.500 Euro für eine neue Website mit Terminbuchung.`,
       werkzeug: ["beleg_erstellen"], maxMs: 60000 }] },
@@ -399,7 +436,11 @@ const SZENARIEN = [
     { frage: "Wie viel Umsatz war im Juli?", maxMs: 35000 },
     { frage: "Das stimmt nicht, schau nochmal genau nach.", verboten: PANNE, maxMs: 40000 }] },
   { id: "s-11", gruppe: "sprache", titel: "Wetter", zuege: [
-    { frage: "Wie wird das Wetter morgen in München?", werkzeug: ["wetter"], verboten: PANNE, maxMs: 30000 }] },
+    { frage: "Wie wird das Wetter morgen in München?", werkzeug: ["wetter"],
+      // Grad ODER ein Wetterwort MIT Zahl. Ohne diese Kopplung ging "Alles
+      // klar." als Wetterauskunft durch — das Wort "klar" steht darin.
+      enthaelt: /(\d+\s*(grad|°)|(sonn|regen|wolk|bewölkt|schauer|gewitter|schnee|nebel)\w*)/i,
+      verboten: PANNE, maxMs: 30000 }] },
   { id: "s-12", gruppe: "sprache", titel: "Recherche", zuege: [
     { frage: "Was kostet aktuell eine Meta-Ads-Agentur im Monat, so als Richtwert?",
       werkzeug: ["recherchieren", "lange_arbeit"], maxMs: 60000 }] },
@@ -421,8 +462,9 @@ const SZENARIEN = [
   // standen am 20.08. woertlich in einer Flugantwort.
   { id: "r-1", gruppe: "rueckfall", titel: "Flugantwort ohne Google-Rohtext", zuege: [
     { frage: "Buch mir den günstigsten Flieger nach Barcelona, abgestimmt mit meinem Terminkalender.",
-      werkzeug: ["computer_auftrag"],
-      verboten: /(CO2|gesch(ä|ae)tzt|Durchgef(ü|ue)hrt von|kg CO2e)/i, maxMs: 60000 }] },
+      werkzeug: ["computer_auftrag"], enthaelt: FLUG_DA,
+      verboten: /(CO2|gesch(ä|ae)tzt|Durchgef(ü|ue)hrt von|kg CO2e|weggebrochen|nicht durchgekommen)/i,
+      maxMs: 60000 }] },
 
   // "Umsatz" muss IMMER zu einer Summe fuehren, nicht nur mit Monatsnennung.
   // Gemessen: "9 Deals diesen Monat: Ralph Richter Malereibetrieb, Frau
@@ -446,7 +488,8 @@ const SZENARIEN = [
   // oder was Bestimmtes? Ohne das schreib ich ihm nur Luft."
   { id: "r-5", gruppe: "rueckfall", titel: "WhatsApp mit duennem Auftrag", zuege: [
     { frage: "Formulier eine WhatsApp an Jannik wegen morgen.",
-      werkzeug: ["whatsapp_senden"], maxMs: 40000 }] },
+      werkzeug: ["whatsapp_senden"], enthaelt: /(Jannik|morgen)/i,
+      verboten: /(Was soll|Worum geht|Ohne das)/i, maxMs: 40000 }] },
 
   // Ein Teilfehler darf nie roh im Text stehen ("spawn gws-cli ENOENT").
   { id: "r-6", gruppe: "rueckfall", titel: "Briefing ohne technische Fehlermeldung", zuege: [
@@ -454,6 +497,7 @@ const SZENARIEN = [
       // "null" steht hier bewusst NICHT: Auf Deutsch ist das eine ganz normale
       // Zahl ("für morgen null Wiedervorlagen"), und der Test hat genau darauf
       // angeschlagen. Gesucht sind technische Reste, keine deutschen Wörter.
+      enthaelt: ZAHL,
       verboten: /(ENOENT|spawn |gws-cli|ECONNREFUSED|undefined|\[object |Error:|: null)/i, maxMs: 45000 }] },
 
   // ==================================================== Leads-Nachschub
@@ -712,8 +756,55 @@ async function aufraeumen(env) {
   } catch (e) {
     weg.fehler = String(e.message).slice(0, 200);
   }
+  // Der Kalender liegt bei Google und geht nur ueber gws-cli.
+  Object.assign(weg, await kalenderRaeumen(env));
   process.env = alt;
   return weg;
+}
+
+// DEN KALENDER RAEUMEN — und melden, wenn etwas uebrigbleibt (20.08.2026).
+//
+// WAS PASSIERT IST: Nach einem Lauf lag "ADSTEST Probeaufnahme" acht Stunden im
+// Produktivkalender. Beim naechsten Morgen fiel die Drehbuch-Eroeffnung darauf
+// herein — auf "Was sind meine Termine heute?" las Alexandra den Testtermin
+// woertlich vor. Jemand musste ihn von Hand loeschen.
+//
+// Die Szenarien sagen ihre Termine zwar selbst wieder ab; genau das kann aber
+// scheitern (und ist gescheitert, siehe den STAND-Fehler vom selben Tag). Ein
+// Aufraeumen, das vom Erfolg des Getesteten abhaengt, ist kein Aufraeumen.
+//
+// Bleibt danach etwas stehen, endet der Lauf mit Fehlercode. Ein stiller Rest
+// im Produktivkalender ist schlimmer als ein roter Testlauf.
+async function kalenderRaeumen(env) {
+  const { execFile } = require("child_process");
+  const gws = (args) => new Promise((ok) => {
+    execFile("gws-cli", args, { env: { ...env, GWS_ENCRYPTION: "none" }, timeout: 30000 },
+      (fehler, aus) => ok(fehler ? "" : String(aus || "")));
+  });
+
+  const roh = await gws(["calendar", "list", "--max", "50"]);
+  // Kein gws-cli heisst: In diesem Lauf konnte auch kein Termin ANGELEGT
+  // werden (werkzeuge.js scheitert an derselben Stelle). Dann gibt es nichts
+  // zu raeumen und erst recht keinen Grund, rot zu werden.
+  if (!roh) return { kalenderUngeprueft: "gws-cli nicht da — es konnte auch nichts eingetragen werden" };
+
+  // gws-cli verpackt die Termine als JSON-Zeichenkette im Feld "data".
+  let termine = [];
+  try {
+    const huelle = JSON.parse(roh);
+    termine = JSON.parse(huelle?.events?.data || "[]");
+  } catch { return { kalender: "Antwort von gws-cli nicht lesbar — von Hand prüfen" }; }
+
+
+  const meine = termine.filter((t) => new RegExp(PRAEFIX, "i").test(String(t.summary || "")));
+  if (!meine.length) return { kalenderTermine: 0 };
+
+  let weg = 0;
+  for (const t of meine) if (await gws(["calendar", "delete", String(t.id)])) weg++;
+  const uebrig = meine.length - weg;
+  return { kalenderTermine: meine.length, kalenderGeloescht: weg,
+           kalenderUebrig: uebrig || 0,
+           kalenderRest: uebrig ? meine.slice(weg).map((t) => `${t.summary} (${t.start})`) : undefined };
 }
 
 // ---------------------------------------------------------------- Hauptlauf
@@ -768,13 +859,27 @@ async function aufraeumen(env) {
       },
       ergebnisse,
     };
+    // AUCH UND GERADE HIER AUFRAEUMEN (20.08.2026). Der Fernmodus schreibt in
+    // den ECHTEN Kalender — genau daher stammt der Testtermin, der am naechsten
+    // Morgen bei "Was sind meine Termine heute?" vorgelesen wurde. Im
+    // Fernmodus laeuft gws-cli nicht hier, sondern im Container; deshalb wird
+    // der Rest hier nur GEMELDET, mit dem fertigen Befehl zum Nachraeumen.
+    bericht.geraeumt = await aufraeumen(env);
+    const rest = bericht.geraeumt.kalenderUebrig || bericht.geraeumt.kalenderUngeprueft;
     fs.mkdirSync(ZIEL, { recursive: true });
     const datei = path.join(ZIEL, "fern-" + new Date().toISOString().replace(/[:.]/g, "-") + ".json");
     fs.writeFileSync(datei, JSON.stringify(bericht, null, 2));
     console.log(`
 Szenarien: ${bericht.zusammenfassung.bestanden}/${bericht.zusammenfassung.szenarien} · Züge: ${bericht.zusammenfassung.zuegeBestanden}/${bericht.zusammenfassung.zuege}`);
+    console.log("Aufgeräumt: " + JSON.stringify(bericht.geraeumt));
+    if (rest) {
+      console.log(`
+⚠  ${PRAEFIX}-Termine im ECHTEN Kalender prüfen — von hier aus geht das nicht:`);
+      console.log("  docker exec flowstate-dashboard sh -c 'GWS_ENCRYPTION=none gws-cli calendar list --max 50'");
+    }
     console.log("Bericht: " + path.relative(WURZEL, datei));
-    return process.exit(bericht.zusammenfassung.bestanden === bericht.zusammenfassung.szenarien ? 0 : 1);
+    return process.exit(
+      bericht.zusammenfassung.bestanden === bericht.zusammenfassung.szenarien && !rest ? 0 : 1);
   }
 
   // ABBRECHEN STATT FALSCH MESSEN (20.08.2026).
@@ -902,8 +1007,23 @@ Szenarien: ${bericht.zusammenfassung.bestanden}/${bericht.zusammenfassung.szenar
       console.log(`  ${e.id.padEnd(7)} ${e.titel} — ${m[0] || e.fehler || "?"}`);
     }
   }
+  // EIN REST IM PRODUKTIVKALENDER MACHT DEN LAUF ROT (20.08.2026).
+  //
+  // Nach einem Lauf blieb "ADSTEST Probeaufnahme" acht Stunden stehen und wurde
+  // am naechsten Morgen bei "Was sind meine Termine heute?" vorgelesen. Der
+  // Lauf selbst hatte gruen gemeldet. Ein Testlauf, der Spuren im Betrieb
+  // hinterlaesst und trotzdem gruen ist, luegt zweimal.
+  const restig = [];
+  if (geraeumt.kalenderUebrig) restig.push(`${geraeumt.kalenderUebrig} Termin(e) im Kalender: ${(geraeumt.kalenderRest || []).join(", ")}`);
+  if (typeof geraeumt.kalender === "string") restig.push(geraeumt.kalender);
+  if (geraeumt.fehler) restig.push("Datenbank: " + geraeumt.fehler);
+  if (restig.length) {
+    console.log("\n⚠  NICHT VOLLSTÄNDIG AUFGERÄUMT — bitte von Hand nachsehen:");
+    for (const r of restig) console.log("  · " + r);
+  }
+
   console.log("\nBericht: " + path.relative(WURZEL, datei));
-  process.exit(durchgefallen.length ? 1 : 0);
+  process.exit(durchgefallen.length || restig.length ? 1 : 0);
 })().catch((e) => { console.log("FEHLER: " + (e.stack || e.message)); process.exit(1); });
 
 function median(werte) {
