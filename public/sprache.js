@@ -100,9 +100,17 @@
     const liste = Array.isArray(dateien) ? dateien : (dateien ? [dateien] : []);
     liste.forEach((datei, i) => {
       const name = i === 0 ? "drehmappe" : "drehmappe2";
-      const url = /^https?:\/\//.test(datei) || datei.startsWith("/")
-        ? datei                            // WhatsApp Web oder eine eigene Seite
-        : "/regie/datei/" + encodeURIComponent(datei);
+      let url;
+      if (/^https?:\/\//.test(datei)) {
+        url = datei;                       // WhatsApp Web
+      } else if (datei.startsWith("/")) {
+        // Eigene Seite. Mit einem frischen Anhaengsel, sonst laedt der Browser
+        // dieselbe Adresse NICHT neu — und genau das ist der Fall in C2_07:
+        // Der Kalender liegt schon offen und muss den neuen Termin zeigen.
+        url = datei + (datei.includes("?") ? "&" : "?") + "_=" + Date.now();
+      } else {
+        url = "/regie/datei/" + encodeURIComponent(datei);
+      }
       try {
         const w = mappen[name];
         if (w && !w.closed) { w.location.href = url; w.focus(); }
