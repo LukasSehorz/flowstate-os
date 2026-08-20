@@ -205,7 +205,17 @@
   // Der naechste Zug. Wird nach dem Klatschen einmal aufgerufen und danach
   // jedes Mal, wenn Jannik zu Ende geredet hat.
   async function drehbuchZug() {
-    if (drehPassiv || !drehbuch) return;
+    if (drehPassiv) {
+      console.warn("Drehbuch: dieser Tab ist passiv, ein anderer fuehrt.");
+      if (el.hinweis) el.hinweis.textContent =
+        "Dieser Tab ist passiv — ein anderer Tab hat die Sprachseite offen.";
+      return;
+    }
+    if (!drehbuch) {
+      console.warn("Drehbuch: nicht geladen.");
+      if (el.hinweis) el.hinweis.textContent = "Drehbuch nicht geladen — Seite neu laden.";
+      return;
+    }
     const z = drehbuch.zuege[drehZug];
     if (!z) {
       zeile("sie", "— Drehbuch zu Ende —");
@@ -232,8 +242,21 @@
       else mappeZeigen(z.oeffnen);
     }
     zeile("sie", z.text || "");
-    if (z.audio) await sagen("/regie/datei/" + encodeURIComponent(z.audio), true, z.text);
-    else if (z.text) await sprich(z.text);
+    if (el.hinweis) {
+      el.hinweis.textContent = "Zug " + drehZug + " von " + drehbuch.zuege.length
+        + " · " + (z.id || "");
+    }
+    if (z.audio) {
+      await sagen("/regie/datei/" + encodeURIComponent(z.audio), true, z.text);
+      // Kam kein Ton, wird die Zeile GESPROCHEN statt verschluckt. Lieber eine
+      // andere Stimme als Stille vor der Kamera — und im Protokoll steht dann
+      // ein "stimme"-Eintrag, an dem man es hinterher sieht.
+      if (!ausgabeOk && z.text) {
+        console.warn("Tonspur fehlgeschlagen, spreche den Text:", z.id);
+        if (el.hinweis) el.hinweis.textContent = "Tonspur klemmt (" + z.id + ") — spreche live.";
+        await sprich(z.text);
+      }
+    } else if (z.text) await sprich(z.text);
     // Steht der naechste Zug direkt dahinter (keine Zeile von Jannik dazwischen),
     // gleich weiterreden statt auf eine Antwort zu warten, die es nicht gibt.
     const naechster = drehbuch && drehbuch.zuege[drehZug];
@@ -568,10 +591,12 @@
     // jede Neuaushandlung ist ein Aussetzer in der Ausgabe.
     klatschWacheStoppen();
     try { wakeErkennung?.stop(); } catch {}
-    await gespraechStarten(false);          // Gruss kommt gleich, aber unser eigener
+    // Im Drehbuch-Modus NICHT gleich zuhoeren — erst der Zug, dann das Mikrofon.
+    await gespraechStarten(false, Boolean(drehbuch));
     // Im Dreh ist der erste Zug der Gruss — der steht im Drehbuch und darf
     // nicht von einem zweiten, selbst gebauten ueberlagert werden.
     if (drehbuch) { drehZug = 0; await drehbuchZug(); geduld(); return; }
+    hoeren();
     await sprich(klatschGruss()).catch(() => {});
     geduld();                                // ab hier normal zuhoeren
   }
@@ -586,7 +611,7 @@
     return "Guten Abend, Boss.";
   }
 
-  async function gespraechStarten(mitGruss) {
+  async function gespraechStarten(mitGruss, ohneHoeren) {
     imGespraech = true;
     letzteAktivitaet = Date.now();
     // Den Wake-Lauscher fuer die Dauer des Gespraechs wirklich abschalten.
@@ -602,7 +627,11 @@
     wakeLaeuft = false;
     wakePunktSetzen();
     if (mitGruss) await begruessung();
-    hoeren();
+    // ohneHoeren: Das Drehbuch spielt zuerst seinen Zug und macht das Mikrofon
+    // DANACH auf. Sonst laufen Aufnahme und Ausgabe gleichzeitig los — die
+    // Aufnahme haelt "erkennung" fest, sagen() findet sie noch nicht und kann
+    // sie nicht stoppen, und der erste Satz geht ins offene Mikrofon.
+    if (!ohneHoeren) hoeren();
   }
 
   // Gespraech ist zu Ende — zurueck in Ruhe, der Waechter horcht wieder aufs
@@ -1302,7 +1331,13 @@
     return stimmAudio;
   }
 
+  // Hat die letzte Ausgabe wirklich geklungen? Wird von abspielen() gesetzt und
+  // vom Drehbuch geprueft — sonst laeuft ein Zug stumm durch und niemand weiss,
+  // warum nichts kommt.
+  let ausgabeOk = true;
+
   function abspielen(url, freigeben) {
+    ausgabeOk = true;
     return new Promise((fertig) => {
       const a = stimmElement();
       audio = a;
@@ -1315,11 +1350,23 @@
         aktuellerStop = null;
         fertig();
       };
-      a.onended = a.onerror = ende;
+      a.onended = ende;
+      // Ein Fehler ist KEIN normales Ende. Bisher liefen beide in dieselbe
+      // Funktion, und eine Tonspur, die gar nicht lief, sah aus wie eine
+      // fertig gespielte — im Dreh hoert man dann nichts und sieht nichts.
+      a.onerror = () => {
+        ausgabeOk = false;
+        console.error("Ton nicht abspielbar:", url, a.error && a.error.code);
+        ende();
+      };
       // Barge-in kann die Ausgabe sofort abwuergen.
       aktuellerStop = () => { try { a.pause(); } catch {} ende(); };
       a.src = url;
-      a.play().catch(() => ende());
+      a.play().catch((e) => {
+        ausgabeOk = false;
+        console.error("Ton blockiert:", e && e.name, url);
+        ende();
+      });
     });
   }
 
