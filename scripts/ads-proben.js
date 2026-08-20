@@ -43,6 +43,16 @@ const os = require("os");
 const path = require("path");
 const http = require("http");
 const { spawn } = require("child_process");
+// DER TEXT, DEN LUKAS WIRKLICH HOERT (20.08.2026).
+//
+// Die Antwort aus /api/chat ist NICHT das, was aus dem Lautsprecher kommt —
+// dazwischen liegt lib/aussprache.js. Der Pruefer hat bis heute den Rohtext
+// bemaengelt und damit eine richtige Antwort durchfallen lassen: "Umsatz im
+// Juli 2026 waren 5.000 €" galt als Fehler ("Unerwuenschte Wendung: €"),
+// obwohl daraus beim Sprechen sauber "fuenftausend Euro" wird.
+//
+// Verbote gelten deshalb ab jetzt fuer den GESPROCHENEN Text.
+const { fuerStimme } = require("../lib/aussprache.js");
 
 const WURZEL = path.join(__dirname, "..");
 const ZIEL = path.join(WURZEL, "shots", "ads-proben");
@@ -102,11 +112,22 @@ const PRAEFIX = "ADSTEST";
 // wenig, such nochmal hundert weitere raus" ins Leere greifen.
 //
 // PRUEFUNGEN je Zug, alle freiwillig:
-//   werkzeug   Name(n) — mindestens einer muss aufgerufen worden sein
-//   kein_werkzeug  Name(n) — keiner davon darf aufgerufen worden sein
-//   enthaelt   Regex, die in der Antwort vorkommen MUSS
-//   verboten   Regex, die NICHT vorkommen darf
+//   werkzeug   Name(n) — WEICH: laeuft keiner davon, steht das als Hinweis im
+//              Bericht, ist aber kein Durchfall. Hart wird es nur, wenn ALLE
+//              genannten Namen in WERKZEUG_PFLICHT stehen (siehe dort).
+//   kein_werkzeug  Name(n) — keiner davon darf aufgerufen worden sein (hart)
+//   enthaelt   Regex, die in der Antwort vorkommen MUSS — geprueft am rohen
+//              UND am gesprochenen Text, es reicht eines von beiden
+//   verboten   Regex, die NICHT vorkommen darf — geprueft am GESPROCHENEN Text
 //   maxMs      Zeitbudget. Ueberschreitung ist ein Mangel, kein Absturz.
+//
+// Dazu kommen drei Pruefungen, die IMMER gelten und nicht im Szenario stehen
+// (siehe bewerteZug): kein technischer Rohtext, kein Testmuell aus einem
+// frueheren Lauf, und eine Antwort muss ueberhaupt da sein.
+//
+// DIE GRUNDREGEL (20.08.2026): Ein Werkzeug ist Mittel, nicht Zweck. Geprueft
+// gehoert, ob die ANTWORT stimmt — Zahl da, Uhrzeit da, keine Ausrede, keine
+// erfundene Bestaetigung. Ob dafuer ein Werkzeug lief, ist Lukas egal.
 //
 // schreibt: true  -> laeuft nie parallel zu anderen (sonst faelschen sich zwei
 //                    Laeufe gegenseitig die Zahlen) und wird beim Aufraeumen
@@ -146,11 +167,89 @@ const UHRZEIT = new RegExp(
   + "|\\b(?:um|auf|ab|gegen)\\s+" + STUNDE_WORT + "\\b"  // um vier, auf sechs
   + "|\\b(?:halb|viertel|dreiviertel)\\s+" + STUNDE_WORT + "\\b"  // halb elf
   + ")", "i");
-const ZAHL = /(\d|null|ein|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|kein)/i;
 // Die Flugsuche hat geliefert, wenn ein Preis dasteht — nicht, wenn sie nur
 // nicht gejammert hat.
 const FLUG_DA = /(\d[\d.]*\s*(€|Euro)|(hundert|tausend)\w*\s*Euro)/i;
-const FLUG_WEG = /(weggebrochen|nicht durchgelaufen|keinen Preis|kein Chrome|nicht verstanden)/i;
+const FLUG_WEG = /(weggebrochen|nicht durchgelaufen|nicht durchgekommen|keinen Preis|kein Chrome|nicht verstanden|melde? mich .{0,20}(später|per Telegram))/i;
+
+// EINE MENGE — als Ziffer oder als Wort (20.08.2026).
+//
+// Warum nicht das alte ZAHL: Das matchte auf "ein" und traf damit fast jeden
+// deutschen Satz ("keine", "einfach", "eingetragen"). Eine Pruefung, die immer
+// zutrifft, ist keine. Hier steht deshalb, was eine Mengenangabe wirklich ist:
+// eine Ziffer, ein Zahlwort als eigenes Wort, oder die saubere Null ("keine",
+// "nichts", "niemand") — denn "Null. Keiner hat heute telefoniert" IST die
+// richtige Antwort auf "wie viele Anrufe".
+//
+// Die Endungen (…mal, …e, …en) sind nachgetragen, weil "zweimal Follow-up
+// Häckl" sonst nicht als Menge galt — gemessen im Briefing vom 19.08. "ein"
+// bleibt bewusst streng eingegrenzt: Ohne \b danach faengt es "einfach",
+// "eine" und "eingetragen" mit ein und trifft wieder jeden Satz.
+const MENGE = new RegExp(
+  "(\\d"
+  + "|\\b(?:null|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf)(?:e|en|er|es|mal|te|ten|tens)?\\b"
+  + "|\\beins?\\b|\\beinmal\\b"
+  + "|\\b[a-zäöüß]*(?:zehn|zwanzig|ßig|zig|hundert|tausend|million)[a-zäöüß]*\\b"
+  + "|\\bkein(?:e|er|en|es)?\\b|\\bnichts\\b|\\bniemand\\b)", "i");
+
+// EINE AUSREDE (20.08.2026).
+//
+// Der wichtigere Teil der neuen Grundregel: Nicht "lief ein Werkzeug", sondern
+// "kam eine Auskunft". Wer auf eine Zahlenfrage vertroestet, hat nicht
+// geantwortet — auch wenn kein einziges Panne-Wort fiel. Alle Wendungen hier
+// sind aus echten Laeufen abgeschrieben, keine erfunden.
+const AUSREDE = /(dazu (hab|habe) ich (nichts|keine|nix)|kann ich (dir )?(gerade |so )?nicht sagen|weiß ich (gerade )?nicht|keine Ahnung|müsst ich|müsste ich (erst )?(nach)?(sehen|schauen|gucken)|schau ich (gleich|später|dann) (mal )?nach|meld mich (gleich|später|dann)|liegt mir nicht vor|hab ich (gerade |so )?nicht (da|zur Hand|parat)|komm(e|) (da |gerade )?nicht (ran|dran)|nicht erreichbar|hängt gerade|ich melde mich)/i;
+
+// TECHNISCHER ROHTEXT — nirgends, in keiner Antwort (20.08.2026).
+//
+// Bis hierher stand diese Pruefung nur bei r-6. Sie gehoert an JEDEN Zug: Ein
+// "spawn gws-cli ENOENT" mitten in der Aufnahme ist immer ein Totalausfall,
+// egal welche Frage davor stand. Bewusst OHNE ": null" — auf Deutsch ist Null
+// eine ganz normale Zahl ("für morgen null Wiedervorlagen").
+const ROHTEXT = /(ENOENT|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|spawn |gws-cli|undefined|\[object |Error:|TypeError|Traceback|\bat Object\.|<html)/i;
+
+// KEIN SOLCHER TERMIN — dem Sinn nach, nicht dem Wortlaut nach (20.08.2026).
+//
+// k-5 verlangte woertlich "finde keinen Termin". Live kam: "So einen Termin
+// hast du nicht im Kalender — kein Bundeskanzler, weder heute noch später.
+// Meinst du einen anderen?" Das ist die BESSERE Antwort, und der Pruefer hat
+// sie durchfallen lassen. Gefordert ist die Aussage, nicht die Formulierung.
+const KEIN_TERMIN = /(find(e|et)? (da )?keinen? .{0,25}Termin|hast du nicht|gibt('s| es) (da )?(keinen|kein|nicht)|steht (da )?(nichts|kein)|nicht(s)? im Kalender|kein(en)? .{0,25}(Termin|Eintrag)|nichts .{0,20}gefunden)/i;
+
+// WERKZEUG IST MITTEL, NICHT ZWECK (20.08.2026).
+//
+// Elf Szenarien fielen durch, obwohl die ANTWORT richtig war — nur hatte
+// Alexandra sie aus dem STAND geliefert statt aus einer Abfrage. Das ist der
+// bessere Weg (3,6 s statt 7,5 s, jedes Mal dieselbe Zahl), und ein Test, der
+// ihn rot faerbt, treibt die Entwicklung in die falsche Richtung.
+//
+// Werkzeug-Erwartungen sind deshalb ab jetzt ein HINWEIS im Bericht. Hart
+// bleibt nur, wo der Aufruf selbst die Leistung ist: Ein Termin, den niemand
+// eintraegt, steht nicht im Kalender — da hilft die schoenste Antwort nichts.
+//
+// Hart wird ein Zug nur, wenn ALLE genannten Alternativen hier drinstehen.
+// Sobald "lange_arbeit" oder "nachschlagen" als Ausweichweg danebensteht, ist
+// der Weg ausdruecklich freigestellt — und die Hintergrundarbeit landet
+// ohnehin erst nach der Antwort im Sprachprotokoll.
+const WERKZEUG_PFLICHT = new Set([
+  "termin_eintragen", "termin_verschieben", "termin_absagen",
+  "aufgabe_anlegen", "aufgabe_erledigt",
+  "crm_lead", "crm_notiz", "crm_anruf", "crm_wiedervorlage",
+]);
+
+// Was Lukas wirklich hoert. Faellt aussprache.js aus, wird der Rohtext
+// geprueft — lieber ein falscher Alarm als eine stille Luecke.
+function gesprochen(text) {
+  try { return fuerStimme(String(text || "")); } catch { return String(text || ""); }
+}
+
+// Eine Wetterauskunft: Grad ODER ein Wetterwort. Ohne diese Kopplung ging
+// "Alles klar." als Wetterauskunft durch — das Wort "klar" steht darin.
+const WETTER = /(\d+\s*(grad|°)|\b(?:sonn|regen|wolk|bewölkt|schauer|gewitter|schnee|nebel|trocken|windig)\w*)/i;
+
+// Zwei Muster zu einem verodern, damit die Szenarien lesbar bleiben:
+// verboten: oder(PANNE, AUSREDE) statt einer handgeschriebenen Riesenzeile.
+const oder = (...muster) => new RegExp(muster.map((m) => m.source).join("|"), "i");
 
 const SZENARIEN = [
   // ============================================================ Creative 1
@@ -159,7 +258,7 @@ const SZENARIEN = [
     zuege: [
       // MUSS Zahlen nennen. "Dazu hab ich nichts" waere frueher durchgegangen.
       { frage: "Wie viele Cold Calls hat das Team gestern gemacht, wie viele davon wurden zu Erstgesprächen, und wie viele zu Sales?",
-        werkzeug: ["daten_fragen"], enthaelt: ZAHL, verboten: PANNE, maxMs: 30000 },
+        werkzeug: ["daten_fragen"], enthaelt: MENGE, verboten: oder(PANNE, AUSREDE), maxMs: 30000 },
     ],
   },
   {
@@ -178,8 +277,14 @@ const SZENARIEN = [
       // Test, der hier daten_fragen verlangt, wuerde den besseren Weg
       // durchfallen lassen. Geprueft wird die ANTWORT: eine Menge Leads, und
       // keine Aufteilung nach Personen.
+      //
+      // KEINE FESTE ZAHL MEHR (20.08.2026): Hier stand "1.7xx". Der Bestand
+      // aendert sich taeglich — gemessen wurden 1.737, 1.740 und 1.811. Ein
+      // Test, der auf eine tagesaktuelle Zahl festgenagelt ist, wird
+      // irgendwann rot, ohne dass etwas kaputt ist. Verlangt ist jetzt eine
+      // Groessenordnung: dreistellig aufwaerts oder ausgeschrieben.
       { frage: "Wie viele Leads haben wir für morgen zur Verfügung?",
-        enthaelt: /(1[.\s]?7\d\d|siebzehnhundert|tausendsiebenhundert)/i,
+        enthaelt: /(\d\.?\d{3}|\b\d{3,}\b|hundert|tausend)/i,
         verboten: /(Ioannis|Jannik|pro Mitarbeiter)/i,
         maxMs: 30000 },
       // MUSS sagen, wie viele es geworden sind — "mach ich" allein ist nichts.
@@ -193,13 +298,20 @@ const SZENARIEN = [
     id: "c2-1", gruppe: "kern", titel: "Neue Mails heute",
     zuege: [
       { frage: "Wie viele neue Mails kamen heute rein?",
-        werkzeug: ["mail_lesen"], enthaelt: ZAHL, verboten: PANNE, maxMs: 35000 },
+        werkzeug: ["mail_lesen"], enthaelt: MENGE, verboten: oder(PANNE, AUSREDE), maxMs: 35000 },
     ],
   },
   {
     id: "c2-2", gruppe: "kern", titel: "To-Dos fuer heute",
     zuege: [
-      { frage: "Was sind die To-Dos für heute?", enthaelt: ZAHL, verboten: PANNE, maxMs: 25000 },
+      // KEINE Mengenpflicht (20.08.2026): Auf "was steht an" ist eine Liste die
+      // richtige Antwort, keine Zahl. Gemessen: "Fällig heute: die Wallner-Bau-
+      // Anpassungen …, die Landingpage plus Creative für Frau Ladenhauf" — voll
+      // brauchbar und ohne ein einziges Zahlwort. Geprueft wird deshalb, dass
+      // ueberhaupt Aufgaben genannt werden und nicht vertroestet wird.
+      { frage: "Was sind die To-Dos für heute?",
+        enthaelt: /(fällig|offen|steht|To-?do|Aufgabe|erledig|an:)/i,
+        verboten: oder(PANNE, AUSREDE), maxMs: 25000 },
     ],
   },
   {
@@ -228,8 +340,13 @@ const SZENARIEN = [
         verboten: PANNE, maxMs: 35000 },
       // Bewusst NICHT bestaetigen: In der Aufnahme soll man die Rueckfrage
       // hoeren. Dass sie kommt, ist der Pruefpunkt.
+      // "bleibt liegen" und "ich halt sie zurück" sind beide gemessen und beide
+      // richtig — "liegt" allein hat sie nicht erfasst (20.08.2026). "klar"
+      // steht bewusst NICHT drin: Sonst wuerde ein blosses "Alles klar."
+      // bestehen, und der Waechter in test-harnisch.js schlaegt genau darauf an.
       { frage: "Nein, noch nicht schicken.",
-        enthaelt: /(ok|gut|verworfen|liegt|warte|Bescheid|nicht)/i, verboten: PANNE, maxMs: 25000 },
+        enthaelt: /(ok\b|gut\b|verworfen|liegen|liegt|bleibt|halt|zurück|warte|Bescheid|nicht)/i,
+        verboten: PANNE, maxMs: 25000 },
     ],
   },
 
@@ -271,7 +388,7 @@ const SZENARIEN = [
     zuege: [
       // Ein Briefing ohne eine einzige Zahl ist kein Briefing.
       { frage: "Guten Morgen — gib mir mein Morning Briefing.",
-        enthaelt: ZAHL, verboten: PANNE, maxMs: 40000 },
+        enthaelt: MENGE, verboten: PANNE, maxMs: 40000 },
     ],
   },
 
@@ -302,31 +419,61 @@ const SZENARIEN = [
   },
 
   // ==================================================== Varianten Zahlen/CRM
+  //
+  // GEPRUEFT WIRD DIE ANTWORT, NICHT DER WEG (20.08.2026). Diese zwoelf hatten
+  // bis heute NUR eine Werkzeug-Erwartung und sonst nichts — und genau das war
+  // beides zugleich falsch: z-1, z-4, z-7 und z-12 fielen mit einer richtigen
+  // Auskunft durch (aus dem STAND beantwortet, ohne Abfrage), waehrend ein
+  // "Schau ich gleich nach" mit Abfrage bestanden haette.
+  //
+  // Jetzt steht da, was in der Antwort STEHEN muss (eine Menge oder ein
+  // Betrag) und was nicht drin sein darf (eine Ausrede). Das Werkzeug bleibt
+  // als Hinweis im Bericht stehen — interessant fuer die Diagnose, kein Urteil.
   { id: "z-1", gruppe: "zahlen", titel: "Anrufe heute", zuege: [
-    { frage: "Wie viele Anrufe hat das Team heute schon gemacht?", werkzeug: ["daten_fragen"], maxMs: 30000 }] },
+    // "Null. Keiner hat heute bisher telefoniert." ist die richtige Antwort —
+    // MENGE erkennt die gesprochene Null ebenso wie die Ziffer.
+    { frage: "Wie viele Anrufe hat das Team heute schon gemacht?", werkzeug: ["daten_fragen"],
+      enthaelt: MENGE, verboten: oder(PANNE, AUSREDE), maxMs: 30000 }] },
   { id: "z-2", gruppe: "zahlen", titel: "Erstgespraeche diese Woche", zuege: [
-    { frage: "Wurden diese Woche Erstgespräche gebucht?", werkzeug: ["daten_fragen"], maxMs: 30000 }] },
+    { frage: "Wurden diese Woche Erstgespräche gebucht?", werkzeug: ["daten_fragen"],
+      enthaelt: MENGE, verboten: oder(PANNE, AUSREDE), maxMs: 30000 }] },
   { id: "z-3", gruppe: "zahlen", titel: "Umsatz letzter Monat, umformuliert", zuege: [
-    { frage: "Was haben wir letzten Monat eingenommen?", werkzeug: ["daten_fragen", "nachschlagen"], maxMs: 30000 }] },
+    { frage: "Was haben wir letzten Monat eingenommen?", werkzeug: ["daten_fragen", "nachschlagen"],
+      enthaelt: BETRAG, verboten: oder(PANNE, AUSREDE), maxMs: 30000 }] },
   { id: "z-4", gruppe: "zahlen", titel: "Bester im Team", zuege: [
-    { frage: "Wer hat im Team gerade die meisten Leads?", werkzeug: ["daten_fragen"], maxMs: 30000 }] },
+    // Ein Name allein reicht nicht — gefragt war "die meisten", also eine Zahl.
+    { frage: "Wer hat im Team gerade die meisten Leads?", werkzeug: ["daten_fragen"],
+      enthaelt: MENGE, verboten: oder(PANNE, AUSREDE), maxMs: 30000 }] },
   { id: "z-5", gruppe: "zahlen", titel: "Umsatz Jahr", zuege: [
-    { frage: "Wie viel Umsatz haben wir dieses Jahr insgesamt gemacht?", werkzeug: ["daten_fragen", "nachschlagen"], maxMs: 30000 }] },
+    { frage: "Wie viel Umsatz haben wir dieses Jahr insgesamt gemacht?", werkzeug: ["daten_fragen", "nachschlagen"],
+      enthaelt: BETRAG, verboten: oder(PANNE, AUSREDE), maxMs: 30000 }] },
   { id: "z-6", gruppe: "zahlen", titel: "Quote", zuege: [
-    { frage: "Wie ist unsere Abschlussquote von Erstgespräch zu Kunde?", werkzeug: ["daten_fragen"], maxMs: 35000 }] },
+    { frage: "Wie ist unsere Abschlussquote von Erstgespräch zu Kunde?", werkzeug: ["daten_fragen"],
+      enthaelt: MENGE, verboten: oder(PANNE, AUSREDE), maxMs: 35000 }] },
   { id: "z-7", gruppe: "zahlen", titel: "Nachfassen auf eine Zahl", zuege: [
-    { frage: "Wie viele Leads haben wir insgesamt im System?", werkzeug: ["daten_fragen"], maxMs: 30000 },
-    { frage: "Und wie viele davon sind noch nie angerufen worden?", werkzeug: ["daten_fragen"], maxMs: 35000 }] },
+    { frage: "Wie viele Leads haben wir insgesamt im System?", werkzeug: ["daten_fragen"],
+      enthaelt: MENGE, verboten: oder(PANNE, AUSREDE), maxMs: 30000 },
+    { frage: "Und wie viele davon sind noch nie angerufen worden?", werkzeug: ["daten_fragen"],
+      enthaelt: MENGE, verboten: oder(PANNE, AUSREDE), maxMs: 35000 }] },
   { id: "z-8", gruppe: "zahlen", titel: "Zwei Fragen in einem Satz", zuege: [
-    { frage: "Sag mir den Umsatz vom Juli und wie viele Kunden wir gerade haben.", werkzeug: ["daten_fragen"], maxMs: 40000 }] },
+    { frage: "Sag mir den Umsatz vom Juli und wie viele Kunden wir gerade haben.", werkzeug: ["daten_fragen"],
+      enthaelt: BETRAG, verboten: oder(PANNE, AUSREDE), maxMs: 40000 }] },
   { id: "z-9", gruppe: "zahlen", titel: "Unklarer Zeitraum", zuege: [
-    { frage: "Wie lief's letzte Zeit?", maxMs: 35000 }] },
+    // Bewusst ohne feste Erwartung: Hier darf sie zurueckfragen. Nur jammern
+    // darf sie nicht.
+    { frage: "Wie lief's letzte Zeit?", verboten: PANNE, maxMs: 35000 }] },
   { id: "z-10", gruppe: "zahlen", titel: "Stand bei einer Firma", zuege: [
-    { frage: "Wie ist der Stand bei Krotzer?", werkzeug: ["nachschlagen", "daten_fragen"], maxMs: 35000 }] },
+    // Die Firma muss im Satz vorkommen — auch ein ehrliches "zu Krotzer finde
+    // ich nichts" tut das. Was nicht geht: an der Frage vorbeireden.
+    { frage: "Wie ist der Stand bei Krotzer?", werkzeug: ["nachschlagen", "daten_fragen"],
+      enthaelt: /Krotzer/i, verboten: PANNE, maxMs: 35000 }] },
   { id: "z-11", gruppe: "zahlen", titel: "Korrektur mitten drin", zuege: [
-    { frage: "Wie viele Cold Calls waren es gestern? Nein, doch lieber die ganze Woche.", werkzeug: ["daten_fragen"], maxMs: 40000 }] },
+    { frage: "Wie viele Cold Calls waren es gestern? Nein, doch lieber die ganze Woche.", werkzeug: ["daten_fragen"],
+      enthaelt: MENGE, verboten: oder(PANNE, AUSREDE), maxMs: 40000 }] },
   { id: "z-12", gruppe: "zahlen", titel: "Offene Rechnungen", zuege: [
-    { frage: "Sind noch Rechnungen offen?", werkzeug: ["daten_fragen", "nachschlagen"], maxMs: 35000 }] },
+    // "Nein, aktuell keine offenen Rechnungen" ist eine vollstaendige Antwort.
+    { frage: "Sind noch Rechnungen offen?", werkzeug: ["daten_fragen", "nachschlagen"],
+      enthaelt: MENGE, verboten: oder(PANNE, AUSREDE), maxMs: 35000 }] },
 
   // ==================================================== Varianten Kalender
   { id: "k-1", gruppe: "kalender", titel: "Termine morgen", zuege: [
@@ -341,101 +488,152 @@ const SZENARIEN = [
     { frage: `Und sag ihn doch wieder ab.`, werkzeug: ["termin_absagen"],
       enthaelt: /(Abgesagt|ist raus)/i, verboten: /finde keinen Termin/i, maxMs: 30000 }] },
   { id: "k-4", gruppe: "kalender", titel: "Termin ohne Uhrzeit", schreibt: true, zuege: [
-    { frage: `Trag mir am Freitag ${PRAEFIX} Drehtag ganztägig ein.`, werkzeug: ["termin_eintragen"], maxMs: 30000 }] },
+    { frage: `Trag mir am Freitag ${PRAEFIX} Drehtag ganztägig ein.`, werkzeug: ["termin_eintragen"],
+      enthaelt: /(Steht|eingetragen|ganztägig)/i, verboten: /gehakt|nicht drin/i, maxMs: 30000 }] },
   // Kein "Mach ich" vor einem Werkzeug, das scheitern kann. Live gemessen:
   // "Mach ich, der Kamera-Check morgen fliegt raus. Ich finde keinen Termin …"
+  //
+  // DEM SINN NACH PRUEFEN, NICHT DEM WORTLAUT (20.08.2026): Hier stand bis
+  // heute woertlich "finde keinen Termin". Live kam "So einen Termin hast du
+  // nicht im Kalender — kein Bundeskanzler, weder heute noch später. Meinst du
+  // einen anderen?" — besser als die Erwartung, und trotzdem rot. Ein Pruefer,
+  // der auf eine Formulierung festnagelt, bestraft jede Verbesserung.
   { id: "k-5", gruppe: "kalender", titel: "Nicht existierender Termin", zuege: [
     { frage: "Sag den Termin mit dem Bundeskanzler ab.",
       verboten: /(abgesagt|ist raus|fliegt raus|mach ich|sag ich ab|schieb ich)/i,
-      enthaelt: /finde keinen Termin/i, maxMs: 30000 }] },
+      enthaelt: KEIN_TERMIN, maxMs: 30000 }] },
   { id: "k-6", gruppe: "kalender", titel: "Freie Zeit finden", zuege: [
-    { frage: "Wann hab ich diese Woche zwei Stunden am Stück frei?", maxMs: 35000 }] },
+    { frage: "Wann hab ich diese Woche zwei Stunden am Stück frei?",
+      verboten: oder(PANNE, AUSREDE), maxMs: 35000 }] },
   { id: "k-7", gruppe: "kalender", titel: "Termin plus Aufgabe in einem Satz", schreibt: true, zuege: [
     { frage: `Trag mir morgen um 14 Uhr ${PRAEFIX} Schnitt ein und setz ${PRAEFIX} Musik aussuchen auf die Liste.`,
-      werkzeug: ["termin_eintragen"], maxMs: 40000 }] },
+      werkzeug: ["termin_eintragen"], enthaelt: /(Steht|eingetragen)/i,
+      verboten: /gehakt|nicht drin/i, maxMs: 40000 }] },
 
   // ==================================================== Varianten Aufgaben
   { id: "a-1", gruppe: "aufgaben", titel: "Aufgabe anlegen und abhaken", schreibt: true, zuege: [
     { frage: `Setz ${PRAEFIX} Akkus laden auf die Liste.`, werkzeug: ["aufgabe_anlegen"],
       enthaelt: /(steht|liste|notiert|drauf|eingetragen)/i, maxMs: 30000 },
-    { frage: `${PRAEFIX} Akkus laden hab ich erledigt.`, werkzeug: ["aufgabe_erledigt"], maxMs: 30000 }] },
+    { frage: `${PRAEFIX} Akkus laden hab ich erledigt.`, werkzeug: ["aufgabe_erledigt"],
+      enthaelt: /(abgehakt|erledigt|raus|weg|Haken)/i, maxMs: 30000 }] },
   { id: "a-2", gruppe: "aufgaben", titel: "Aufgabe mit Frist", schreibt: true, zuege: [
-    { frage: `Erinner mich bis Freitag an ${PRAEFIX} Rechnung Bergmann.`, werkzeug: ["aufgabe_anlegen"], maxMs: 30000 }] },
+    { frage: `Erinner mich bis Freitag an ${PRAEFIX} Rechnung Bergmann.`, werkzeug: ["aufgabe_anlegen"],
+      enthaelt: /(steht|Liste|notiert|drauf|Freitag)/i, maxMs: 30000 }] },
   { id: "a-3", gruppe: "aufgaben", titel: "Was ist offen", zuege: [
-    { frage: "Was ist bei mir noch offen?", verboten: PANNE, maxMs: 30000 }] },
+    { frage: "Was ist bei mir noch offen?", verboten: oder(PANNE, AUSREDE), maxMs: 30000 }] },
   { id: "a-4", gruppe: "aufgaben", titel: "Aufgabe vs. Termin unterscheiden", schreibt: true, zuege: [
-    { frage: `Ich muss ${PRAEFIX} das Objektiv putzen, irgendwann.`, werkzeug: ["aufgabe_anlegen"], kein_werkzeug: ["termin_eintragen"], maxMs: 30000 }] },
+    { frage: `Ich muss ${PRAEFIX} das Objektiv putzen, irgendwann.`, werkzeug: ["aufgabe_anlegen"],
+      kein_werkzeug: ["termin_eintragen"], enthaelt: /(steht|Liste|notiert|drauf)/i, maxMs: 30000 }] },
 
   // ==================================================== Varianten Nachrichten
+  //
+  // whatsapp_senden legt einen ENTWURF vor, den Lukas freigibt. Ob der Weg
+  // ueber das Werkzeug oder direkt durch die Formulierung geht, ist egal — was
+  // zaehlt, ist: Steht der Entwurf da? Deshalb ueberall eine inhaltliche
+  // Erwartung statt der reinen Werkzeugpflicht (20.08.2026).
   { id: "n-1", gruppe: "nachricht", titel: "WhatsApp kurz", zuege: [
-    { frage: "Schreib Jannik, dass ich zehn Minuten später komme.", werkzeug: ["whatsapp_senden"], maxMs: 35000 }] },
+    { frage: "Schreib Jannik, dass ich zehn Minuten später komme.", werkzeug: ["whatsapp_senden"],
+      enthaelt: /(zehn|10|später|Jannik)/i, verboten: PANNE, maxMs: 35000 }] },
   { id: "n-2", gruppe: "nachricht", titel: "WhatsApp mit Freigabe", zuege: [
-    { frage: "Sag Jannik Bescheid, dass die Kamera da ist.", werkzeug: ["whatsapp_senden"], maxMs: 35000 },
-    { frage: "Ja, schick sie ab.", verboten: PANNE, maxMs: 30000 }] },
+    { frage: "Sag Jannik Bescheid, dass die Kamera da ist.", werkzeug: ["whatsapp_senden"],
+      enthaelt: /(Kamera|Jannik)/i, verboten: PANNE, maxMs: 35000 },
+    { frage: "Ja, schick sie ab.", enthaelt: /(raus|geschickt|abgeschickt|unterwegs|erledigt|weg)/i,
+      verboten: PANNE, maxMs: 30000 }] },
   { id: "n-3", gruppe: "nachricht", titel: "WhatsApp umformulieren lassen", zuege: [
-    { frage: "Formulier eine WhatsApp an Jannik wegen morgen.", werkzeug: ["whatsapp_senden"], maxMs: 35000 },
-    { frage: "Nein, schreib das kürzer und lockerer.", werkzeug: ["whatsapp_senden"], maxMs: 35000 }] },
+    // Duenner Auftrag, trotzdem vorlegen — dieselbe Regel wie r-5. Rueckfragen
+    // statt formulieren war der gemessene Fehler, nicht das fehlende Werkzeug.
+    { frage: "Formulier eine WhatsApp an Jannik wegen morgen.", werkzeug: ["whatsapp_senden"],
+      enthaelt: /morgen/i, verboten: /(Was soll|Worum geht|Ohne das)/i, maxMs: 35000 },
+    { frage: "Nein, schreib das kürzer und lockerer.", werkzeug: ["whatsapp_senden"],
+      enthaelt: /morgen/i, verboten: PANNE, maxMs: 35000 }] },
   { id: "n-4", gruppe: "nachricht", titel: "Mail an mich selbst", zuege: [
-    { frage: "Schick mir eine Mail mit den Zahlen von heute.", maxMs: 45000 }] },
+    { frage: "Schick mir eine Mail mit den Zahlen von heute.", verboten: PANNE, maxMs: 45000 }] },
+  // Nach aussen geht nichts ohne Freigabe — die Mail muss als ENTWURF
+  // vorliegen, nicht als "ist raus".
   { id: "n-5", gruppe: "nachricht", titel: "Externe Mail = Entwurf", zuege: [
     { frage: "Schreib eine Mail an die Zahnarztpraxis Bergmann, dass sich das Angebot verzögert.",
-      kein_werkzeug: [], maxMs: 45000 }] },
+      enthaelt: /(Entwurf|Freigabe|schau .{0,15}drüber|passt|Bergmann)/i,
+      verboten: /(ist raus|abgeschickt|hab ich gesendet|ist unterwegs)/i, maxMs: 45000 }] },
   { id: "n-6", gruppe: "nachricht", titel: "Erfundener Gruppenname", zuege: [
     { frage: "Schreib in die Gruppe Vertriebsleitung Nord, dass wir morgen drehen.",
       verboten: /ist raus|abgeschickt|gesendet/i, maxMs: 35000 }] },
   { id: "n-7", gruppe: "nachricht", titel: "Neue Mails, umformuliert", zuege: [
-    { frage: "Ist heute was Wichtiges reingekommen?", werkzeug: ["mail_lesen"], maxMs: 40000 }] },
+    { frage: "Ist heute was Wichtiges reingekommen?", werkzeug: ["mail_lesen"],
+      verboten: oder(PANNE, AUSREDE), maxMs: 40000 }] },
   { id: "n-8", gruppe: "nachricht", titel: "WhatsApp lesen", zuege: [
-    { frage: "Was hat Jannik zuletzt geschrieben?", werkzeug: ["whatsapp_lesen"], maxMs: 35000 }] },
+    { frage: "Was hat Jannik zuletzt geschrieben?", werkzeug: ["whatsapp_lesen"],
+      verboten: oder(PANNE, AUSREDE), maxMs: 35000 }] },
 
   // ==================================================== Varianten CRM
   { id: "c-1", gruppe: "crm", titel: "Lead anlegen", schreibt: true, zuege: [
     { frage: `Leg einen Lead an: ${PRAEFIX} Zahnarztpraxis Bergmann, München, kam über Empfehlung.`,
       werkzeug: ["crm_lead"], enthaelt: /(angelegt|steht|drin|Bergmann)/i, maxMs: 35000 }] },
   { id: "c-2", gruppe: "crm", titel: "Notiz an einer Firma", schreibt: true, zuege: [
-    { frage: `Leg einen Lead an: ${PRAEFIX} Praxis Nordlicht, Hamburg.`, werkzeug: ["crm_lead"], maxMs: 35000 },
+    { frage: `Leg einen Lead an: ${PRAEFIX} Praxis Nordlicht, Hamburg.`, werkzeug: ["crm_lead"],
+      enthaelt: /(angelegt|steht|drin|Nordlicht)/i, maxMs: 35000 },
     { frage: `Notier bei ${PRAEFIX} Praxis Nordlicht, dass sie erst im Oktober Budget haben.`,
-      werkzeug: ["crm_notiz"], maxMs: 35000 }] },
+      werkzeug: ["crm_notiz"], enthaelt: /(notiert|Notiz|steht|drin|Oktober)/i, maxMs: 35000 }] },
   { id: "c-3", gruppe: "crm", titel: "Anrufergebnis festhalten", schreibt: true, zuege: [
-    { frage: `Leg einen Lead an: ${PRAEFIX} Praxis Sonnenhof, Rosenheim.`, werkzeug: ["crm_lead"], maxMs: 35000 },
+    { frage: `Leg einen Lead an: ${PRAEFIX} Praxis Sonnenhof, Rosenheim.`, werkzeug: ["crm_lead"],
+      enthaelt: /(angelegt|steht|drin|Sonnenhof)/i, maxMs: 35000 },
     { frage: `Ich hab bei ${PRAEFIX} Praxis Sonnenhof angerufen, wir haben ein Erstgespräch ausgemacht.`,
-      werkzeug: ["crm_anruf"], maxMs: 35000 }] },
+      werkzeug: ["crm_anruf"], enthaelt: /(Erstgespräch|festgehalten|notiert|steht|vermerkt)/i, maxMs: 35000 }] },
   { id: "c-4", gruppe: "crm", titel: "Wiedervorlage", schreibt: true, zuege: [
-    { frage: `Leg einen Lead an: ${PRAEFIX} Praxis Waldblick, Augsburg.`, werkzeug: ["crm_lead"], maxMs: 35000 },
-    { frage: `Erinner mich in einer Woche an ${PRAEFIX} Praxis Waldblick.`, werkzeug: ["crm_wiedervorlage"], maxMs: 35000 }] },
+    { frage: `Leg einen Lead an: ${PRAEFIX} Praxis Waldblick, Augsburg.`, werkzeug: ["crm_lead"],
+      enthaelt: /(angelegt|steht|drin|Waldblick)/i, maxMs: 35000 },
+    { frage: `Erinner mich in einer Woche an ${PRAEFIX} Praxis Waldblick.`, werkzeug: ["crm_wiedervorlage"],
+      enthaelt: /(Woche|Wiedervorlage|erinner|steht)/i, maxMs: 35000 }] },
   { id: "c-5", gruppe: "crm", titel: "Firma ohne Namen", zuege: [
     { frage: "Leg mir mal einen Lead an.", verboten: /angelegt|steht|ist drin/i, maxMs: 30000 }] },
 
   // ==================================================== Varianten Buchhaltung
   { id: "b-1", gruppe: "buchhaltung", titel: "Naechste Rechnungsnummer", zuege: [
     { frage: "Welche Rechnungsnummer kommt als nächstes dran?", werkzeug: ["beleg_nummer"],
-      enthaelt: ZAHL, verboten: PANNE, maxMs: 30000 }] },
+      enthaelt: MENGE, verboten: oder(PANNE, AUSREDE), maxMs: 30000 }] },
   { id: "b-2", gruppe: "buchhaltung", titel: "Angebot mit allen Angaben", schreibt: true, zuege: [
     { frage: `Schreib ein Angebot für ${PRAEFIX} Zahnarztpraxis Bergmann über 4.500 Euro für eine neue Website mit Terminbuchung.`,
-      werkzeug: ["beleg_erstellen"], maxMs: 60000 }] },
+      werkzeug: ["beleg_erstellen"], enthaelt: /(Angebot|Bergmann|liegt|erstellt|fertig)/i, maxMs: 60000 }] },
+  // "Nummer \d" hat der Aussprache-Filter frueher unbrauchbar gemacht: Aus
+  // "Nummer 14" wird gesprochen "Nummer vierzehn", und die Ziffer war weg.
+  // Seit Verbote am GESPROCHENEN Text geprueft werden (20.08.), steht hier
+  // deshalb die Nummer in beiden Schreibweisen.
   { id: "b-3", gruppe: "buchhaltung", titel: "Rechnung ohne Betrag", zuege: [
-    { frage: "Schreib eine Rechnung für Bergmann.", verboten: /ist erstellt|liegt bereit|Nummer \d/i, maxMs: 35000 }] },
+    { frage: "Schreib eine Rechnung für Bergmann.",
+      verboten: /ist erstellt|liegt bereit|Nummer\s+(\d|null|ein|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf)/i,
+      maxMs: 35000 }] },
   { id: "b-4", gruppe: "buchhaltung", titel: "Belege des Monats", zuege: [
-    { frage: "Welche Belege habe ich diesen Monat schon abgelegt?", maxMs: 35000 }] },
+    { frage: "Welche Belege habe ich diesen Monat schon abgelegt?",
+      verboten: oder(PANNE, AUSREDE), maxMs: 35000 }] },
 
   // ==================================================== Sprache/Ton
   { id: "s-1", gruppe: "sprache", titel: "Kein Fachjargon", zuege: [
     { frage: "Was kannst du eigentlich alles?", verboten: INTERN, maxMs: 30000 }] },
   { id: "s-2", gruppe: "sprache", titel: "Gedaechtnis ueber Zuege", zuege: [
-    { frage: "Wie ist das Wetter morgen?", werkzeug: ["wetter"], maxMs: 30000 },
-    { frage: "Wie viele Leads haben wir?", maxMs: 30000 },
+    { frage: "Wie ist das Wetter morgen?", werkzeug: ["wetter"], enthaelt: WETTER, maxMs: 30000 },
+    { frage: "Wie viele Leads haben wir?", enthaelt: MENGE, verboten: oder(PANNE, AUSREDE), maxMs: 30000 },
     { frage: "Was hab ich dich als Erstes gefragt?", enthaelt: /wetter/i, maxMs: 30000 }] },
+  // PRUEFT DEN GESPROCHENEN TEXT, NICHT DEN ROHEN (20.08.2026).
+  //
+  // Hier lag der peinlichste Fehlalarm: "Umsatz im Juli 2026 waren 5.000 €"
+  // wurde als "Unerwuenschte Wendung: €" gemeldet. Gesprochen wird daraus
+  // laengst "fuenftausend Euro" — der Pruefer schaute auf den falschen Text.
+  //
+  // Das Szenario bleibt trotzdem wertvoll: Es ist jetzt die Rueckfall-Sicherung
+  // fuer lib/aussprache.js. Bricht dort die Waehrungs- oder Datumsregel, steht
+  // das € wieder im gesprochenen Text und s-3 wird rot. Dazu die positive
+  // Erwartung, damit ein blosses "Weiß ich nicht" nicht als sauber durchgeht.
   { id: "s-3", gruppe: "sprache", titel: "Euro und Datum sprechbar", zuege: [
     { frage: "Wie viel Umsatz war es im Juli, sag es mir in einem Satz.",
-      verboten: /€|EUR\b|\d{4}-\d{2}-\d{2}/, maxMs: 35000 }] },
+      enthaelt: BETRAG, verboten: /€|EUR\b|\d{4}-\d{2}-\d{2}/, maxMs: 35000 }] },
   { id: "s-4", gruppe: "sprache", titel: "Unverstaendliche Eingabe", zuege: [
     { frage: "das kann aus okay ja ich klappte doch keine Zeit", verboten: PANNE, maxMs: 30000 }] },
   { id: "s-5", gruppe: "sprache", titel: "Abbruch mitten drin", zuege: [
     { frage: "Trag mir morgen um zehn einen Termin ein — nein, warte, lass es.",
       kein_werkzeug: ["termin_eintragen"], maxMs: 30000 }] },
   { id: "s-6", gruppe: "sprache", titel: "Zwei Auftraege in einem Satz", zuege: [
+    // Beide Haelften muessen beantwortet sein — Wetter UND eine Mailzahl.
     { frage: "Sag mir das Wetter für morgen und wie viele Mails heute reinkamen.",
-      werkzeug: ["wetter"], maxMs: 45000 }] },
+      werkzeug: ["wetter"], enthaelt: WETTER, verboten: oder(PANNE, AUSREDE), maxMs: 45000 }] },
   { id: "s-7", gruppe: "sprache", titel: "Frage nach den eigenen Grenzen", zuege: [
     { frage: "Darfst du eigentlich selbst was bestellen?",
       enthaelt: /(nicht|nie|freigab|frag)/i, maxMs: 30000 }] },
@@ -444,24 +642,29 @@ const SZENARIEN = [
   { id: "s-9", gruppe: "sprache", titel: "Begruessung", zuege: [
     { frage: "Guten Morgen Alexandra.", verboten: PANNE, maxMs: 25000 }] },
   { id: "s-10", gruppe: "sprache", titel: "Widerspruch des Nutzers", zuege: [
-    { frage: "Wie viel Umsatz war im Juli?", maxMs: 35000 },
-    { frage: "Das stimmt nicht, schau nochmal genau nach.", verboten: PANNE, maxMs: 40000 }] },
+    { frage: "Wie viel Umsatz war im Juli?", enthaelt: BETRAG, verboten: oder(PANNE, AUSREDE), maxMs: 35000 },
+    // Auch nach dem Widerspruch muss eine Zahl kommen — nicht bloss ein
+    // "stimmt, tut mir leid".
+    { frage: "Das stimmt nicht, schau nochmal genau nach.", enthaelt: BETRAG, verboten: PANNE, maxMs: 40000 }] },
   { id: "s-11", gruppe: "sprache", titel: "Wetter", zuege: [
     { frage: "Wie wird das Wetter morgen in München?", werkzeug: ["wetter"],
-      // Grad ODER ein Wetterwort MIT Zahl. Ohne diese Kopplung ging "Alles
-      // klar." als Wetterauskunft durch — das Wort "klar" steht darin.
-      enthaelt: /(\d+\s*(grad|°)|(sonn|regen|wolk|bewölkt|schauer|gewitter|schnee|nebel)\w*)/i,
-      verboten: PANNE, maxMs: 30000 }] },
+      enthaelt: WETTER, verboten: PANNE, maxMs: 30000 }] },
   { id: "s-12", gruppe: "sprache", titel: "Recherche", zuege: [
+    // Ein Richtwert ist eine Zahl. "Kommt drauf an" allein ist keiner.
     { frage: "Was kostet aktuell eine Meta-Ads-Agentur im Monat, so als Richtwert?",
-      werkzeug: ["recherchieren", "lange_arbeit"], maxMs: 60000 }] },
+      werkzeug: ["recherchieren", "lange_arbeit"], enthaelt: MENGE, verboten: PANNE, maxMs: 60000 }] },
   { id: "s-13", gruppe: "sprache", titel: "Firmengedaechtnis", zuege: [
+    // Ein ehrliches "dazu finde ich nichts im Gedächtnis" ist erlaubt — nur
+    // das Thema muss sie aufgreifen, statt an der Frage vorbeizureden.
     { frage: "Was haben wir damals zum Thema Preisgestaltung entschieden?",
-      werkzeug: ["gehirn_suchen", "nachschlagen"], maxMs: 45000 }] },
+      werkzeug: ["gehirn_suchen", "nachschlagen"],
+      enthaelt: /(Preis|Pricing|Honorar|entschieden|festgelegt|finde .{0,15}nichts)/i,
+      verboten: PANNE, maxMs: 45000 }] },
   { id: "s-14", gruppe: "sprache", titel: "Dashboard zeigen", zuege: [
-    { frage: "Zeig mir mal den Kalender.", maxMs: 25000 }] },
+    { frage: "Zeig mir mal den Kalender.", enthaelt: /(Kalender|oben|Seite|offen)/i, verboten: PANNE, maxMs: 25000 }] },
   { id: "s-15", gruppe: "sprache", titel: "Anruf anfordern", zuege: [
-    { frage: "Ruf mich in zehn Sekunden an.", werkzeug: ["anrufen"], maxMs: 30000 }] },
+    { frage: "Ruf mich in zehn Sekunden an.", werkzeug: ["anrufen"],
+      enthaelt: /(ruf|klingel|Anruf|meld)/i, verboten: PANNE, maxMs: 30000 }] },
 
   // ============================================== Nachgereicht am 20.08.
   //
@@ -508,25 +711,41 @@ const SZENARIEN = [
       // "null" steht hier bewusst NICHT: Auf Deutsch ist das eine ganz normale
       // Zahl ("für morgen null Wiedervorlagen"), und der Test hat genau darauf
       // angeschlagen. Gesucht sind technische Reste, keine deutschen Wörter.
-      enthaelt: ZAHL,
-      verboten: /(ENOENT|spawn |gws-cli|ECONNREFUSED|undefined|\[object |Error:|: null)/i, maxMs: 45000 }] },
+      //
+      // Die Liste selbst ist am 20.08. nach ROHTEXT gewandert und gilt jetzt
+      // fuer JEDEN Zug — ein "spawn gws-cli ENOENT" ist immer ein Totalausfall,
+      // egal welche Frage davor stand. Hier bleibt die positive Erwartung.
+      enthaelt: MENGE, verboten: PANNE, maxMs: 45000 }] },
 
   // ==================================================== Leads-Nachschub
   { id: "l-1", gruppe: "leads", titel: "Nachschub mit Ort und Branche", zuege: [
     { frage: "Such mir fünfzig neue Zahnarztpraxen in München als Leads raus.",
-      werkzeug: ["leads_nachschub", "lange_arbeit"], maxMs: 60000 }] },
+      werkzeug: ["leads_nachschub", "lange_arbeit"],
+      enthaelt: /(fünfzig|50|München|Zahnarzt|Praxen)/i, verboten: PANNE, maxMs: 60000 }] },
   { id: "l-2", gruppe: "leads", titel: "Nachschub ohne Angaben", zuege: [
-    { frage: "Wir brauchen mehr Leads.", maxMs: 35000 }] },
+    // ZWEI RICHTIGE WEGE (20.08.2026): nachfragen ODER einfach liefern.
+    // Gemessen wurde das Liefern ("50 Leads liegen jetzt in der Liste …") —
+    // eine Erwartung, die nur die Rueckfrage gelten laesst, haette die
+    // bessere Antwort durchfallen lassen. Falsch ist nur beides nicht zu tun.
+    { frage: "Wir brauchen mehr Leads.",
+      enthaelt: /(welche|wo\b|Ort|Branche|wie viele|Zielgruppe|Region|Liste|Leads liegen|\d+ Leads)/i,
+      verboten: PANNE, maxMs: 35000 }] },
   { id: "l-3", gruppe: "leads", titel: "Nachschub nach Zahlenfrage", zuege: [
-    { frage: "Wie viele unbearbeitete Leads liegen noch da?", werkzeug: ["daten_fragen"], maxMs: 35000 },
+    // Zug 1 ist eine Zahlenfrage — die Zahl zaehlt, nicht der Weg dorthin.
+    { frage: "Wie viele unbearbeitete Leads liegen noch da?", werkzeug: ["daten_fragen"],
+      enthaelt: MENGE, verboten: oder(PANNE, AUSREDE), maxMs: 35000 },
+    // Zug 2 MUSS liefern: eine Menge tatsaechlich gebuendelter Leads.
     { frage: "Zu wenig — leg nochmal hundert nach, gleiche Zielgruppe.",
-      werkzeug: ["leads_nachschub", "lange_arbeit"], maxMs: 60000 }] },
+      werkzeug: ["leads_nachschub", "lange_arbeit"],
+      enthaelt: /(\d{2,}|hundert)/i, verboten: PANNE, maxMs: 60000 }] },
 
   // ==================================================== Beleg/Steuerberaterin
   { id: "st-1", gruppe: "steuer", titel: "Belege sammeln und schicken", zuege: [
-    { frage: "Schick alle Rechnungen vom Juli an die Steuerberaterin.", maxMs: 60000 }] },
+    { frage: "Schick alle Rechnungen vom Juli an die Steuerberaterin.",
+      enthaelt: /(Juli|Rechnung|Entwurf|Ordner|schick|welche)/i, verboten: PANNE, maxMs: 60000 }] },
   { id: "st-2", gruppe: "steuer", titel: "Beleg ablegen", zuege: [
-    { frage: "Ich hab hier eine Tankquittung über 68 Euro — leg die für die Buchhaltung ab.", maxMs: 45000 }] },
+    { frage: "Ich hab hier eine Tankquittung über 68 Euro — leg die für die Buchhaltung ab.",
+      enthaelt: /(68|achtundsechzig|Tank|Beleg|abgelegt|Foto|Telegram)/i, verboten: PANNE, maxMs: 45000 }] },
 ];
 
 // ---------------------------------------------------------------- Umgebung
@@ -662,8 +881,100 @@ function abfragenAus(protokoll) {
     .map((e) => ({ was: e.was, sql: e.sql, antwort: e.antwort, ok: e.ok, dauerMs: e.dauerMs }));
 }
 
+// ---------------------------------------------------------------- Bewertung
+//
+// EINE FUNKTION, ZWEI AUFRUFER (20.08.2026). Diese Bewertung ist der ganze
+// Wert des Harnischs — und sie wird von scripts/test-harnisch.js mit
+// absichtlich kaputten Antworten beschossen. Deshalb ist sie hier
+// herausgeloest, rein (kein Netz, keine Datei) und exportiert: Der Waechter
+// prueft damit GENAU den Code, der morgen laeuft, und keine Abschrift.
+//
+// DIE GRUNDREGEL: Ein Werkzeug ist Mittel, nicht Zweck. Geprueft wird die
+// ANTWORT — Zahl da, Uhrzeit da, keine Ausrede, keine erfundene Bestaetigung,
+// kein Rohtext, kein Testmuell. Ob dafuer ein Werkzeug lief, ist Lukas egal.
+//
+// opt.werkzeuge      welche Werkzeuge laut Sprachprotokoll liefen
+// opt.dauerMs        gemessene Zeit
+// opt.fern           Fernmodus — dort gibt es kein Sprachprotokoll
+// opt.praefixErlaubt hat in diesem Gespraech schon eine FRAGE den Praefix
+//                    genannt? Dann darf er auch in der Antwort stehen.
+// opt.fehler         Transportfehler (HTTP, ok:false)
+function bewerteZug(zug, antwort, opt = {}) {
+  const { werkzeuge = [], dauerMs = 0, fern = false, praefixErlaubt = false, fehler = null } = opt;
+  const roh = String(antwort || "");
+  const laut = gesprochen(roh);          // das, was aus dem Lautsprecher kommt
+  const maengel = [];
+  const hinweise = [];
+
+  if (fehler) maengel.push("Fehler: " + fehler);
+  if (!roh) maengel.push("Keine Antwort");
+
+  // --- Werkzeuge: Hinweis statt Urteil, ausser wo der Aufruf die Leistung ist
+  if (zug.werkzeug?.length) {
+    const lief = zug.werkzeug.some((w) => werkzeuge.includes(w));
+    const pflicht = zug.werkzeug.every((w) => WERKZEUG_PFLICHT.has(w));
+    if (lief) {
+      /* alles gut, nichts zu melden */
+    } else if (fern) {
+      hinweise.push(`Werkzeug [${zug.werkzeug.join(", ")}] im Fernmodus nicht prüfbar (Protokoll liegt auf dem Server)`);
+    } else if (pflicht) {
+      // Ein Termin, den niemand eintraegt, steht nicht im Kalender — hier hilft
+      // die schoenste Antwort nichts.
+      maengel.push(`Pflicht-Werkzeug [${zug.werkzeug.join(", ")}] lief nicht — aufgerufen: [${werkzeuge.join(", ") || "keins"}]`);
+    } else {
+      hinweise.push(`Ohne [${zug.werkzeug.join(", ")}] beantwortet — aufgerufen: [${werkzeuge.join(", ") || "keins"}]`);
+    }
+  }
+  // kein_werkzeug bleibt hart: Das ist eine Aussage darueber, was NICHT
+  // passieren darf ("nein, warte, lass es"), und da zaehlt der Aufruf selbst.
+  if (!fern && zug.kein_werkzeug?.length) {
+    const verboten = zug.kein_werkzeug.filter((w) => werkzeuge.includes(w));
+    if (verboten.length) maengel.push("Verbotenes Werkzeug: " + verboten.join(", "));
+  }
+
+  // --- Inhalt: roh ODER gesprochen zaehlt.
+  // "16:00" und "sechzehn Uhr" sind dieselbe Auskunft, "5.000 €" und
+  // "fuenftausend Euro" auch. Wer nur eine der beiden Schreibweisen gelten
+  // laesst, misst die Aussprache statt der Antwort.
+  if (zug.enthaelt && !zug.enthaelt.test(roh) && !zug.enthaelt.test(laut)) {
+    maengel.push("Antwort passt nicht zu " + zug.enthaelt);
+  }
+  // --- Verbote gelten fuer den GESPROCHENEN Text.
+  // Genau hier fiel "Umsatz im Juli 2026 waren 5.000 €" durch, obwohl beim
+  // Sprechen sauber "fuenftausend Euro" herauskommt.
+  if (zug.verboten && zug.verboten.test(laut)) {
+    maengel.push("Unerwünschte Wendung: „" + (laut.match(zug.verboten) || [""])[0] + "“");
+  }
+
+  // --- Technischer Rohtext: nirgends, in keiner Antwort.
+  // Am ROHEN Text geprueft — die Aussprache soll so etwas nicht kaschieren.
+  if (ROHTEXT.test(roh)) {
+    maengel.push("Technischer Rohtext in der Antwort: „" + (roh.match(ROHTEXT) || [""])[0] + "“");
+  }
+
+  // --- Testmuell aus einem frueheren Lauf.
+  //
+  // WAS PASSIERT IST (20.08.2026): "ADSTEST Probeaufnahme" lag acht Stunden im
+  // Produktivkalender, und am naechsten Morgen las Alexandra ihn bei "Was sind
+  // meine Termine heute?" woertlich vor. Der Lauf davor hatte gruen gemeldet.
+  // Aufgeraeumt wird am Ende — aber gemerkt wird es hier, an der Stelle, wo es
+  // in der Aufnahme wehtut: mitten in der Antwort.
+  //
+  // Kein Alarm, wenn der Praefix im Gespraech schon gefallen ist ("Sag ADSTEST
+  // Probeaufnahme ab" -> "Abgesagt, ADSTEST Probeaufnahme ist raus").
+  if (!praefixErlaubt && new RegExp(PRAEFIX, "i").test(roh)) {
+    maengel.push(`Testmüll in der Antwort: „${PRAEFIX}“ steht drin, obwohl die Frage ihn nicht nennt — Rest aus einem früheren Lauf?`);
+  }
+
+  if (zug.maxMs && dauerMs > zug.maxMs) {
+    maengel.push(`Zu langsam: ${(dauerMs / 1000).toFixed(1)} s (Budget ${(zug.maxMs / 1000).toFixed(0)} s)`);
+  }
+
+  return { maengel, hinweise, gesprochen: laut };
+}
+
 // ---------------------------------------------------------------- Ein Zug
-async function zugFahren(zug, cookie, datenPfad) {
+async function zugFahren(zug, cookie, datenPfad, praefixErlaubt = false) {
   const start = Date.now();
   let antwort = "", fehler = null, code = 0;
   try {
@@ -680,35 +991,33 @@ async function zugFahren(zug, cookie, datenPfad) {
   }
   const dauerMs = Date.now() - start;
 
-  // Das Protokoll wird mit appendFile geschrieben (nicht blockierend) — ein
-  // kurzer Moment, sonst fehlt der Eintrag zur gerade gestellten Frage.
-  await new Promise((r) => setTimeout(r, 250));
-  const { namen, diag, aktionen } = werkzeugeZu(protokollLesen(datenPfad), zug.frage);
+  // AUF DAS PROTOKOLL WARTEN, STATT ES ZU RATEN (20.08.2026).
+  //
+  // Das Sprachprotokoll wird mit appendFile geschrieben (nicht blockierend).
+  // Die alten 250 ms fest reichten oft nicht: Der Eintrag fehlte, der Pruefer
+  // meldete "kein Werkzeug" — und das war einer der Gruende fuer die falschen
+  // Alarme. Jetzt wird bis zu drei Sekunden nachgeschaut und beim ersten
+  // Treffer weitergemacht; im Normalfall kostet das den ersten Schlag.
+  //
+  // Im Fernmodus gibt es hier gar kein Protokoll (es liegt auf dem Server) —
+  // dort waeren die drei Sekunden je Zug reine Wartezeit ohne Erkenntnis.
+  let namen = [], diag = null, aktionen = [];
+  if (!FERN) {
+    for (let i = 0; i < 12; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      ({ namen, diag, aktionen } = werkzeugeZu(protokollLesen(datenPfad), zug.frage));
+      if (diag) break;
+    }
+  }
 
-  // --- Bewertung
-  const maengel = [];
-  if (fehler) maengel.push("Fehler: " + fehler);
-  if (!antwort) maengel.push("Keine Antwort");
-  // Im Fernmodus liegt das Sprachprotokoll auf dem anderen Rechner. Eine
-  // Werkzeugpruefung waere dann keine Pruefung, sondern ein garantiertes Nein.
-  if (!FERN && zug.werkzeug?.length && !zug.werkzeug.some((w) => namen.includes(w))) {
-    maengel.push(`Kein Werkzeug aus [${zug.werkzeug.join(", ")}] — aufgerufen: [${namen.join(", ") || "keins"}]`);
-  }
-  if (!FERN && zug.kein_werkzeug?.length) {
-    const verboten = zug.kein_werkzeug.filter((w) => namen.includes(w));
-    if (verboten.length) maengel.push("Verbotenes Werkzeug: " + verboten.join(", "));
-  }
-  if (zug.enthaelt && !zug.enthaelt.test(antwort)) maengel.push("Antwort passt nicht zu " + zug.enthaelt);
-  if (zug.verboten && zug.verboten.test(antwort)) {
-    maengel.push("Unerwünschte Wendung: „" + (antwort.match(zug.verboten) || [""])[0] + "“");
-  }
-  if (zug.maxMs && dauerMs > zug.maxMs) maengel.push(`Zu langsam: ${(dauerMs / 1000).toFixed(1)} s (Budget ${(zug.maxMs / 1000).toFixed(0)} s)`);
+  const { maengel, hinweise, gesprochen: laut } =
+    bewerteZug(zug, antwort, { werkzeuge: namen, dauerMs, fern: FERN, praefixErlaubt, fehler });
 
   return {
-    frage: zug.frage, antwort, werkzeuge: namen, aktionen, dauerMs, httpCode: code,
+    frage: zug.frage, antwort, gesprochen: laut, werkzeuge: namen, aktionen, dauerMs, httpCode: code,
     modell: diag?.modell || null, verstehenMs: diag?.dauerMs || null,
     reserve: Boolean(diag?.reserve), modellFehler: diag?.fehler || null,
-    fehler, maengel, bestanden: maengel.length === 0,
+    fehler, maengel, hinweise, bestanden: maengel.length === 0,
   };
 }
 
@@ -722,11 +1031,20 @@ async function szenarioFahren(sz, datenPfad) {
   await anfrage("/api/sprache/neu", { methode: "POST", body: {}, cookie }).catch(() => {});
 
   const zuege = [];
+  // Sobald eine FRAGE den Praefix genannt hat, darf er auch in den Antworten
+  // danach stehen ("Sag ADSTEST Probeaufnahme ab" -> "Abgesagt, ist raus").
+  // Davor waere er Testmuell aus einem frueheren Lauf.
+  const praefixMuster = new RegExp(PRAEFIX, "i");
+  let praefixErlaubt = false;
   for (const zug of sz.zuege) {
-    const e = await zugFahren(zug, cookie, datenPfad);
+    if (praefixMuster.test(zug.frage)) praefixErlaubt = true;
+    const e = await zugFahren(zug, cookie, datenPfad, praefixErlaubt);
     zuege.push(e);
     console.log(`  ${e.bestanden ? "✅" : "❌"} [${sz.id}] ${(e.dauerMs / 1000).toFixed(1)}s  „${zug.frage.slice(0, 62)}${zug.frage.length > 62 ? "…" : ""}“`);
     if (!e.bestanden) for (const m of e.maengel) console.log(`       ↳ ${m}`);
+    // Hinweise sind KEIN Durchfall — sie sagen nur, welchen Weg sie genommen
+    // hat. Fuer die Diagnose wertvoll, fuer das Urteil bedeutungslos.
+    for (const h of e.hinweise || []) console.log(`       · ${h}`);
     if (AUSFUEHRLICH || !e.bestanden) console.log(`       » ${(e.antwort || "(nichts)").replace(/\n/g, " ").slice(0, 220)}`);
   }
   return { ...kopfDaten(sz), zuege, dauerMs: Date.now() - start, bestanden: zuege.every((z) => z.bestanden) };
@@ -833,8 +1151,21 @@ async function kalenderRaeumen(env) {
            kalenderRest: uebrig ? meine.slice(weg).map((t) => `${t.summary} (${t.start})`) : undefined };
 }
 
+// Die Werkzeug-Hinweise aus allen Zuegen, gebuendelt fuer den Bericht.
+// Sie sind das Gegenstueck zur weichen Werkzeugpruefung: Was frueher elf
+// Szenarien rot gemacht hat, steht jetzt hier — sichtbar, aber ohne Urteil.
+function hinweiseSammeln(ergebnisse) {
+  const raus = [];
+  for (const e of ergebnisse) {
+    for (const z of e.zuege || []) {
+      for (const h of z.hinweise || []) raus.push({ id: e.id, frage: z.frage.slice(0, 70), hinweis: h });
+    }
+  }
+  return raus;
+}
+
 // ---------------------------------------------------------------- Hauptlauf
-(async () => {
+async function hauptlauf() {
   let liste = SZENARIEN;
   if (NUR.length) liste = liste.filter((s) => NUR.includes(s.id) || NUR.includes(s.gruppe));
   if (WIEDERHOLEN > 1) {
@@ -883,6 +1214,7 @@ async function kalenderRaeumen(env) {
         medianMs: median(zuegeAlle.map((z) => z.dauerMs)),
         gesamtMs: Date.now() - start,
       },
+      werkzeugHinweise: hinweiseSammeln(ergebnisse),
       ergebnisse,
     };
     // AUCH UND GERADE HIER AUFRAEUMEN (20.08.2026). Der Fernmodus schreibt in
@@ -897,6 +1229,9 @@ async function kalenderRaeumen(env) {
     fs.writeFileSync(datei, JSON.stringify(bericht, null, 2));
     console.log(`
 Szenarien: ${bericht.zusammenfassung.bestanden}/${bericht.zusammenfassung.szenarien} · Züge: ${bericht.zusammenfassung.zuegeBestanden}/${bericht.zusammenfassung.zuege}`);
+    if (bericht.werkzeugHinweise.length) {
+      console.log(`Werkzeug-Hinweise (kein Durchfall): ${bericht.werkzeugHinweise.length} — stehen im Bericht.`);
+    }
     console.log("Aufgeräumt: " + JSON.stringify(bericht.geraeumt));
     if (rest) {
       console.log(`
@@ -1008,6 +1343,9 @@ Szenarien: ${bericht.zusammenfassung.bestanden}/${bericht.zusammenfassung.szenar
       maxMs: Math.max(0, ...zuegeAlle.map((z) => z.dauerMs)),
       gesamtMs: Date.now() - start,
     },
+    // Kein Durchfall, sondern Diagnose: Wo hat sie ohne Werkzeug geantwortet?
+    // Genau diese Faelle waren bis zum 20.08. elf rote Szenarien.
+    werkzeugHinweise: hinweiseSammeln(ergebnisse),
     abgefangen, geraeumt, abfragen: abfragenAus(protokollLesen(datenPfad)), ergebnisse,
   };
 
@@ -1033,6 +1371,17 @@ Szenarien: ${bericht.zusammenfassung.bestanden}/${bericht.zusammenfassung.szenar
       console.log(`  ${e.id.padEnd(7)} ${e.titel} — ${m[0] || e.fehler || "?"}`);
     }
   }
+  // KEIN DURCHFALL, SONDERN DIAGNOSE (20.08.2026). Bis heute machte jeder
+  // dieser Faelle das Szenario rot — obwohl die Antwort stimmte und der Weg
+  // ohne Abfrage sogar der schnellere war. Jetzt stehen sie hier, sichtbar
+  // und unbewertet: Wer wissen will, wo der STAND schon reicht, liest das.
+  if (bericht.werkzeugHinweise.length) {
+    console.log(`\nWerkzeug-Hinweise (kein Durchfall, ${bericht.werkzeugHinweise.length}):`);
+    for (const h of bericht.werkzeugHinweise.slice(0, 15)) {
+      console.log(`  ${String(h.id).padEnd(7)} ${h.hinweis}`);
+    }
+    if (bericht.werkzeugHinweise.length > 15) console.log(`  … ${bericht.werkzeugHinweise.length - 15} weitere im Bericht.`);
+  }
   // EIN REST IM PRODUKTIVKALENDER MACHT DEN LAUF ROT (20.08.2026).
   //
   // Nach einem Lauf blieb "ADSTEST Probeaufnahme" acht Stunden stehen und wurde
@@ -1042,6 +1391,12 @@ Szenarien: ${bericht.zusammenfassung.bestanden}/${bericht.zusammenfassung.szenar
   const restig = [];
   if (geraeumt.kalenderUebrig) restig.push(`${geraeumt.kalenderUebrig} Termin(e) im Kalender: ${(geraeumt.kalenderRest || []).join(", ")}`);
   if (typeof geraeumt.kalender === "string") restig.push(geraeumt.kalender);
+  // UNGEPRUEFT IST NICHT SAUBER (20.08.2026). Der Fernmodus wertet das schon
+  // aus, der Lauf hier bisher nicht: Mit --trotzdem laeuft er ohne gws-cli
+  // durch, kann den Kalender also weder lesen noch raeumen — und meldete
+  // trotzdem gruen. Genau die Luecke, durch die der Testtermin acht Stunden
+  // im Produktivkalender stand.
+  if (geraeumt.kalenderUngeprueft) restig.push("Kalender ungeprüft: " + geraeumt.kalenderUngeprueft);
   if (geraeumt.fehler) restig.push("Datenbank: " + geraeumt.fehler);
   if (restig.length) {
     console.log("\n⚠  NICHT VOLLSTÄNDIG AUFGERÄUMT — bitte von Hand nachsehen:");
@@ -1050,10 +1405,27 @@ Szenarien: ${bericht.zusammenfassung.bestanden}/${bericht.zusammenfassung.szenar
 
   console.log("\nBericht: " + path.relative(WURZEL, datei));
   process.exit(durchgefallen.length || restig.length ? 1 : 0);
-})().catch((e) => { console.log("FEHLER: " + (e.stack || e.message)); process.exit(1); });
+}
 
 function median(werte) {
   if (!werte.length) return 0;
   const s = [...werte].sort((a, b) => a - b);
   return s[Math.floor(s.length / 2)];
 }
+
+// NUR LAUFEN, WENN JEMAND DIESE DATEI AUFRUFT (20.08.2026).
+//
+// Vorher startete schon das blosse Laden einen Server. scripts/test-harnisch.js
+// musste die Szenarienliste deshalb als TEXT herausschneiden und mit
+// new Function() nachbauen — ein Waechter, der eine Abschrift prueft statt des
+// Originals. Mit dieser Weiche kann er require() benutzen und beschiesst genau
+// den Code, der morgen laeuft.
+if (require.main === module) {
+  hauptlauf().catch((e) => { console.log("FEHLER: " + (e.stack || e.message)); process.exit(1); });
+}
+
+module.exports = {
+  SZENARIEN, bewerteZug, gesprochen, PRAEFIX, WERKZEUG_PFLICHT,
+  PANNE, INTERN, BETRAG, MENGE, AUSREDE, ROHTEXT, UHRZEIT, KEIN_TERMIN, WETTER,
+  FLUG_DA, FLUG_WEG,
+};

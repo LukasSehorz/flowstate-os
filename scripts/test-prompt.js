@@ -43,7 +43,7 @@ const ERWARTET = [
   "beleg_erstellen", "beleg_nummer", "anrufen",
   // 20.08.2026 dazugekommen, fuer die Werbeaufnahmen: ein echter Browser
   // (lib/computer.js) und Nachschub fuer die Anrufliste (lib/leads-nachschub.js).
-  "computer_auftrag", "leads_nachschub",
+  "computer_auftrag", "leads_nachschub", "steuer_versand", "gespraech_auswerten",
   "zeigen",
 ];
 const fehlend = ERWARTET.filter((n) => !NAMEN.includes(n));
@@ -61,7 +61,16 @@ pruefe("ausAufrufen() verarbeitet jedes Werkzeug" + (unbekannt.length ? ` — ig
 const ohneBeschreibung = WERKZEUGE.filter((w) => !w.description || w.description.length < 20).map((w) => w.name);
 pruefe("Jedes Werkzeug erklaert seinen Zweck" + (ohneBeschreibung.length ? ` — duenn: ${ohneBeschreibung}` : ""),
   !ohneBeschreibung.length);
-const ohnePflicht = WERKZEUGE.filter((w) => !w.input_schema.required.length).map((w) => w.name);
+// Ausnahme mit Grund (20.08.): steuer_versand hat absichtlich KEIN Pflichtfeld.
+// Weder Zeitraum noch Adresse muessen kommen — fehlt der Zeitraum, nimmt der
+// Server den letzten abgeschlossenen Monat und sagt ihn im Satz ("Die
+// Juli-Rechnungen liegen bereit"), sodass "nein, den Juni" ihn umbiegt. Ein
+// Pflichtfeld wuerde das Modell zu einer Rueckfrage zwingen, die niemand
+// braucht — und im Werbespot ist jede unnoetige Rueckfrage eine Szene weniger.
+const OHNE_PFLICHT_ERLAUBT = ["steuer_versand"];
+const ohnePflicht = WERKZEUGE
+  .filter((w) => !w.input_schema.required.length && !OHNE_PFLICHT_ERLAUBT.includes(w.name))
+  .map((w) => w.name);
 pruefe("Jedes Werkzeug hat Pflichtfelder" + (ohnePflicht.length ? ` — offen: ${ohnePflicht}` : ""), !ohnePflicht.length);
 
 // Regeln, die frueher im Prompt standen und jetzt im Schema stehen muessen —
