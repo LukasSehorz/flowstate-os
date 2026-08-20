@@ -45,6 +45,11 @@ const MASSE = [
 const SEITEN = [
   { name: "sprache", pfad: "/sprache" },
   { name: "zentrale", pfad: "/" },
+  // Die Buehne fuer die Aufnahme (20.08.). Zwei Bilder statt einem: Der
+  // Zustand VOR dem Klatschen ist die halbe Miete — ein Bildschirm, der
+  // wartet. Ausgeloest wird per Leertaste, weil ein kopfloser Browser kein
+  // Mikrofon hat; im Code ist es derselbe Weg wie beim Klatschen.
+  { name: "buehne", pfad: "/buehne", wecken: true },
 ];
 
 const nur = process.argv.includes("--nur") ? process.argv[process.argv.indexOf("--nur") + 1] : "";
@@ -128,6 +133,15 @@ const nur = process.argv.includes("--nur") ? process.argv[process.argv.indexOf("
         const datei = path.join(ZIEL, `${s.name}-${mass.name}.png`);
         await seite.screenshot({ path: datei, fullPage: mass.name !== "gross" });
         console.log("  " + path.relative(WURZEL, datei));
+
+        // Buehne: einmal schlafend (oben), einmal aufgefahren.
+        if (s.wecken) {
+          await seite.keyboard.press("Space");
+          await new Promise((r) => setTimeout(r, 4200));
+          const wach = path.join(ZIEL, `${s.name}-wach-${mass.name}.png`);
+          await seite.screenshot({ path: wach, fullPage: false });
+          console.log("  " + path.relative(WURZEL, wach));
+        }
       }
       await seite.close();
     }

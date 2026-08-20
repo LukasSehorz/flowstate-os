@@ -1498,8 +1498,14 @@ app.get("/", async (req, res) => {
   // und diese eine soll dort keine Sonderregel hinterlassen. Damit faellt
   // zugleich crm-dashboard-design weg — die Graphit-Palette der Arbeitsseiten
   // haette gegen das Pult gearbeitet.
+  // ?buehne=1 — die Zentrale sitzt dann in einem Rahmen auf /buehne (der
+  // Aufnahme-Seite). Dort bringt sie ihre eigene Schiene und Kopfleiste ein
+  // ZWEITES Mal mit, weil die Buehne beides schon hat; im Bild stand alles
+  // doppelt. Die Klasse blendet ihre Navigation aus, sonst bleibt alles.
+  const imRahmen = String(req.query.buehne || "") === "1";
   const seite = layout("Zentrale", "zentrale-start", inhalt, req)
-    .replace(/<body[^>]*>/, () => `<body class="jarvis hud-zentrale">\n${HUD_VERTRAG}`);
+    .replace(/<body[^>]*>/, () =>
+      `<body class="jarvis hud-zentrale${imRahmen ? " hud-im-rahmen" : ""}">\n${HUD_VERTRAG}`);
   res.send(seite);
 });
 
