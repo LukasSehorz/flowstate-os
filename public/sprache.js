@@ -73,9 +73,20 @@
   let drehAus = drehFrage === "aus";
   let drehbuch = null;      // { titel, zuege: [{id, text, audio, oeffnen}] }
   let drehZug = 0;
-  // Zwei Fenster: In Creative 3 liegen Rechnung und Excel nebeneinander. Ein
-  // einziges Fenster wuerde die erste Datei durch die zweite ersetzen.
-  const mappen = { drehmappe: null, drehmappe2: null };
+  // EIN FENSTER JE INHALT, und alle bleiben offen (20.08.2026, Wunsch Lukas).
+  //
+  // Vorher gab es zwei feste Fenster, und jedes neue Dokument ersetzte das
+  // vorige. Jetzt bekommt jeder Inhalt sein eigenes — der Name wird aus der
+  // Adresse abgeleitet. Zwei Zuege, die dieselbe Seite zeigen (C2_05 und C2_07
+  // den Kalender), landen damit von selbst im selben Fenster und laden es neu,
+  // statt einen zweiten Kalender-Tab aufzumachen.
+  const mappen = {};          // Name -> Fenster
+  let mappenNamen = [];       // alle, die dieses Drehbuch braucht
+
+  function fensterName(datei) {
+    const basis = String(datei).split("?")[0].split("#")[0];
+    return "dreh-" + basis.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+  }
 
   // Ein Fenster, das SPAETER ohne Nutzergeste weiterspringen darf.
   //
@@ -85,29 +96,41 @@
   function mappeVorbereiten() {
     const einmal = () => {
       document.removeEventListener("click", einmal);
-      try {
-        mappen.drehmappe = window.open("about:blank", "drehmappe");
-        mappen.drehmappe2 = window.open("about:blank", "drehmappe2");
-        // Das zweite Fenster nach hinten: Solange nur eine Datei aufgeht, soll
-        // das erste vorne liegen.
-        try { mappen.drehmappe.focus(); } catch {}
-      } catch {}
+      // ALLE auf einmal, und zwar JETZT: window.open braucht eine Nutzergeste,
+      // ein Klatschen ist keine. Spaeter wird nur noch umgelenkt.
+      mappenNamen.forEach((name) => {
+        try { mappen[name] = window.open("about:blank", name); } catch {}
+      });
+      console.log("Drehbuch: " + mappenNamen.length + " Fenster vorbereitet");
     };
     document.addEventListener("click", einmal);
   }
 
   function mappeZeigen(dateien) {
     const liste = Array.isArray(dateien) ? dateien : (dateien ? [dateien] : []);
-    liste.forEach((datei, i) => {
-      const name = i === 0 ? "drehmappe" : "drehmappe2";
+    liste.forEach((datei) => {
+      const name = fensterName(datei);
       let url;
       if (/^https?:\/\//.test(datei)) {
-        url = datei;                       // WhatsApp Web
+        // WhatsApp Web bleibt, wie es ist — ein Anhaengsel wuerde dort die
+        // Sitzung durcheinanderbringen. Der Google-Kalender dagegen MUSS neu
+        // laden, sonst fehlt in C2_07 der gerade angelegte Termin.
+        url = /calendar\.google\.com/.test(datei)
+          ? datei + (datei.includes("?") ? "&" : "?") + "_=" + Date.now()
+          : datei;
       } else if (datei.startsWith("/")) {
-        // Eigene Seite. Mit einem frischen Anhaengsel, sonst laedt der Browser
-        // dieselbe Adresse NICHT neu — und genau das ist der Fall in C2_07:
-        // Der Kalender liegt schon offen und muss den neuen Termin zeigen.
-        url = datei + (datei.includes("?") ? "&" : "?") + "_=" + Date.now();
+        // Eigene Seite — und zwingend mit drehbuch=aus.
+        //
+        // WARUM (20.08.2026): Jede Seite des OS laedt die Sprachsteuerung mit.
+        // Ohne das Aus haette der Kalender-Tab das Drehbuch ebenfalls geladen,
+        // die Fuehrung uebernommen — und der Haupt-Tab waere stumm geworden.
+        // Genau das ist im Dreh passiert: Sobald der Kalender aufging, ging
+        // nichts mehr.
+        //
+        // Das frische Anhaengsel muss dazu: Sonst laedt der Browser dieselbe
+        // Adresse NICHT neu, und C2_07 zeigte den gerade angelegten Termin nicht.
+        url = datei + (datei.includes("?") ? "&" : "?")
+          + "drehbuch=aus&_=" + Date.now();
       } else {
         url = "/regie/datei/" + encodeURIComponent(datei);
       }
@@ -164,6 +187,11 @@
       if (!r.ok) throw new Error("HTTP " + r.status);
       drehbuch = await r.json();
       drehZug = 0;
+      const gesehen = new Set();
+      (drehbuch.zuege || []).forEach((z) => (z.oeffnen || []).forEach((d) => {
+        const n = fensterName(d);
+        if (!gesehen.has(n)) { gesehen.add(n); mappenNamen.push(n); }
+      }));
       mappeVorbereiten();
       drehFuehrungUebernehmen();
       if (el.hinweis) el.hinweis.textContent =
