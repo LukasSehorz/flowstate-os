@@ -117,9 +117,34 @@
     });
   }
 
+  // Was sich NICHT einbetten laesst. WhatsApp Web schickt X-Frame-Options und
+  // bleibt im Rahmen weiss — das muss ein eigenes Fenster bekommen.
+  const NICHT_EINBETTBAR = /web\.whatsapp\.com|accounts\.google\.com/;
+
+  // Eigenes Fenster fuer genau diese Faelle.
+  //
+  // Ohne Nutzergeste blockt Chrome das. Wer Pop-ups fuer die Seite einmal
+  // erlaubt, bekommt es trotzdem — und weil das der einzige Weg ist, WhatsApp
+  // im Bild zu haben, wird es versucht und der Fehlschlag SICHTBAR gemeldet
+  // statt still geschluckt.
+  function externZeigen(url) {
+    let w = null;
+    try { w = window.open(url, "dreh-extern"); } catch { /* geblockt */ }
+    if (!w) {
+      console.warn("Fenster blockiert:", url);
+      if (el.hinweis) {
+        el.hinweis.textContent = "Pop-up blockiert — WhatsApp bitte von Hand öffnen.";
+      }
+      return false;
+    }
+    try { w.focus(); } catch {}
+    return true;
+  }
+
   function mappeZeigen(dateien) {
     const liste = Array.isArray(dateien) ? dateien : (dateien ? [dateien] : []);
     liste.forEach((datei) => {
+      if (NICHT_EINBETTBAR.test(datei)) return void externZeigen(datei);
       let url;
       if (/^https?:\/\//.test(datei)) {
         // Der Google-Kalender MUSS neu laden, sonst fehlt in C2_07 der gerade
