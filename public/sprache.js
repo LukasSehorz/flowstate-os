@@ -296,6 +296,33 @@
   // gleich schliessen (sonst muesste Lukas staendig neu wecken). Laeuft im
   // Hintergrund noch Arbeit, bleibt es unbegrenzt offen: er soll jederzeit
   // "wie schaut's aus?" dazwischenwerfen koennen (Lukas 24.07.).
+  // Was passiert, wenn der Server nicht erreichbar ist (20.08.2026).
+  //
+  // Nicht schweigen und nicht so tun, als haette man den Nutzer nicht
+  // verstanden. Beim ersten Mal genuegt ein kurzer Hinweis und ein neuer
+  // Anlauf — meist ist der Server binnen Sekunden zurueck (Neustart nach
+  // einem Deploy dauert rund zehn). Bleibt es dabei, muss sie es SAGEN:
+  // Wer ins Mikrofon spricht und nichts hoert, hat keine Chance zu erkennen,
+  // ob es an ihm, am Mikrofon oder an der Leitung liegt.
+  let netzFehlerZaehler = 0;
+  async function netzAussetzer() {
+    netzFehlerZaehler++;
+    if (el.hinweis) {
+      el.hinweis.textContent = netzFehlerZaehler === 1
+        ? "Verbindung weg — ich versuch's gleich nochmal."
+        : "Keine Verbindung zum Server. Prüf das Netz oder lad die Seite neu.";
+    }
+    setzeZustand("ruhe");
+    if (netzFehlerZaehler === 2) {
+      // Einmal laut, nicht bei jedem Anlauf — sonst redet sie im Kreis.
+      await sprich("Ich komme gerade nicht an den Server. Sag es nochmal, sobald die Verbindung steht.")
+        .catch(() => {});
+    }
+    // Warten und neu ansetzen: beim ersten Mal kurz, danach laenger.
+    await new Promise((r) => setTimeout(r, netzFehlerZaehler === 1 ? 1500 : 4000));
+    if (lausche) geduld();
+  }
+
   function geduld() {
     if (!imGespraech) { setzeZustand("ruhe"); return; }
     if (pausiert) { setzeZustand("pause"); return; }   // Pause laeuft nicht ab
@@ -454,14 +481,32 @@
       if (el.hinweis) el.hinweis.textContent = "…";
       setzeZustand("denken");
       const blob = new Blob(stuecke, { type: rec.mimeType || "audio/webm" });
-      let d = null;
+      // NETZFEHLER IST NICHT "NICHTS VERSTANDEN" (20.08.2026).
+      //
+      // Hier stand ein leeres catch mit dem Kommentar "Netz weg". Danach war
+      // d = null, der Text leer, und die Seite sagte "Nichts verstanden —
+      // sag's nochmal." Also genau das, was sie auch sagt, wenn jemand ins
+      // Leere gehustet hat. Lukas hat daraufhin weitergesprochen, es kam
+      // wieder nichts an, und das ging endlos so weiter: Die Kugel zeigte
+      // "hoert zu", der Server bekam nie etwas.
+      //
+      // Ausgeloest hat es an dem Tag vermutlich ein Neustart des Servers
+      // mitten im Gespraech. Der Grund spielt aber keine Rolle — eine
+      // Oberflaeche, die einen Verbindungsabbruch als Hoerfehler des Nutzers
+      // ausgibt, laesst ihn gegen eine Wand reden.
+      let d = null, netzWeg = false;
       try {
-        d = await fetch("/api/sprache/hoeren", {
+        const r = await fetch("/api/sprache/hoeren", {
           method: "POST",
           headers: { "Content-Type": blob.type || "application/octet-stream" },
           body: blob,
-        }).then((r) => r.json());
-      } catch { /* Netz weg */ }
+        });
+        if (!r.ok) netzWeg = true;               // 502/503 beim Neustart
+        else d = await r.json().catch(() => null);
+      } catch { netzWeg = true; }                // abgebrochen, offline
+
+      if (netzWeg) { await netzAussetzer(); return; }
+      netzFehlerZaehler = 0;
 
       const text = (d && d.ok && d.text || "").trim();
       if (!text) {
