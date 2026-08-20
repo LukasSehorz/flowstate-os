@@ -341,6 +341,10 @@
 
   async function klatschAusgeloest() {
     if (el.hinweis) el.hinweis.textContent = "…";
+    // Die Buehne (/buehne) haengt hier ihre Inszenierung an: Gehirn auffahren,
+    // dann das Command Center dazuschieben. Auf /sprache hoert niemand zu,
+    // dann passiert nichts weiter.
+    try { document.dispatchEvent(new CustomEvent("alexandra-geweckt")); } catch {}
     // Das Mikro der Wache freigeben, bevor die Aufnahme startet — zwei
     // gleichzeitige Zugriffe handelt Android als neue Tonsitzung aus, und
     // jede Neuaushandlung ist ein Aussetzer in der Ausgabe.

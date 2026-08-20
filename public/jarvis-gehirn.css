@@ -609,3 +609,87 @@ body.jarvis-buehne .topbar { border-bottom: 1px solid var(--j-linie); }
 @media (prefers-reduced-motion: reduce) {
   .gh-spur::after { animation: none; opacity: .5; }
 }
+
+/* ==================================================================== BÜHNE
+
+   Nur fuer die Werbeaufnahme (20.08.2026). Ablauf: Jannik kommt herein,
+   klatscht zweimal, das Gehirn faehrt auf, Alexandra begruesst ihn, danach
+   schiebt sich das Command Center dazu.
+
+   Der Zustand VOR dem Klatschen ist der wichtigste Teil: fast schwarz, ein
+   einzelnes Wort, ein sehr langsamer Puls. Ein Bildschirm, der aussieht, als
+   warte er — nicht als sei er aus. Erst dadurch wirkt das Auffahren wie ein
+   Erwachen und nicht wie ein Seitenwechsel.
+
+   Alles ist von Anfang an geladen, auch die Zentrale im Rahmen. Beim
+   Klatschen wird nur noch aufgeblendet: nichts nachgeladen, nichts, das
+   haengen kann. Genau das war gemeint mit "die Tabs sind schon offen, nur
+   zugeklappt". */
+
+/* Solange sie schlaeft: die Sprachbuehne bis auf das Noetigste abgedunkelt. */
+body.jarvis:not(.buehne-wach) .gh-kopf,
+body.jarvis:not(.buehne-wach) .gh-fuss { opacity: 0; transition: opacity 600ms ease; }
+body.jarvis:not(.buehne-wach) .gh-canvas { opacity: .07; transition: opacity 1400ms ease; }
+
+/* Der Vorhang: ein schwarzes Tuch mit einem Atemzug darin. */
+.bu-vorhang {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: radial-gradient(60% 45% at 50% 50%, #060B14 0%, #02040A 70%, #010206 100%);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: opacity 900ms ease, visibility 900ms;
+}
+.bu-vorhang::after {
+  content: "bereit";
+  font-family: var(--j-mono);
+  font-size: 11px;
+  letter-spacing: .42em;
+  text-transform: uppercase;
+  color: var(--j-blau);
+  opacity: .38;
+  animation: bu-atmen 4.2s ease-in-out infinite;
+}
+@keyframes bu-atmen {
+  0%, 100% { opacity: .16; letter-spacing: .42em; }
+  50%      { opacity: .52; letter-spacing: .50em; }
+}
+
+/* Geklatscht: Vorhang weg, Gehirn faehrt auf. */
+body.buehne-wach .bu-vorhang { opacity: 0; visibility: hidden; }
+body.buehne-wach .gh-kopf,
+body.buehne-wach .gh-fuss { opacity: 1; }
+body.buehne-wach .gh-canvas { opacity: 1; }
+
+/* Das Command Center. Es sitzt am unteren Rand und faehrt hoch — nicht als
+   Ueberblendung, sondern als zweites Geraet, das dazukommt. */
+.bu-hud {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: 58vh;
+  z-index: 50;
+  transform: translateY(101%);
+  transition: transform 1100ms cubic-bezier(.16, 1, .3, 1);
+  border-top: 1px solid var(--j-linie-akzent);
+  box-shadow: 0 -30px 80px rgba(0, 0, 0, .75), 0 -1px 0 rgba(75, 141, 248, .35);
+  background: var(--j-grund);
+}
+.bu-hud iframe { width: 100%; height: 100%; border: 0; display: block; }
+body.buehne-hud-an .bu-hud { transform: translateY(0); }
+
+/* Das Gehirn rueckt nach oben, sobald das Pult da ist — sonst verdeckt es die
+   untere Haelfte, und die Kamera sieht ein halbes Gehirn. */
+body.buehne-hud-an .gh { transform: translateY(-19vh) scale(.82); transition: transform 1100ms cubic-bezier(.16, 1, .3, 1); }
+
+/* Auf dem Handy nimmt das Pult mehr Platz — dort wird es einzeln gefilmt. */
+@media (max-width: 620px) {
+  .bu-hud { height: 52vh; }
+  body.buehne-hud-an .gh { transform: translateY(-13vh) scale(.9); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bu-vorhang, .bu-hud, body.buehne-hud-an .gh { transition-duration: .01ms; }
+  .bu-vorhang::after { animation: none; }
+}
