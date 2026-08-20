@@ -253,6 +253,114 @@
   // Auf das Wake-Word: Gespraech mit Begruessung starten.
   function geweckt() { gespraechStarten(true); }
 
+  // ------------------------------------------------------ Zweimal klatschen
+  //
+  // Gewuenscht am 20.08.2026 fuer die Meta-Ads: reinkommen, zweimal klatschen,
+  // Alexandra meldet sich. Kein Knopf, kein Wake-Wort — das ist der Moment,
+  // der die Anzeige traegt.
+  //
+  // WARUM EIN EIGENER LAUSCHER und nicht der vorhandene Pegel: Der laeuft nur
+  // waehrend einer Aufnahme, und das Mikro wird zwischen den Runden bewusst
+  // geschlossen (siehe pegelStoppen — sonst frisst die Echounterdrueckung
+  // Alexandras eigene Woerter). Der Klatsch-Lauscher braucht das Gegenteil:
+  // ein offenes Ohr, solange NICHTS passiert.
+  //
+  // WARUM noiseSuppression AUS: Genau dafuer ist sie gebaut — ein kurzer
+  // lauter Knall gilt ihr als Stoergeraeusch und wird entfernt. Mit
+  // eingeschalteter Unterdrueckung kommt vom Klatschen fast nichts an.
+  // autoGainControl aus demselben Grund aus: Sie wuerde den Pegel nachregeln
+  // und den Unterschied zwischen Sprache und Knall einebnen.
+  const KLATSCH = {
+    schwelle: 0.55,   // Spitze (0..1) — deutlich ueber normaler Sprache
+    ruhe: 0.18,       // davor muss es leise gewesen sein: ein Knall, kein Anschwellen
+    minAbstand: 120,  // ms — schneller klatscht niemand zweimal
+    maxAbstand: 900,  // ms — laenger ist es kein Doppelklatschen mehr
+    sperre: 2500,     // ms Ruhe nach dem Ausloesen, damit es nicht doppelt zuendet
+  };
+  let klatschStrom = null, klatschAnalyser = null, klatschRAF = 0;
+  let klatschDaten = null, letzterKnall = 0, letztesAusloesen = 0, warLaut = false;
+
+  async function klatschWacheStarten() {
+    if (klatschAnalyser || konfig.klatsch === false) return;
+    try {
+      const ctx = audioKontext();
+      klatschStrom = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false },
+      });
+      const q = ctx.createMediaStreamSource(klatschStrom);
+      klatschAnalyser = ctx.createAnalyser();
+      klatschAnalyser.fftSize = 512;
+      q.connect(klatschAnalyser);
+      klatschDaten = new Uint8Array(klatschAnalyser.fftSize);
+      klatschPruefen();
+    } catch { /* ohne Mikrofonfreigabe gibt es die Klatsch-Wache eben nicht */ }
+  }
+
+  function klatschWacheStoppen() {
+    if (klatschRAF) cancelAnimationFrame(klatschRAF);
+    klatschRAF = 0;
+    try { klatschStrom?.getTracks().forEach((t) => t.stop()); } catch {}
+    klatschStrom = null;
+    klatschAnalyser = null;
+  }
+
+  function klatschPruefen() {
+    klatschRAF = requestAnimationFrame(klatschPruefen);
+    if (!klatschAnalyser) return;
+    // Nur im Ruhezustand. Waehrend sie spricht oder zuhoert, hat ein Knall
+    // nichts auszuloesen — und ihre eigene Stimme soll ihn gar nicht erst
+    // ausloesen koennen.
+    if (imGespraech || zustand !== "ruhe") { warLaut = false; return; }
+
+    // Zeitbereich, nicht Frequenz: Ein Klatschen ist ein AUSSCHLAG, kein Ton.
+    klatschAnalyser.getByteTimeDomainData(klatschDaten);
+    let spitze = 0;
+    for (let i = 0; i < klatschDaten.length; i++) {
+      const v = Math.abs(klatschDaten[i] - 128) / 128;
+      if (v > spitze) spitze = v;
+    }
+
+    const jetzt = Date.now();
+    if (spitze < KLATSCH.ruhe) { warLaut = false; return; }
+    if (spitze < KLATSCH.schwelle || warLaut) return;
+
+    // Ein Knall aus der Stille heraus.
+    warLaut = true;
+    const seitAusloesen = jetzt - letztesAusloesen;
+    if (seitAusloesen < KLATSCH.sperre) { letzterKnall = 0; return; }
+
+    const abstand = jetzt - letzterKnall;
+    if (letzterKnall && abstand >= KLATSCH.minAbstand && abstand <= KLATSCH.maxAbstand) {
+      letzterKnall = 0;
+      letztesAusloesen = jetzt;
+      klatschAusgeloest();
+    } else {
+      letzterKnall = jetzt;
+    }
+  }
+
+  async function klatschAusgeloest() {
+    if (el.hinweis) el.hinweis.textContent = "…";
+    // Das Mikro der Wache freigeben, bevor die Aufnahme startet — zwei
+    // gleichzeitige Zugriffe handelt Android als neue Tonsitzung aus, und
+    // jede Neuaushandlung ist ein Aussetzer in der Ausgabe.
+    klatschWacheStoppen();
+    try { wakeErkennung?.stop(); } catch {}
+    await gespraechStarten(false);          // Gruss kommt gleich, aber unser eigener
+    await sprich(klatschGruss()).catch(() => {});
+    geduld();                                // ab hier normal zuhoeren
+  }
+
+  // "Guten Morgen, Boss" ist der Satz aus dem Drehbuch. Nach der Tageszeit
+  // abgewandelt, damit sie nachmittags nicht guten Morgen wuenscht — das
+  // faellt in einer Aufnahme sofort auf.
+  function klatschGruss() {
+    const h = new Date().getHours();
+    if (h < 11) return "Guten Morgen, Boss.";
+    if (h < 18) return "Guten Tag, Boss.";
+    return "Guten Abend, Boss.";
+  }
+
   async function gespraechStarten(mitGruss) {
     imGespraech = true;
     letzteAktivitaet = Date.now();
@@ -277,6 +385,10 @@
   function gespraechBeenden() {
     imGespraech = false;
     lausche = false;
+    // Die Klatsch-Wache uebernimmt wieder, sobald das Gespraech vorbei ist.
+    // Kurz verzoegert: Sonst hoert sie den letzten Satz aus dem Lautsprecher
+    // noch mit und koennte sich am eigenen Schlusswort verschlucken.
+    setTimeout(() => { if (!imGespraech) klatschWacheStarten(); }, 1200);
     pausiert = false;               // beim naechsten Wecken wieder normal zuhoeren
     pauseKnopfSetzen();
     clearTimeout(stilleTimer);
@@ -1092,6 +1204,9 @@
       el.stimmeInfo.textContent = k.elevenlabs ? "Stimme: ElevenLabs" : "Stimme: Browser (ElevenLabs nicht eingerichtet)";
     }
     if (wakeAn) wakeStarten();   // Wunsch ueberlebt den Seitenwechsel
+    // Zweimal klatschen weckt sie — ohne Knopf, ohne Wake-Wort. Braucht die
+    // Mikrofonfreigabe; ohne sie tut klatschWacheStarten() still nichts.
+    klatschWacheStarten();
   }).catch(() => {});
 
   // STANDORT MELDEN (07.08.2026, Wunsch Lukas: "er soll immer wissen, wo ich
