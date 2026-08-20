@@ -1470,6 +1470,18 @@
     if (DREHBUCH_NR === null && !drehAus && istGrosseSeite && konfig.drehbuch != null) {
       DREHBUCH_NR = String(konfig.drehbuch);
     }
+    // "?drehbuch=aus" heisst: Diese Seite fasst das Mikrofon NICHT an.
+    //
+    // WARUM (20.08.2026): Die Inhalte im zweiten Fenster sind teils eigene
+    // Seiten — der Kalender etwa. Jede OS-Seite laedt diese Datei mit und
+    // startet die Klatsch-Wache, also einen zweiten Zugriff aufs Mikrofon.
+    // Der Sprachbuehne wurde es damit unter den Fuessen weggezogen: geklatscht,
+    // geredet, nichts kam an. Ein "aus" muss deshalb wirklich alles abschalten,
+    // nicht nur das Drehbuch.
+    if (drehAus) {
+      console.log("Sprachsteuerung auf dieser Seite aus (drehbuch=aus).");
+      return;
+    }
     if (wakeAn && DREHBUCH_NR === null) wakeStarten();
     // Zweimal klatschen weckt sie — ohne Knopf, ohne Wake-Wort. Braucht die
     // Mikrofonfreigabe; ohne sie tut klatschWacheStarten() still nichts.
