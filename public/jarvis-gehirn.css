@@ -627,9 +627,15 @@ body.jarvis-buehne .topbar { border-bottom: 1px solid var(--j-linie); }
    zugeklappt". */
 
 /* Solange sie schlaeft: die Sprachbuehne bis auf das Noetigste abgedunkelt. */
-body.jarvis:not(.buehne-wach) .gh-kopf,
-body.jarvis:not(.buehne-wach) .gh-fuss { opacity: 0; transition: opacity 600ms ease; }
-body.jarvis:not(.buehne-wach) .gh-canvas { opacity: .07; transition: opacity 1400ms ease; }
+/* NUR AUF DER BUEHNE ABDUNKELN (korrigiert 20.08.2026).
+   Diese drei Regeln standen vorher auf body.jarvis — also auf JEDER
+   Jarvis-Seite. Auf /sprache wird aber nie geklatscht, die Klasse
+   buehne-wach kommt dort nie dazu, und das Gehirn blieb dauerhaft auf 7 %
+   Deckkraft stehen: fast unsichtbar. Der Abdunkler gehoert ausschliesslich
+   zur Aufnahme-Buehne, wo er die Erwartung vor dem Klatschen aufbaut. */
+body.buehne:not(.buehne-wach) .gh-kopf,
+body.buehne:not(.buehne-wach) .gh-fuss { opacity: 0; transition: opacity 600ms ease; }
+body.buehne:not(.buehne-wach) .gh-canvas { opacity: .07; transition: opacity 1400ms ease; }
 
 /* Der Vorhang: ein schwarzes Tuch mit einem Atemzug darin. */
 .bu-vorhang {
@@ -658,10 +664,10 @@ body.jarvis:not(.buehne-wach) .gh-canvas { opacity: .07; transition: opacity 140
 }
 
 /* Geklatscht: Vorhang weg, Gehirn faehrt auf. */
-body.buehne-wach .bu-vorhang { opacity: 0; visibility: hidden; }
-body.buehne-wach .gh-kopf,
-body.buehne-wach .gh-fuss { opacity: 1; }
-body.buehne-wach .gh-canvas { opacity: 1; }
+body.buehne.buehne-wach .bu-vorhang { opacity: 0; visibility: hidden; }
+body.buehne.buehne-wach .gh-kopf,
+body.buehne.buehne-wach .gh-fuss { opacity: 1; }
+body.buehne.buehne-wach .gh-canvas { opacity: 1; }
 
 /* Das Command Center. Es sitzt am unteren Rand und faehrt hoch — nicht als
    Ueberblendung, sondern als zweites Geraet, das dazukommt. */
