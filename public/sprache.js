@@ -93,6 +93,23 @@
   }
 
   let popupGewarnt = false;
+
+  // WO die Inhalte aufgehen sollen: auf dem Bildschirm RECHTS neben dem, auf
+  // dem das Gehirn steht. Ein eigenes Fenster statt eines Tabs — nur so laesst
+  // sich die Lage vorgeben, und nur so bleibt das Gehirn durchgehend im Bild.
+  //
+  // availLeft + availWidth ist die linke Kante des naechsten Bildschirms. Wer
+  // die Bildschirme anders stehen hat, kann es ueberschreiben:
+  //   localStorage.setItem("dreh-bildschirm-x", "2560")
+  function fensterLage() {
+    const gespeichert = Number(localStorage.getItem("dreh-bildschirm-x"));
+    const x = Number.isFinite(gespeichert) && gespeichert > 0
+      ? gespeichert
+      : (window.screen.availLeft || 0) + (window.screen.availWidth || 1920);
+    const breite = Math.max(1100, Math.min(1920, window.screen.availWidth || 1600));
+    const hoehe = Math.max(700, (window.screen.availHeight || 1000) - 60);
+    return `popup=yes,width=${breite},height=${hoehe},left=${x},top=0`;
+  }
   let drehPassiv = false;
 
   function mappeZeigen(dateien) {
@@ -116,8 +133,21 @@
       }
 
       let w = null;
-      try { w = window.open(url, tabName(datei)); } catch { /* geblockt */ }
-      if (w) { try { w.focus(); } catch {} return; }
+      try { w = window.open(url, tabName(datei), fensterLage()); } catch { /* geblockt */ }
+      if (w) {
+        // Kurz nach vorn holen, damit das Fenster wirklich sichtbar wird —
+        // und den Blick sofort zurueck aufs Gehirn.
+        //
+        // WARUM ZURUECK (20.08.2026): Verliert der Gehirn-Tab die Sicht,
+        // drosselt Chrome seine Zeitgeber auf einmal pro Minute. Die
+        // Stille-Erkennung laeuft aber auf einem 100-ms-Takt — sie steht dann
+        // still, die Aufnahme endet nie, und es geht nicht mehr weiter. Genau
+        // das ist ab dem Kalender passiert: WhatsApp kam nicht mehr, und
+        // sprechen half auch nicht.
+        try { w.focus(); } catch {}
+        try { window.focus(); } catch {}
+        return;
+      }
 
       // Sichtbar melden statt still schlucken: Im Take steht man sonst davor
       // und weiss nicht, warum nichts kommt.
