@@ -22,6 +22,8 @@
 
   let konfig = { elevenlabs: false, hermes: false, wakeWord: "alexandra", begruessung: "" };
   let zustand = "ruhe";
+  const AGENT_IM_HTML =
+    (document.getElementById("kugel-wort")?.textContent || "Alexandra").trim();
   // Standardmaessig AN: "Hey Alexandra" soll ohne Vorbereitung funktionieren,
   // auf jeder Seite. Nur wer es ausdruecklich abschaltet, bekommt Ruhe —
   // deshalb Vergleich auf "aus" statt auf "an".
@@ -278,10 +280,16 @@
     zustand = z;
     el.kugel.dataset.zustand = z;
     if (el.zustandText) el.zustandText.textContent = text || WORTE[z] || z;
-    // Im Ruhezustand steht der Name des Agenten da. Er kommt vom Server
-    // (konfig.agent), damit ihn eine einzige Stelle bestimmt.
+    // Im Ruhezustand steht der Name des Agenten da.
+    //
+    // ZWEI QUELLEN, und das ist Absicht (20.08.2026): konfig.agent kommt erst
+    // mit /api/sprache/status an, also einen Wimpernschlag zu spaet. Bis dahin
+    // gilt, was der SERVER schon ins HTML geschrieben hat — sonst ueberschreibt
+    // der erste setzeZustand-Aufruf das gerenderte JARVIS mit dem Standardwert,
+    // und es bleibt so stehen, bis jemand den Zustand wechselt. Genau das war
+    // im ersten Drehversuch auf dem Bildschirm zu sehen.
     if (el.wort) el.wort.textContent = z === "ruhe"
-      ? (konfig.agent || "Alexandra").toUpperCase()
+      ? (konfig.agent || AGENT_IM_HTML).toUpperCase()
       : (WORTE[z] || "").toUpperCase();
   }
 
@@ -1319,6 +1327,7 @@
 
   fetch("/api/sprache/status").then((r) => r.json()).then((k) => {
     konfig = { ...konfig, ...k };
+    setzeZustand(zustand);   // Name neu setzen, jetzt ist er bekannt
     if (el.stimmeInfo) {
       el.stimmeInfo.textContent = k.elevenlabs ? "Stimme: ElevenLabs" : "Stimme: Browser (ElevenLabs nicht eingerichtet)";
     }
