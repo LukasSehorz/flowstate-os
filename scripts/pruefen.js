@@ -85,7 +85,31 @@ const TESTS = [
   // scripts/ads-proben.js bei kaputten Antworten ueberhaupt anschlaegt —
   // test-guthaben, ob ein leeres Guthaben laut scheitert statt still.
   "test-harnisch", "test-guthaben",
+  // 20.08.2026: der Weg des Monatsordners zur Steuerberaterin. Seit heute legt
+  // er einen ENTWURF an, statt auf ein gesprochenes Ja hin zu senden — und
+  // genau das muss belegbar bleiben, sonst faellt es beim naechsten Umbau
+  // still zurueck auf "sendet". Laeuft ohne Datenbank (mit Attrappen) und ohne
+  // Netz; ADS_PROBE=1 setzt es selbst.
+  "test-steuer-versand",
+  // 20.08.2026: die Mailpruefung fuer das Kanzlei-Feld. Der Datenbank-Teil ist
+  // zugeschaltet (KANZLEI_TEST_DB=1) — er wuerde sonst bei jedem Lauf die
+  // echten Finanz-Einstellungen beschreiben.
+  "test-steuerkanzlei",
+  // 20.08.2026: die Rechnerei der Websuche (lib/suche-web.js, lib/suche-seiten.js)
+  // — Rueckbezug ("wie haben SIE gespielt"), Seitentext, Sprechtext. Braucht
+  // kein Netz. Die 27 ECHTEN Fragen laufen getrennt in
+  // scripts/websuche-proben.js: Die dauern eine Minute, brauchen Schluessel und
+  // haengen am Internet — beides gehoert nicht in eine Pruefung, die vor jedem
+  // Push laufen soll.
+  "test-suche-web",
 ];
+
+// NICHT hier drin, mit Grund:
+//   test-belegleser-echt  ruft das Sprachmodell mit einem erzeugten Beleg auf.
+//     Das braucht Schluessel, LibreOffice und ~30 s und kostet Geld — eine
+//     Pruefung, die lange dauert, wird umgangen. Der Test gehoert vor einen
+//     Umbau am Lesen, nicht vor jeden Push:
+//       docker exec -w /app flowstate-dashboard node scripts/test-belegleser-echt.js
 for (const t of TESTS) {
   const p = path.join(wurzel, "scripts", t + ".js");
   if (!fs.existsSync(p)) continue;

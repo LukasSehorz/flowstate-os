@@ -1,17 +1,24 @@
 // Prueft den Weg "Schick den Ordner an die Steuerberaterin" (Szene 3c).
 //
-// WARUM DIESER TEST (20.08.2026): Das Modul verschickt die komplette
-// Buchhaltung nach aussen. Zwei Dinge muessen darum belegbar sein und nicht
-// nur plausibel:
+// WARUM DIESER TEST (20.08.2026): Das Modul fasst die komplette Buchhaltung an.
+// Drei Dinge muessen darum belegbar sein und nicht nur plausibel:
 //
-//   1. Ohne gesprochenes Ja geht NICHTS raus (REGELN.md: Mailversand nach
-//      aussen ist ROT).
-//   2. Der Sprechtext enthaelt keine Dateinamen, keine Adresse, keine Ziffern —
+//   1. Der Normalfall ist der ENTWURF. Es geht nichts nach draussen — die Mail
+//      liegt in Lukas' Postfach, und abgeschickt wird sie dort von ihm.
+//   2. Der alte Freigabe-Weg gibt es weiter, aber nur auf ausdrueckliches
+//      "schick sie raus" — und auch dann erst nach der Rueckfrage (REGELN.md:
+//      Mailversand nach aussen ist ROT).
+//   3. Der Sprechtext enthaelt keine Dateinamen, keine Adresse, keine Ziffern —
 //      er wird vorgelesen, und im Auto ist "Buchhaltung_2026-07.zip" nur Laerm.
 //
 // GUERTEL UND HOSENTRAEGER: Der Lauf setzt ADS_PROBE=1 (lib/probemodus.js) UND
-// verbiegt zusaetzlich gmail.senden auf einen Fehler. Selbst wenn der Riegel
-// einmal nicht greift, kann hier nichts hinausgehen.
+// verbiegt gmail.senden auf einen Fehler. Selbst wenn der Riegel einmal nicht
+// greift, kann hier nichts hinausgehen.
+//
+// FUER DEN ENTWURFS-ABSCHNITT wird der Probemodus BEWUSST kurz abgeschaltet und
+// gmail.entwurf durch eine Attrappe ersetzt, die nur mitschreibt. Sonst pruefte
+// der Abschnitt nur, dass der Riegel haelt — nicht, was Alexandra sagt und was
+// im Entwurf steht. gmail.senden bleibt dabei die Bombe.
 //
 // Standardmaessig laeuft alles gegen ERFUNDENE Monatsdaten — der echte
 // buch.monatsExport() schreibt eine Zeile nach monats_exporte, und der Monat
@@ -37,11 +44,37 @@ process.env.ADS_PROBE = "1";            // auch wenn die .env etwas anderes sagt
 
 const buch = require("../lib/buchhaltung.js");
 const gmail = require("../lib/gmail-direkt.js");
+const kontakte = require("../lib/kontakte.js");
 const probemodus = require("../lib/probemodus.js");
 const sv = require("../lib/steuer-versand.js");
 
 // Zweiter Riegel: ein echter Versand waere ab hier ein lauter Fehler.
 gmail.senden = async () => { throw new Error("ECHTER VERSAND VERSUCHT — das darf der Test nie"); };
+
+// Attrappe fuer den Entwurf. Sie legt nichts an, sie schreibt mit — damit
+// pruefbar ist, WAS im Entwurf gestanden haette (Adresse, Betreff, Anhang).
+const entwuerfe = [];
+let entwurfFehler = null;
+gmail.entwurf = async (m) => {
+  if (entwurfFehler) throw new Error(entwurfFehler);
+  entwuerfe.push({ ...m, anhaenge: (m.anhaenge || []).map((a) => `${a.name} (${a.daten.length} B)`) });
+  return { ok: true, id: "entwurf-" + entwuerfe.length };
+};
+const geloescht = [];
+gmail.entwurfLoeschen = async (id) => { geloescht.push(id); return true; };
+gmail.bereit = () => true;
+
+// Das Kontaktbuch nicht anfassen. Eine diktierte Adresse wird sich sonst
+// gemerkt (merken()) — der Test hinterliesse eine erfundene Steuerberaterin in
+// data/kontakte.json, und die waere beim naechsten echten Lauf eine Quelle.
+const gemerkt = [];
+kontakte.speichern = (liste) => { gemerkt.push(liste); return true; };
+
+// Den Probemodus fuer einen Abschnitt zuschalten oder wegnehmen. Er wird an
+// steuer-versand.js ueber DIESES Modulobjekt gereicht, ein Umbiegen hier wirkt
+// also auch dort.
+const echtAktiv = probemodus.aktiv;
+const probeAn = (an) => { probemodus.aktiv = an ? echtAktiv : () => false; };
 
 let fehler = 0;
 const melde = (ok, text) => { console.log((ok ? "✅" : "❌") + " " + text); if (!ok) fehler++; };
@@ -60,8 +93,18 @@ const ECHT = {
   monatsDaten: buch.monatsDaten,
   monatsExport: buch.monatsExport,
   monateMitDaten: buch.monateMitDaten,
+  steuerkanzlei: buch.steuerkanzlei,
+  einstellungen: buch.einstellungen,
 };
 const monateEchtWieder = () => Object.assign(buch, ECHT);
+
+// Das Kanzlei-Feld (Migration 0055) ist seit dem 20.08. die ERSTE Quelle fuer
+// die Empfaengerin. Im Container steht dort womoeglich schon eine echte
+// Adresse — dann pruefte der Rest des Tests nicht mehr, was er soll. Darum
+// wird die Quelle hier gesetzt statt gelesen.
+function kanzleiSetzen(k) {
+  buch.steuerkanzlei = async () => (k || { anrede: "", name: "", reinerName: "", an: "", notiz: "" });
+}
 
 function monateFaelschen({ leer = false } = {}) {
   buch.monatsDaten = async (u, jahr, monat) => (leer ? { jahr, monat, zeilen: [] } : {
@@ -109,103 +152,187 @@ function probeZeilen() {
       (z && z.titel === erwartet ? "" : `   ERWARTET: ${erwartet}`));
   }
 
-  // ================================================== 2. Der ganze Weg
-  console.log("\n— Vorlegen und Freigabe —");
+  // ================================================== 2. Die Kanzlei als Quelle
+  //
+  // Sie steht VOR der Umgebung: Was Lukas im Dashboard eintraegt, gilt. Sonst
+  // koennte eine alte STEUER_MAIL auf dem Server ein gepflegtes Feld
+  // stillschweigend ueberstimmen — und niemand saehe, warum die Mail woanders
+  // hinging, als im Dashboard steht.
+  console.log("\n— Woher die Empfängerin kommt —");
   monateFaelschen();
-  process.env.STEUER_MAIL = "Frau Meier <meier@beispiel-kanzlei.de>";
-  process.env.STEUER_NAME = "Frau Meier";
+  buch.einstellungen = async () => ({ notiz: "" });        // dritte Quelle still
+  process.env.STEUER_MAIL = "alt@umgebung.de";
+  process.env.STEUER_NAME = "Alt";
+  kanzleiSetzen({ anrede: "Frau", name: "Frau Meier", reinerName: "Meier",
+    an: "meier@beispiel-kanzlei.de", notiz: "" });
+  const q = await sv.empfaengerinFinden(NUTZER);
+  melde(q && q.an === "meier@beispiel-kanzlei.de", "das Kanzlei-Feld schlägt die Umgebung: " + (q && q.an));
+  melde(q && q.name === "Frau Meier", "Anrede und Name kommen zusammen: " + (q && q.name));
+
+  // Halb eingetippte Adresse: buch.steuerkanzlei() gibt "an" dann gar nicht
+  // heraus, und die naechste Quelle greift — hier die Umgebung.
+  kanzleiSetzen({ anrede: "", name: "", reinerName: "", an: "", notiz: "" });
+  const q2 = await sv.empfaengerinFinden(NUTZER);
+  melde(q2 && q2.an === "alt@umgebung.de", "ohne gepflegte Kanzlei greift die nächste Quelle");
+  delete process.env.STEUER_MAIL;
+  delete process.env.STEUER_NAME;
+
+  // ================================================== 3. Der Entwurf
+  console.log("\n— Der Entwurf (Normalfall) —");
+  kanzleiSetzen({ anrede: "Frau", name: "Frau Meier", reinerName: "Meier",
+    an: "meier@beispiel-kanzlei.de", notiz: "" });
+  probeAn(false);                 // damit der echte Text und der Anhang prüfbar sind
+  entwuerfe.length = 0; geloescht.length = 0;
+  const vorher = probeZeilen().length;
   sv.vergessen();
 
-  const vorher = probeZeilen().length;
   const a = await sv.vorbereiten(NUTZER, { text: "Schick den kompletten Ordner mit den Rechnungen an unsere Steuerberaterin." });
   console.log("   gesprochen: " + a.gesprochen);
   console.log("   reply:\n" + String(a.reply).split("\n").map((z) => "     " + z).join("\n"));
 
-  melde(a.ok && a.wartetAuf === "freigabe", "legt zur Freigabe vor, sendet nicht von selbst");
+  melde(a.ok && a.entwurf === true, "legt einen Entwurf an, statt zu fragen und zu senden");
+  melde(entwuerfe.length === 1, "genau ein Entwurf: " + entwuerfe.length);
+  melde(entwuerfe[0]?.an === "meier@beispiel-kanzlei.de", "an die hinterlegte Adresse: " + entwuerfe[0]?.an);
+  melde(/Buchhaltung Juli 2026/.test(entwuerfe[0]?.betreff || ""), "Betreff: " + entwuerfe[0]?.betreff);
+  melde(entwuerfe[0]?.anhaenge.length === 1 && /\.zip \(\d{4,}/.test(entwuerfe[0].anhaenge[0]),
+    "ein echtes ZIP hängt dran: " + entwuerfe[0]?.anhaenge[0]);
+  melde(/Guten Tag Frau Meier,/.test(entwuerfe[0]?.text || ""), "die Anrede steht in der Mail");
+  melde(/Entwurf/.test(a.gesprochen) && /Postfach/.test(a.gesprochen), "sagt, dass es ein Entwurf im Postfach ist");
   melde(/Juli-Rechnungen/.test(a.gesprochen), "nennt den Zeitraum im Sprechtext");
   melde(/achtzehn Belege/.test(a.gesprochen), "Anzahl als Wort: „achtzehn Belege“");
   melde(/zweitausendvierhundert Euro/.test(a.gesprochen), "Betrag als Wort: „zweitausendvierhundert Euro“");
   melde(/Frau Meier/.test(a.gesprochen), "nennt die Empfängerin beim Namen");
-  melde(/\?$/.test(a.gesprochen.trim()), "endet mit der Frage");
   melde(!/[0-9]/.test(a.gesprochen), "keine Ziffern im Sprechtext");
   melde(!/@|\.zip|\/|Betreff/i.test(a.gesprochen), "keine Adresse, kein Dateiname, kein Pfad im Sprechtext");
+  melde(/Liegt als Entwurf in deinem Postfach/.test(a.reply), "die Langfassung sagt es wörtlich");
   melde(/@/.test(a.reply) && /\.zip/.test(a.reply), "die Langfassung im Chat zeigt Adresse und Anhang");
-  melde(probeZeilen().length === vorher, "beim Vorlegen geht noch nichts raus");
+  melde(sv.wasOffen()?.schritt === "entwurf-liegt", "der Vorgang steht auf „Entwurf liegt“");
 
   // Ein beliebiger Satz ist KEINE Antwort auf die Rueckfrage.
   const egal = await sv.antwortAuf("Wie wird das Wetter morgen?");
   melde(egal === null, "fremder Satz läuft normal weiter (antwortAuf gibt null)");
-  melde(sv.wasOffen() !== null, "der Vorgang bleibt dabei offen");
 
-  // ================================================== 3. Das Ja
-  console.log("\n— Das gesprochene Ja —");
-  const b = await sv.antwortAuf("Ja, schick sie raus.");
-  console.log("   gesprochen: " + (b && b.gesprochen));
-  melde(b && b.ok && b.probe === true, "Ja -> Versand läuft, wird aber vom Probemodus abgefangen");
-  const zeilen = probeZeilen();
-  const letzte = zeilen[zeilen.length - 1];
-  melde(zeilen.length === vorher + 1 && letzte.kanal === "mail", "genau eine abgefangene Mail protokolliert");
-  melde(letzte && letzte.an === "meier@beispiel-kanzlei.de", "an die hinterlegte Adresse: " + (letzte && letzte.an));
-  melde(letzte && /Buchhaltung Juli 2026/.test(letzte.betreff || ""), "Betreff: " + (letzte && letzte.betreff));
-  melde(letzte && Array.isArray(letzte.anhaenge) && letzte.anhaenge.length === 1 && /\.zip/.test(letzte.anhaenge[0]),
-    "genau ein ZIP im Anhang: " + (letzte && letzte.anhaenge && letzte.anhaenge[0]));
+  // Ein blosses "ja" darf jetzt NICHTS senden — es war keine Frage offen.
+  const jaDanach = await sv.antwortAuf("Ja.");
+  console.log("   gesprochen: " + (jaDanach && jaDanach.gesprochen));
+  melde(jaDanach && jaDanach.ok && !jaDanach.gesendet, "ein bloßes Ja schickt nichts ab");
+  melde(/abschicken musst du ihn selbst/.test(jaDanach?.gesprochen || ""), "und sagt, dass Lukas selbst abschickt");
+  melde(entwuerfe.length === 1, "und legt keinen zweiten Entwurf an");
+  melde(probeZeilen().length === vorher, "es ist nichts hinausgegangen");
+
+  // ================================================== 4. Doch direkt senden
+  //
+  // Der alte Weg bleibt — aber nur auf ausdruecklichen Wunsch, und auch dann
+  // erst nach der Rueckfrage. Ein Ja, das auf keine Frage antwortet, ist keins.
+  console.log("\n— „Schick sie doch wirklich raus“ —");
+  const w1 = await sv.antwortAuf("Schick sie doch bitte wirklich raus.");
+  console.log("   gesprochen: " + (w1 && w1.gesprochen));
+  melde(w1 && w1.wartetAuf === "freigabe", "ausdrücklicher Wunsch -> Freigabe wird eingeholt");
+  melde(/\?$/.test((w1?.gesprochen || "").trim()), "und die Frage wird gestellt");
+  melde(geloescht.length === 1, "der Entwurf wird dabei weggeräumt: " + geloescht.join(","));
+  melde(probeZeilen().length === vorher, "bis hierher ist nichts raus");
+
+  probeAn(true);                  // ab jetzt wieder der harte Riegel
+  const w2 = await sv.antwortAuf("Ja.");
+  console.log("   gesprochen: " + (w2 && w2.gesprochen));
+  melde(w2 && w2.ok && w2.probe === true, "erst das Ja darauf sendet — und wird abgefangen");
+  const letzte = probeZeilen().pop();
+  melde(probeZeilen().length === vorher + 1 && letzte.kanal === "mail" && letzte.an === "meier@beispiel-kanzlei.de",
+    "genau eine abgefangene Mail an die richtige Adresse");
   melde(sv.wasOffen() === null, "der Vorgang ist danach zu");
-
   const nochmal = await sv.antwortAuf("Ja.");
   melde(nochmal === null, "ein zweites Ja verschickt nichts ein zweites Mal");
-  melde(probeZeilen().length === vorher + 1, "und hinterlässt keine zweite Sendung");
 
-  // ================================================== 4. Das Nein
-  console.log("\n— Das Nein —");
+  // ================================================== 5. Das Nein
+  console.log("\n— Das Nein räumt den Entwurf weg —");
+  probeAn(false);
+  entwuerfe.length = 0; geloescht.length = 0;
+  const vorNein = probeZeilen().length;
   sv.vergessen();
   await sv.vorbereiten(NUTZER, { text: "Schick die Juli-Rechnungen an die Steuerberaterin." });
+  melde(entwuerfe.length === 1, "erst liegt der Entwurf");
   const n = await sv.antwortAuf("Nein, lass mal.");
   console.log("   gesprochen: " + (n && n.gesprochen));
-  melde(n && n.ok && !n.probe, "Nein -> verworfen");
-  melde(probeZeilen().length === vorher + 1, "beim Nein geht nichts raus");
+  melde(n && n.ok, "Nein -> verworfen");
+  melde(geloescht.length === 1 && /rausgenommen/.test(n.gesprochen), "der Entwurf wird wieder rausgenommen");
+  melde(probeZeilen().length === vorNein, "beim Nein geht nichts raus");
   melde(sv.wasOffen() === null, "der Vorgang ist zu");
 
-  // ================================================== 5. Monat umbiegen
+  // ================================================== 6. Monat umbiegen
   console.log("\n— „Nein, den Juni“ —");
+  entwuerfe.length = 0; geloescht.length = 0;
   sv.vergessen();
   const v1 = await sv.vorbereiten(NUTZER, { text: "Schick den Ordner an die Steuerberaterin." });
   melde(/Juli/.test(v1.gesprochen), "geraten wird der letzte abgeschlossene Monat — und er wird ausgesprochen");
   const v2 = await sv.antwortAuf("Nein, den Juni.");
   console.log("   gesprochen: " + (v2 && v2.gesprochen));
   melde(v2 && v2.ok && /Juni-Rechnungen/.test(v2.gesprochen), "der Monat wird umgebogen statt verworfen");
-  melde(v2 && v2.wartetAuf === "freigabe", "und wieder zur Freigabe vorgelegt");
-  melde(probeZeilen().length === vorher + 1, "dabei geht nichts raus");
+  melde(v2 && v2.entwurf === true, "und wieder als Entwurf abgelegt");
+  melde(geloescht.length === 1, "der Juli-Entwurf ist weg — es liegt nur einer im Postfach: " + geloescht.length);
+  melde(entwuerfe.length === 2, "und es wurde genau EIN neuer geschrieben, nicht zwei: " + entwuerfe.length);
+  melde(/Juni/.test(entwuerfe[entwuerfe.length - 1]?.betreff || ""),
+    "der neue Entwurf trägt den Juni: " + entwuerfe[entwuerfe.length - 1]?.betreff);
+  // Die Empfaengerin darf beim Umbiegen nicht verlorengehen — sonst begaenne
+  // die Mail mit "Guten Tag," statt mit dem Namen.
+  melde(/Guten Tag Frau Meier,/.test(entwuerfe[entwuerfe.length - 1]?.text || ""),
+    "und die Anrede ist mitgewandert");
+  melde(probeZeilen().length === vorNein, "dabei geht nichts raus");
+  // Eine intern weitergereichte Adresse ist keine diktierte: Sie darf keinen
+  // Kontakt anlegen, den nie jemand eingetragen hat.
+  melde(gemerkt.length === 0, "und es wurde kein Kontakt „Steuerberaterin“ erfunden");
   sv.vergessen();
 
-  // ================================================== 6. Ohne Adresse
+  // ================================================== 7. Ohne Adresse
   console.log("\n— Keine Adresse hinterlegt —");
-  delete process.env.STEUER_MAIL;
-  delete process.env.STEUER_NAME;
-  // Die dritte Quelle (Notiz in den Finanz-Einstellungen) hier stilllegen —
-  // im Container koennte dort eine echte Adresse stehen, und dann pruefte
-  // dieser Fall nichts.
-  const echteEinstellungen = buch.einstellungen;
-  buch.einstellungen = async () => ({ notiz: "" });
+  kanzleiSetzen(null);
+  // Auch die zweite Quelle stilllegen: Im Container kann im Kontaktbuch eine
+  // echte Kanzlei stehen, und dann pruefte dieser Fall nichts.
+  const echteKontakte = kontakte.alle;
+  kontakte.alle = () => [];
+  entwuerfe.length = 0; geloescht.length = 0;
   sv.vergessen();
   const f = await sv.vorbereiten(NUTZER, { text: "Schick die Juli-Rechnungen an die Steuerberaterin." });
   console.log("   gesprochen: " + f.gesprochen);
   melde(f.wartetAuf === "adresse", "fragt nach der Adresse, statt zu raten");
   melde(!/@/.test(f.gesprochen), "und liest keine erfundene Adresse vor");
+  melde(entwuerfe.length === 0, "ohne Adresse gibt es auch keinen Entwurf");
   const jaOhne = await sv.antwortAuf("Ja, mach.");
-  melde(jaOhne && jaOhne.wartetAuf === "adresse", "ein Ja ohne Adresse sendet nichts");
-  melde(probeZeilen().length === vorher + 1, "und schickt erst recht nichts los");
+  melde(jaOhne && jaOhne.wartetAuf === "adresse", "ein Ja ohne Adresse legt nichts an");
 
   const nachgereicht = await sv.antwortAuf("Die geht an meier@beispiel-kanzlei.de.");
-  melde(nachgereicht && nachgereicht.wartetAuf === "freigabe", "nachgereichte Adresse -> Freigabe steht an");
-  const raus = await sv.antwortAuf("Ja.");
-  melde(raus && raus.probe === true, "danach geht sie (im Probemodus) raus");
-  buch.einstellungen = echteEinstellungen;
+  console.log("   gesprochen: " + (nachgereicht && nachgereicht.gesprochen));
+  melde(nachgereicht && nachgereicht.entwurf === true, "nachgereichte Adresse -> Entwurf liegt");
+  melde(entwuerfe[0]?.an === "meier@beispiel-kanzlei.de", "mit der diktierten Adresse: " + entwuerfe[0]?.an);
+  melde(probeZeilen().length === vorNein, "und raus ist immer noch nichts");
+  kontakte.alle = echteKontakte;
+  probeAn(true);
   sv.vergessen();
 
-  // ================================================== 7. Leerer Monat
+  // ================================================== 7b. Gmail hakt
+  console.log("\n— Wenn das Ablegen scheitert —");
+  probeAn(false);
+  // Die Empfaengerin wieder setzen: Der Abschnitt davor hat sie absichtlich
+  // weggenommen, und ohne sie prüfte dieser hier nur die Adressfrage.
+  kanzleiSetzen({ anrede: "Frau", name: "Frau Meier", reinerName: "Meier",
+    an: "meier@beispiel-kanzlei.de", notiz: "" });
+  entwurfFehler = "Gmail 500";
+  sv.vergessen();
+  const h = await sv.vorbereiten(NUTZER, { text: "Schick die Juli-Rechnungen an die Steuerberaterin." });
+  console.log("   gesprochen: " + h.gesprochen);
+  melde(h && h.ok === false && /nochmal/.test(h.gesprochen), "sagt ehrlich, dass es hakt, und bietet einen zweiten Versuch an");
+  melde(sv.wasOffen()?.schritt === "entwurf-nochmal", "der Vorgang steht auf „nochmal“, NICHT auf Freigabe");
+  entwurfFehler = null;
+  const h2 = await sv.antwortAuf("Ja, versuch's nochmal.");
+  melde(h2 && h2.entwurf === true, "das Ja legt den Entwurf an — und sendet nicht");
+  melde(probeZeilen().length === vorNein, "auch hier geht nichts raus");
+  probeAn(true);
+  sv.vergessen();
+
+  // ================================================== 8. Leerer Monat
   console.log("\n— Monat ohne Buchungen —");
   monateFaelschen({ leer: true });
-  process.env.STEUER_MAIL = "meier@beispiel-kanzlei.de";
+  kanzleiSetzen({ anrede: "Frau", name: "Frau Meier", reinerName: "Meier",
+    an: "meier@beispiel-kanzlei.de", notiz: "" });
   sv.vergessen();
   const l = await sv.vorbereiten(NUTZER, { text: "Schick die Juli-Rechnungen an die Steuerberaterin." });
   console.log("   gesprochen: " + l.gesprochen);
@@ -215,7 +342,7 @@ function probeZeilen() {
   melde(jaLeer !== null, "das Ja greift den Vorschlag auf");
   sv.vergessen();
 
-  // ================================================== 8. Echter Durchlauf
+  // ================================================== 9. Echter Durchlauf
   //
   // ACHTUNG: buch.monatsExport() schreibt eine Zeile nach monats_exporte —
   // der Monat steht danach im Dashboard als "schon geholt". Deshalb ist dieser
@@ -223,6 +350,11 @@ function probeZeilen() {
   if (process.env.STEUER_TEST_ECHT === "1") {
     console.log("\n— Echter Ordner aus der Datenbank —");
     monateEchtWieder();
+    // Hier laeuft ALLES echt bis auf die letzte Stelle: echte Monatsdaten,
+    // echtes ZIP — und der Probemodus faengt den Entwurf ab, bevor er in
+    // Lukas' Postfach liegt.
+    kanzleiSetzen({ anrede: "Frau", name: "Frau Meier", reinerName: "Meier",
+      an: "meier@beispiel-kanzlei.de", notiz: "" });
     const crm = require("../lib/crm.js");
     const { rows: [chef] } = await crm.system(
       `select id, name from profiles where aktiv and rolle='admin' and name ilike 'Lukas%' limit 1`);
@@ -232,8 +364,6 @@ function probeZeilen() {
     console.log("   Monate mit Daten: " + monate.slice(0, 4).map((m) => `${m.monat}/${m.jahr} (${m.anzahl})`).join(", "));
     melde(monate.length > 0, "die Buchhaltung liefert Monate");
 
-    process.env.STEUER_MAIL = "Frau Meier <meier@beispiel-kanzlei.de>";
-    process.env.STEUER_NAME = "Frau Meier";
     sv.vergessen();
     const vorEcht = probeZeilen().length;
     let e1 = await sv.vorbereiten(chef, { text: "Schick den kompletten Ordner mit den Rechnungen an unsere Steuerberaterin." });
@@ -252,13 +382,13 @@ function probeZeilen() {
     }
     console.log("   gesprochen: " + e1.gesprochen);
     console.log("   reply:\n" + String(e1.reply).split("\n").map((z) => "     " + z).join("\n"));
-    melde(e1.ok && e1.wartetAuf === "freigabe", "echter Monatsordner wird zur Freigabe vorgelegt");
+    melde(e1.ok && e1.probe === true && e1.entwurf === true,
+      "echter Monatsordner -> Entwurf, vom Probemodus abgefangen");
     melde(!/[0-9]/.test(e1.gesprochen || ""), "auch hier keine Ziffern im Sprechtext");
 
-    const e2 = await sv.antwortAuf("Ja, schick sie raus.");
     const letzteEcht = probeZeilen().pop();
-    melde(e2 && e2.probe === true, "Ja -> abgefangen, nichts ist rausgegangen");
-    melde(probeZeilen().length === vorEcht + 1 && /\.zip \(\d{4,}/.test((letzteEcht.anhaenge || [])[0] || ""),
+    melde(probeZeilen().length === vorEcht + 1 && letzteEcht.entwurf === true
+      && /\.zip \(\d{4,}/.test((letzteEcht.anhaenge || [])[0] || ""),
       "ein echtes ZIP hing dran: " + ((letzteEcht.anhaenge || [])[0] || "keins"));
     sv.vergessen();
     await crm.pool?.end?.().catch(() => {});
