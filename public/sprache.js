@@ -73,90 +73,82 @@
   let drehAus = drehFrage === "aus";
   let drehbuch = null;      // { titel, zuege: [{id, text, audio, oeffnen}] }
   let drehZug = 0;
-  // EIN ECHTER TAB JE INHALT, und jeder geht erst auf, wenn er dran ist.
+  // DIE INHALTE LIEGEN IN DER DREHMAPPE, NICHT HIER.
   //
-  // WEG UEBER DIE DREHMAPPE (ein Fenster mit eigenen Reitern) war der Umweg,
-  // solange der Popup-Schutz nur EIN window.open pro Klick zuliess. Sobald
-  // Pop-ups fuer die Seite erlaubt sind, braucht es den Umweg nicht mehr:
-  // window.open geht dann auch ohne Nutzergeste, und Chrome macht daraus einen
-  // normalen Tab statt eines Fensterchens — kein features-Argument uebergeben.
+  // WARUM (20.08.2026): window.open landet in dem Fenster, aus dem es
+  // aufgerufen wird. Von hier kamen die Tabs auf dem Laptop an, wo das Gehirn
+  // steht — und jeder neue Tab nahm dem Gehirn die Sicht. Sobald es nicht
+  // sichtbar ist, drosselt Chrome seine Zeitgeber auf einmal pro Minute; die
+  // Stille-Erkennung stand still, und es ging nicht mehr weiter.
   //
-  // Der Tabname kommt aus der Adresse. Zwei Zuege auf dieselbe Seite (C2_05
-  // und C2_07 den Kalender) landen dadurch im selben Tab und laden ihn neu,
-  // statt einen zweiten Kalender daneben zu stellen.
-  //
-  // /regie/mappe bleibt als Rueckfallebene bestehen, falls jemand ohne
-  // erlaubte Pop-ups drehen muss.
+  // Jetzt geht beim ersten Klick EIN Tab auf: die Drehmappe. Die wird auf den
+  // zweiten Bildschirm gezogen und laedt dort alle Inhalte vor. Im Take wird
+  // nur noch der passende Tab nach vorn geholt — mappe.open() oeffnet in der
+  // Mappe, nicht hier.
+  let mappe = null;
+  let mappeGeladen = false;
+
   function tabName(datei) {
     const basis = String(datei).split("?")[0].split("#")[0];
     return "dreh-" + basis.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
   }
 
-  let popupGewarnt = false;
-
-  // WO die Inhalte aufgehen sollen: auf dem Bildschirm RECHTS neben dem, auf
-  // dem das Gehirn steht. Ein eigenes Fenster statt eines Tabs — nur so laesst
-  // sich die Lage vorgeben, und nur so bleibt das Gehirn durchgehend im Bild.
-  //
-  // availLeft + availWidth ist die linke Kante des naechsten Bildschirms. Wer
-  // die Bildschirme anders stehen hat, kann es ueberschreiben:
-  //   localStorage.setItem("dreh-bildschirm-x", "2560")
-  function fensterLage() {
-    const gespeichert = Number(localStorage.getItem("dreh-bildschirm-x"));
-    const x = Number.isFinite(gespeichert) && gespeichert > 0
-      ? gespeichert
-      : (window.screen.availLeft || 0) + (window.screen.availWidth || 1920);
-    const breite = Math.max(1100, Math.min(1920, window.screen.availWidth || 1600));
-    const hoehe = Math.max(700, (window.screen.availHeight || 1000) - 60);
-    return `popup=yes,width=${breite},height=${hoehe},left=${x},top=0`;
+  function mappeVorbereiten() {
+    const einmal = () => {
+      document.removeEventListener("click", einmal);
+      try {
+        mappe = window.open("/regie/mappe?c=" + encodeURIComponent(DREHBUCH_NR || 0), "drehmappe");
+        if (!mappe && el.hinweis) {
+          el.hinweis.textContent = "Pop-up blockiert — für diese Seite erlauben.";
+        }
+      } catch (e) { console.error("Drehmappe:", e.message); }
+    };
+    document.addEventListener("click", einmal);
+    window.addEventListener("message", (e) => {
+      if (e.origin !== location.origin) return;
+      const d = e.data || {};
+      if (d.typ === "mappe-geladen") {
+        mappeGeladen = true;
+        console.log("Drehbuch: " + d.offen + " Inhalte in der Drehmappe vorgeladen");
+        if (el.hinweis) el.hinweis.textContent = "Drehmappe bereit — " + d.offen + " Inhalte geladen.";
+      }
+    });
   }
-  let drehPassiv = false;
 
   function mappeZeigen(dateien) {
     const liste = Array.isArray(dateien) ? dateien : (dateien ? [dateien] : []);
     liste.forEach((datei) => {
       let url;
       if (/^https?:\/\//.test(datei)) {
-        // Der Google-Kalender MUSS neu laden, sonst fehlt in C2_07 der gerade
-        // angelegte Termin. WhatsApp bleibt unangetastet — ein Anhaengsel
-        // wuerde dort die Sitzung durcheinanderbringen.
-        url = /calendar\.google\.com/.test(datei)
-          ? datei + (datei.includes("?") ? "&" : "?") + "_=" + Date.now()
-          : datei;
+        url = datei;
       } else if (datei.startsWith("/")) {
         // Eigene Seiten zwingend mit drehbuch=aus: Jede Seite des OS laedt die
-        // Sprachsteuerung mit und wuerde sonst die Fuehrung uebernehmen —
-        // dann waere der Haupt-Tab stumm.
-        url = datei + (datei.includes("?") ? "&" : "?") + "drehbuch=aus&_=" + Date.now();
+        // Sprachsteuerung mit und wuerde sonst die Fuehrung uebernehmen.
+        url = datei + (datei.includes("?") ? "&" : "?") + "drehbuch=aus";
       } else {
         url = "/regie/datei/" + encodeURIComponent(datei);
       }
 
-      let w = null;
-      try { w = window.open(url, tabName(datei), fensterLage()); } catch { /* geblockt */ }
-      if (w) {
-        // Kurz nach vorn holen, damit das Fenster wirklich sichtbar wird —
-        // und den Blick sofort zurueck aufs Gehirn.
-        //
-        // WARUM ZURUECK (20.08.2026): Verliert der Gehirn-Tab die Sicht,
-        // drosselt Chrome seine Zeitgeber auf einmal pro Minute. Die
-        // Stille-Erkennung laeuft aber auf einem 100-ms-Takt — sie steht dann
-        // still, die Aufnahme endet nie, und es geht nicht mehr weiter. Genau
-        // das ist ab dem Kalender passiert: WhatsApp kam nicht mehr, und
-        // sprechen half auch nicht.
-        try { w.focus(); } catch {}
-        try { window.focus(); } catch {}
+      if (!mappe || mappe.closed) {
+        console.warn("Drehmappe fehlt:", url);
+        if (el.hinweis) el.hinweis.textContent = "Drehmappe ist zu — Seite neu laden und einmal klicken.";
         return;
       }
-
-      // Sichtbar melden statt still schlucken: Im Take steht man sonst davor
-      // und weiss nicht, warum nichts kommt.
-      console.warn("Tab blockiert:", url);
-      if (!popupGewarnt && el.hinweis) {
-        popupGewarnt = true;
-        el.hinweis.textContent = "Pop-ups blockiert — für diese Seite erlauben (chrome://settings/content/popups).";
-      }
+      try {
+        // Oeffnet IN der Mappe. Ist der Tab dort schon geladen (vorgeladen),
+        // wird er nur nach vorn geholt — ohne Wartezeit.
+        mappe.open(url, tabName(datei));
+      } catch (e) { console.error("Tab nicht erreichbar:", e.message); }
     });
+  }
+
+  // Nach dem Eintragen im Kalender muss der schon offene Tab den neuen Termin
+  // zeigen. Frisches Anhaengsel = neu laden. Seit der Kalender direkt bei
+  // Google liest (0,4 s statt 9 s) faellt das im Bild nicht mehr auf.
+  function mappeNeuLaden(datei) {
+    if (!mappe || mappe.closed) return;
+    const basis = datei + (datei.includes("?") ? "&" : "?") + "drehbuch=aus&_=" + Date.now();
+    try { mappe.open(basis, tabName(datei)); } catch { /* Fenster weg */ }
   }
 
   // NUR EIN TAB DARF DAS DREHBUCH FUEHREN.
@@ -230,7 +222,14 @@
         .catch((e) => console.error("Drehbuch-Tat fehlgeschlagen:", e.message));
       if (z.tatWarten) await lauf;
     }
-    if (z.oeffnen && z.oeffnen.length) mappeZeigen(z.oeffnen);
+    if (z.oeffnen && z.oeffnen.length) {
+      // Nach einer Tat hat sich der Inhalt geaendert (C2_07: der Termin ist
+      // neu). Dann neu laden statt nur nach vorn holen.
+      if (z.tat && z.tatWarten) z.oeffnen.forEach((d) => {
+        if (String(d).startsWith("/")) mappeNeuLaden(d); else mappeZeigen([d]);
+      });
+      else mappeZeigen(z.oeffnen);
+    }
     zeile("sie", z.text || "");
     if (z.audio) await sagen("/regie/datei/" + encodeURIComponent(z.audio), true, z.text);
     else if (z.text) await sprich(z.text);
