@@ -191,6 +191,7 @@
       if (!r.ok) throw new Error("HTTP " + r.status);
       drehbuch = await r.json();
       drehZug = 0;
+      mappeVorbereiten();          // beim ersten Klick geht die Drehmappe auf
       drehFuehrungUebernehmen();
       if (el.hinweis) el.hinweis.textContent =
         "Drehbuch: " + drehbuch.titel + " · " + drehbuch.zuege.length + " Züge";
@@ -1455,7 +1456,18 @@
     // Im Dreh ist das Wake-Wort im Weg: "Hey Jarvis" steht in keinem Skript,
     // und die Dauererkennung greift parallel aufs Mikro. Geweckt wird
     // ausschliesslich durch Klatschen.
-    if (DREHBUCH_NR === null && !drehAus && konfig.drehbuch != null) {
+    // Die Servervorgabe gilt NUR auf der Sprachbuehne.
+    //
+    // WARUM (20.08.2026): Jede Seite des OS laedt diese Datei mit — auch die
+    // Zentrale auf dem Fernseher und der Kalender im zweiten Fenster. Mit
+    // DREH_CREATIVE wurde jede davon zum Drehbuch-Tab, und wer zuletzt lud,
+    // riss die Fuehrung an sich. Die Sprachbuehne wurde dadurch passiv,
+    // drehbuch stand auf null — und die naechste Frage ging ans Modell. Genau
+    // das war zu hoeren: geklatscht, verstanden, aber frei geantwortet.
+    //
+    // Wer eine andere Seite ausdruecklich mit ?drehbuch=… aufruft, bekommt es
+    // weiterhin. Nur die stille Vorgabe bleibt auf der Buehne.
+    if (DREHBUCH_NR === null && !drehAus && istGrosseSeite && konfig.drehbuch != null) {
       DREHBUCH_NR = String(konfig.drehbuch);
     }
     if (wakeAn && DREHBUCH_NR === null) wakeStarten();
