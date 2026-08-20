@@ -102,6 +102,12 @@ const TESTS = [
   // haengen am Internet — beides gehoert nicht in eine Pruefung, die vor jedem
   // Push laufen soll.
   "test-suche-web",
+  // 20.08.2026: Vier Endpunkte der Buchhaltung leiten bei einem Fehlschlag auf
+  // "/buchhaltung?fehler=…" um — und die Seite las die Angabe nirgends. Der
+  // Test faehrt die echte Route mit einem echten express und Attrappen statt
+  // Datenbank: Ohne ihn faellt "stumm verworfen" beim naechsten Umbau sofort
+  // wieder zurueck, weil man es der Seite nicht ansieht.
+  "test-buchhaltung-fehler",
 ];
 
 // NICHT hier drin, mit Grund:

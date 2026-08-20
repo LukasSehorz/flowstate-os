@@ -147,6 +147,59 @@ function stelle({ hochladen, lesen, buchen } = {}) {
   pruefe("Betrag: ohne Zahl kein Betrag", beleg.betragAus("keine Ahnung ehrlich gesagt") === null);
   pruefe("Betrag: null Euro ist kein Betrag", beleg.betragAus("0") === null);
 
+  // --- JEDE ZAHL WAR EIN BETRAG (Fehler gefunden am 20.08.2026) ------------
+  //
+  // Der Kommentar ueber betragAus() sagte wortwoertlich, das duerfe nicht
+  // passieren — der Code hielt sich nicht daran. Gemessen:
+  //   BOT>   Den Betrag konnte ich nicht lesen — was hat's gekostet?
+  //   LUKAS> sag mal, wie war das mit den 3 Terminen morgen
+  //   BOT>   Beleg 4711: · EDEKA · 3,00 Euro — Soll ich das so buchen?
+  // Doppelt schlimm: Die Nachricht galt als beantwortet und erreichte
+  // Alexandra nie.
+  console.log("\n— Was KEIN Betrag ist —");
+  pruefe("„sag mal, wie war das mit den 3 Terminen morgen“ ist kein Betrag",
+    beleg.betragAus("sag mal, wie war das mit den 3 Terminen morgen") === null,
+    String(beleg.betragAus("sag mal, wie war das mit den 3 Terminen morgen")));
+  pruefe("„von der Tankstelle an der B15“ ist kein Betrag",
+    beleg.betragAus("von der Tankstelle an der B15") === null,
+    String(beleg.betragAus("von der Tankstelle an der B15")));
+  pruefe("„um 14 Uhr“ ist kein Betrag",
+    beleg.betragAus("um 14 Uhr") === null, String(beleg.betragAus("um 14 Uhr")));
+  // Ein Belegbetrag ist nie negativ. Das Vorzeichen wegzuwerfen hiesse, eine
+  // Gutschrift als Ausgabe zu buchen.
+  pruefe("„minus 12,00“ ist kein Betrag (statt 12,00 mit verlorenem Vorzeichen)",
+    beleg.betragAus("minus 12,00") === null, String(beleg.betragAus("minus 12,00")));
+  pruefe("„wie viele Leads hat Ioannis heute“ ist kein Betrag",
+    beleg.betragAus("wie viele Leads hat Ioannis heute bekommen") === null);
+  pruefe("„fahr mal 20 Minuten früher los“ ist kein Betrag",
+    beleg.betragAus("fahr mal 20 Minuten früher los") === null,
+    String(beleg.betragAus("fahr mal 20 Minuten früher los")));
+
+  console.log("\n— Was weiterhin ein Betrag ist —");
+  pruefe("„ca. 20 Euro“", beleg.betragAus("ca. 20 Euro") === 20, String(beleg.betragAus("ca. 20 Euro")));
+  pruefe("„68,50“", beleg.betragAus("68,50") === 68.5, String(beleg.betragAus("68,50")));
+  // Vorher: 8,00 € — die Cent standen hinter dem Waehrungswort und fielen weg.
+  pruefe("„das waren 8 Euro 50“ MIT Cent",
+    beleg.betragAus("das waren 8 Euro 50") === 8.5, String(beleg.betragAus("das waren 8 Euro 50")));
+  pruefe("„8 Euro 50“ MIT Cent",
+    beleg.betragAus("8 Euro 50") === 8.5, String(beleg.betragAus("8 Euro 50")));
+  pruefe("„der hat 129,99 EUR gekostet“",
+    beleg.betragAus("der hat 129,99 EUR gekostet") === 129.99,
+    String(beleg.betragAus("der hat 129,99 EUR gekostet")));
+  pruefe("„waren glaub ich 45 Euro“ (langer Satz, aber mit Geldzeichen)",
+    beleg.betragAus("waren glaub ich 45 Euro") === 45, String(beleg.betragAus("waren glaub ich 45 Euro")));
+  pruefe("nackte Zahl im Kurzsatz", beleg.betragAus("39") === 39);
+
+  // Und der Kern des Fehlers: die Nachricht muss WEITERLAUFEN.
+  s = stelle({ lesen: { ok: true, werte: { betrag: null, datum: "2026-08-01", gegenstelle: "EDEKA" } } });
+  beleg.vergessen();
+  await beleg.verarbeiten({ datei: alsDatei("Bon.jpg", "image/jpeg"), ...s });
+  const durchgereicht = await beleg.antwortAuf("sag mal, wie war das mit den 3 Terminen morgen", s);
+  pruefe("... und die Nachricht läuft an Alexandra weiter, statt gebucht zu werden",
+    durchgereicht === false, "antwortAuf gab " + durchgereicht + " zurück");
+  pruefe("... die Rückfrage nach dem Betrag bleibt stehen",
+    beleg.wasOffen()?.frage === "betrag");
+
   const AM = new Date("2026-08-20T10:00:00");
   pruefe("Datum: heute", beleg.datumAus("heute", AM) === "2026-08-20");
   pruefe("Datum: gestern", beleg.datumAus("gestern", AM) === "2026-08-19");
@@ -157,6 +210,23 @@ function stelle({ hochladen, lesen, buchen } = {}) {
     beleg.datumAus("28.12.", new Date("2026-01-10T10:00:00")) === "2025-12-28",
     String(beleg.datumAus("28.12.", new Date("2026-01-10T10:00:00"))));
   pruefe("Datum: Unsinn wird nicht geraten", beleg.datumAus("weiß nicht mehr", AM) === null);
+  // KEIN UEBERLAUF IN DEN FOLGEMONAT (20.08.2026): datumAus("31.02.2026") gab
+  // bisher 2026-03-03 zurueck — ein verhoertes Datum buchte still in den
+  // falschen Monat, und ein falscher Monat im Ordner fuer die Steuerberaterin
+  // faellt niemandem mehr auf.
+  pruefe("Datum: den 31. Februar gibt es nicht (kein 03.03.)",
+    beleg.datumAus("31.02.2026", AM) === null, String(beleg.datumAus("31.02.2026", AM)));
+  pruefe("Datum: auch der 31.04. nicht",
+    beleg.datumAus("31.04.2026", AM) === null, String(beleg.datumAus("31.04.2026", AM)));
+  pruefe("Datum: 2026-02-30 als ISO ebenfalls nicht",
+    beleg.datumAus("2026-02-30", AM) === null, String(beleg.datumAus("2026-02-30", AM)));
+  // Ein echter Schalttag muss durchkommen — die Pruefung darf nicht zu scharf sein.
+  pruefe("Datum: der 29.02.2024 ist echt und bleibt",
+    beleg.datumAus("29.02.2024", AM) === "2024-02-29", String(beleg.datumAus("29.02.2024", AM)));
+  pruefe("Datum: der 29.02.2026 gab es nie",
+    beleg.datumAus("29.02.2026", AM) === null, String(beleg.datumAus("29.02.2026", AM)));
+  pruefe("Datum: 31.01. bleibt der 31.01.",
+    beleg.datumAus("31.01.2026", AM) === "2026-01-31", String(beleg.datumAus("31.01.2026", AM)));
 
   // Betrag fehlt -> Rueckfrage statt Buchungsfrage.
   s = stelle({ lesen: { ok: true, werte: { betrag: null, datum: "2026-08-01", gegenstelle: "Shell", kategorie: "Fahrzeug & Tanken" } } });
@@ -217,6 +287,98 @@ function stelle({ hochladen, lesen, buchen } = {}) {
   pruefe("Buchungsfehler: Grund im Klartext",
     /der Betrag fehlt/.test(s.gesagt.join(" ")), s.gesagt.join(" | "));
   pruefe("Buchungsfehler: laeuft NICHT zusaetzlich an Alexandra", gemeldet === true);
+
+  // --- DER LESER WARNT — DIE RUECKFRAGE MUSS ES SAGEN (20.08.2026) ---------
+  //
+  // lib/belegleser.js setzt bei Zweifeln ein `hinweis`-Feld und stuft
+  // `sicherheit` herunter. naechsteFrage() hat beides nie angefasst. Gemessen:
+  //   Leser: betrag=259.8, hinweis="Betrag in USD (259,80 USD), nicht EUR."
+  //   Bot:   "· ACME Software Inc. · 259,80 Euro — Soll ich das so buchen?"
+  //   Nach "ja" gebucht: 259,80 € statt rund 240 €.
+  console.log("\n— Was der Belegleser selbst anmerkt —");
+
+  const USD = { ok: true, werte: { betrag: 259.8, datum: "2026-08-03",
+    gegenstelle: "ACME Software Inc.", kategorie: "Software & Tools",
+    sicherheit: "hoch", hinweis: "Betrag in USD (259,80 USD), nicht EUR." } };
+
+  s = stelle({ lesen: USD });
+  beleg.vergessen();
+  await beleg.verarbeiten({ datei: alsDatei("Invoice.pdf", "application/pdf"), ...s });
+  let sagt = s.gesagt.join(" | ");
+  console.log("   " + s.gesagt[s.gesagt.length - 1]);
+  pruefe("Fremdwährung wird NICHT als Euro angeboten", !/259,80 Euro/.test(sagt), sagt);
+  pruefe("„259,80 US-Dollar — soll ich umrechnen?“",
+    /259,80 US-Dollar — soll ich umrechnen\?/.test(sagt), sagt);
+  pruefe("Der Hinweis des Lesers steht mit drin", /nicht EUR/.test(sagt), sagt);
+  pruefe("Es wird nicht „so buchen?“ gefragt", !/Soll ich das so buchen/.test(sagt), sagt);
+  pruefe("Und gebucht ist nichts", !s.gerufen.some((p) => p.endsWith("/buchen")));
+
+  // Ein "ja" darauf darf keinen Kurs erfinden.
+  await beleg.antwortAuf("ja", s);
+  sagt = s.gesagt.join(" | ");
+  pruefe("„ja“ erfindet keinen Wechselkurs, sondern fragt nach dem Euro-Betrag",
+    /Wechselkurs hab ich hier nicht/.test(sagt) && !s.gerufen.some((p) => p.endsWith("/buchen")), sagt);
+  await beleg.antwortAuf("239,40 Euro", s);
+  sagt = s.gesagt.join(" | ");
+  pruefe("Der nachgereichte Euro-Betrag führt zur normalen Buchungsfrage",
+    /239,40 Euro/.test(sagt) && /Soll ich das so buchen/.test(sagt), sagt);
+  await beleg.antwortAuf("passt", s);
+  const usdGebucht = s.koerper[s.gerufen.findIndex((p) => p.endsWith("/buchen"))];
+  pruefe("Gebucht wird der EURO-Betrag, nicht der Dollarbetrag",
+    usdGebucht && usdGebucht.betrag === 239.4, JSON.stringify(usdGebucht));
+
+  // Der direkte Weg: Lukas nennt den Euro-Betrag sofort.
+  s = stelle({ lesen: USD });
+  beleg.vergessen();
+  await beleg.verarbeiten({ datei: alsDatei("Invoice.pdf", "application/pdf"), ...s });
+  await beleg.antwortAuf("das sind 239,40", s);
+  pruefe("Ein sofort genannter Euro-Betrag übernimmt",
+    /239,40 Euro/.test(s.gesagt.join(" ")) && /Soll ich das so buchen/.test(s.gesagt.join(" ")),
+    s.gesagt.join(" | "));
+
+  // Niedrige Sicherheit: der Zweifel gehoert in die Frage.
+  s = stelle({ lesen: { ok: true, werte: { betrag: 43.2, datum: "2026-08-02",
+    gegenstelle: "Shell", sicherheit: "niedrig", hinweis: "" } } });
+  beleg.vergessen();
+  await beleg.verarbeiten({ datei: alsDatei("Bon.jpg", "image/jpeg"), ...s });
+  sagt = s.gesagt.join(" | ");
+  console.log("   " + s.gesagt[s.gesagt.length - 1]);
+  pruefe("Niedrige Sicherheit: kein „Soll ich das so buchen?“",
+    !/Soll ich das so buchen/.test(sagt), sagt);
+  pruefe("Niedrige Sicherheit: der Zweifel wird genannt",
+    /schlecht lesbar/.test(sagt), sagt);
+  // Statt "nein" reicht der richtige Betrag — er korrigiert und fragt neu.
+  await beleg.antwortAuf("nee, das waren 34,20 Euro", s);
+  sagt = s.gesagt.join(" | ");
+  pruefe("Ein korrigierter Betrag wird übernommen statt an Alexandra gereicht",
+    /34,20 Euro/.test(sagt), sagt);
+  pruefe("... und danach ist der Zweifel weg („Soll ich das so buchen?“)",
+    /Soll ich das so buchen/.test(sagt), sagt);
+
+  // Ein MwSt-Widerspruch ist derselbe Weg.
+  s = stelle({ lesen: { ok: true, werte: { betrag: 119, datum: "2026-08-02",
+    gegenstelle: "Baumarkt", sicherheit: "mittel",
+    hinweis: "Ausgewiesene MwSt passt nicht zum Bruttobetrag." } } });
+  beleg.vergessen();
+  await beleg.verarbeiten({ datei: alsDatei("R.pdf", "application/pdf"), ...s });
+  sagt = s.gesagt.join(" | ");
+  pruefe("MwSt-Widerspruch: der Hinweis steht in der Frage",
+    /MwSt passt nicht/.test(sagt) && !/Soll ich das so buchen/.test(sagt), sagt);
+
+  // Ohne Zweifel bleibt alles wie vorher — das ist der Normalfall.
+  s = stelle({ lesen: { ok: true, werte: { betrag: 119.99, datum: "2026-08-01",
+    gegenstelle: "Hetzner", kategorie: "Hosting", sicherheit: "hoch", hinweis: "" } } });
+  beleg.vergessen();
+  await beleg.verarbeiten({ datei: alsDatei("R.pdf", "application/pdf"), ...s });
+  pruefe("Ohne Zweifel bleibt es bei „Soll ich das so buchen?“",
+    /Soll ich das so buchen/.test(s.gesagt.join(" ")), s.gesagt.join(" | "));
+
+  pruefe("USD im Hinweis wird als Fremdwährung erkannt",
+    beleg.fremdwaehrung("Betrag in USD (259,80 USD), nicht EUR.") === "US-Dollar");
+  pruefe("CHF ebenfalls", beleg.fremdwaehrung("Rechnung in CHF ausgestellt.") === "Schweizer Franken");
+  pruefe("Ein Hinweis ohne Währung ist keine Fremdwährung",
+    beleg.fremdwaehrung("Beleg leicht geknickt, Datum schwer lesbar.") === null);
+  pruefe("Kein Hinweis, keine Fremdwährung", beleg.fremdwaehrung("") === null);
 
   console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Faelle bestanden.");
   process.exit(fehler ? 1 : 0);

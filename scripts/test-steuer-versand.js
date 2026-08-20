@@ -220,6 +220,67 @@ function probeZeilen() {
   melde(entwuerfe.length === 1, "und legt keinen zweiten Entwurf an");
   melde(probeZeilen().length === vorher, "es ist nichts hinausgegangen");
 
+  // ============================ 3b. Wiederholen ist keine Eskalation
+  //
+  // FEHLER GEFUNDEN AM 20.08.2026. SENDEWUNSCH matchte `\braus\b` und `schick`,
+  // und damit hat der HAEUFIGSTE Satz ueberhaupt eskaliert — der wiederholte
+  // Auftrag:
+  //
+  //   LUKAS> Schick den Juli-Ordner an die Steuerberaterin   -> Entwurf liegt
+  //   LUKAS> Schick den Juli-Ordner an die Steuerberaterin   -> Entwurf GELÖSCHT,
+  //                                                             "Soll sie so rausgehen?"
+  //   LUKAS> ja                                              -> RAUS an die Kanzlei
+  //
+  // Zwei harmlose Sätze und ein Ja, und die komplette Buchhaltung war beim
+  // Empfänger. Der ganze Umbau ("Ein Entwurf verlässt das Haus nicht") war
+  // damit ausgehebelt.
+  console.log("\n— Denselben Auftrag nochmal sagen —");
+  const vorWdh = probeZeilen().length;
+  const entwuerfeVorWdh = entwuerfe.length;
+  const geloeschtVorWdh = geloescht.length;
+
+  for (const satz of [
+    "Schick den Juli-Ordner an die Steuerberaterin",
+    "Schick den Juli-Ordner an die Steuerberaterin.",
+    "Ja, ist die schon raus?",
+    "Ist die schon raus?",
+    "Schick die Rechnungen an die Steuerberaterin",
+  ]) {
+    const w = await sv.antwortAuf(satz);
+    melde(w && w.ok && !w.gesendet && w.wartetAuf !== "freigabe"
+      && /liegt schon als Entwurf/.test(w.reply || ""),
+      `"${satz}" -> ${w ? String(w.gesprochen).slice(0, 60) : "null"}`);
+  }
+  melde(sv.wasOffen()?.schritt === "entwurf-liegt", "der Vorgang steht weiter auf „Entwurf liegt“");
+  melde(entwuerfe.length === entwuerfeVorWdh, "es wurde kein neuer Entwurf geschrieben");
+  melde(geloescht.length === geloeschtVorWdh, "und der bestehende wurde NICHT weggeräumt");
+  melde(probeZeilen().length === vorWdh, "es ist nichts hinausgegangen");
+
+  // Die Unterscheidung einzeln, ohne offenen Vorgang — damit sie beim naechsten
+  // Umbau nicht still zurueckkippt.
+  console.log("\n— Was gilt als ausdrücklicher Sendewunsch? —");
+  for (const [satz, erwartet] of [
+    ["schick den juli-ordner an die steuerberaterin", false],
+    ["ja, ist die schon raus?", false],
+    ["ist die schon raus?", false],
+    ["ist die eigentlich rausgegangen?", false],
+    ["schick den ordner an die kanzlei", false],
+    ["ja", false],
+    ["passt", false],
+    ["schick sie doch bitte wirklich raus.", true],
+    ["ja, schick sie ruhig gleich raus", true],
+    ["schick sie jetzt raus", true],
+    ["rausschicken bitte", true],
+    ["raus damit", true],
+    ["abschicken", true],
+    ["verschick sie", true],
+    ["schick den ordner jetzt wirklich raus", true],
+  ]) {
+    melde(sv.sendewunsch(satz) === erwartet,
+      `"${satz}" -> ${sv.sendewunsch(satz) ? "Eskalation" : "keine"}` +
+      (sv.sendewunsch(satz) === erwartet ? "" : `   ERWARTET: ${erwartet ? "Eskalation" : "keine"}`));
+  }
+
   // ================================================== 4. Doch direkt senden
   //
   // Der alte Weg bleibt — aber nur auf ausdruecklichen Wunsch, und auch dann
@@ -326,6 +387,30 @@ function probeZeilen() {
   melde(h2 && h2.entwurf === true, "das Ja legt den Entwurf an — und sendet nicht");
   melde(probeZeilen().length === vorNein, "auch hier geht nichts raus");
   probeAn(true);
+  sv.vergessen();
+
+  // ============================ 7c. STEUER_MODUS=senden bleibt unberührt
+  //
+  // Der feste Direktversand laeuft gar nicht ueber sendewunsch() — er wird beim
+  // Vorbereiten gesetzt. Beim Verengen von SENDEWUNSCH am 20.08. war die
+  // naheliegende Sorge, genau diesen Weg mitzuerwischen; hier steht, dass es
+  // nicht passiert ist. Gesendet wird auch dann erst nach der Rückfrage.
+  console.log("\n— STEUER_MODUS=senden —");
+  probeAn(true);                  // harter Riegel: hier geht nichts hinaus
+  monateFaelschen();
+  kanzleiSetzen({ anrede: "Frau", name: "Frau Meier", reinerName: "Meier",
+    an: "meier@beispiel-kanzlei.de", notiz: "" });
+  entwuerfe.length = 0;
+  sv.vergessen();
+  const vorModus = probeZeilen().length;
+  const m1 = await sv.vorbereiten(NUTZER, { text: "Schick die Juli-Rechnungen an die Steuerberaterin.", modus: "senden" });
+  console.log("   gesprochen: " + m1.gesprochen);
+  melde(m1 && m1.wartetAuf === "freigabe", "im Sendemodus wird die Freigabe eingeholt");
+  melde(entwuerfe.length === 0, "und kein Entwurf abgelegt");
+  melde(probeZeilen().length === vorModus, "vor dem Ja ist nichts raus");
+  const m2 = await sv.antwortAuf("Ja.");
+  melde(m2 && m2.ok && m2.probe === true, "das Ja sendet — und wird abgefangen");
+  melde(probeZeilen().length === vorModus + 1, "genau eine abgefangene Mail");
   sv.vergessen();
 
   // ================================================== 8. Leerer Monat

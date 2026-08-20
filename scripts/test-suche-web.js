@@ -126,6 +126,67 @@ pruefe("Vorlagen-Platzhalter fliegen raus", !text.includes("{{"));
 pruefe("Der lesbare Inhalt bleibt",
   text.includes("FC Grünthal") && text.includes("14.08.2026"));
 
+// --- Bruecke zur Seite: die Zusatzbegriffe ---------------------------------
+//
+// DER SCHWERSTE FEHLER VOM 20.08.2026, und er hing an einem Zeichen.
+//
+// Dieselbe Frage, zwei Wege: lib/suche-web.js direkt aufgerufen 5 von 5 richtig,
+// ueber POST /api/chat 0 von 5. Grund war nicht die Suche, sondern der Weg
+// dorthin: Das Verstehen-Modell reichte die Frage nicht durch, sondern schrieb
+// sie in Suchbegriffe um —
+//   Nutzer:      "Wie steht der SV Oberbergkirchen in der Tabelle?"
+//   an websuche: "Aktueller Tabellenstand SV Oberbergkirchen Fußball Saison 2026/27"
+// — und `\btabelle\b` trifft "Tabellenstand" NICHT. Damit fehlten die
+// Brueckenbegriffe, passendeStellen griff das falsche Fenster, und das Modell
+// meldete voellig korrekt "NICHT GEFUNDEN".
+//
+// Beide Enden sind hier festgenagelt: die Werkzeugbeschreibung (damit die Frage
+// woertlich ankommt) und die Muster (damit auch eine umgeschriebene Frage noch
+// greift).
+const begriffe = (frage, thema = "") =>
+  suche.suchbegriffe(frage, thema).map((x) => x.wort.toLowerCase());
+
+const originalFrage = "Wie steht der SV Oberbergkirchen in der Tabelle?";
+const umgeschrieben = "Aktueller Tabellenstand SV Oberbergkirchen Fußball Saison 2026/27";
+
+pruefe("„Tabelle“ bringt die Bruecke (wie bisher)",
+  begriffe(originalFrage, "SV Oberbergkirchen").includes("tabellenplatz"));
+pruefe("„Tabellenstand“ bringt sie jetzt AUCH",
+  begriffe(umgeschrieben, "SV Oberbergkirchen").includes("tabellenplatz"));
+pruefe("... samt Punkte-Bruecke",
+  begriffe(umgeschrieben, "SV Oberbergkirchen").includes("punkte"));
+pruefe("„Tabellenplatz“ als ein Wort trifft ebenfalls",
+  begriffe("Auf welchem Tabellenplatz steht der TSV Dorfen?").includes("pkt"));
+// Fall Dieselpreis (20.08.): "Dieselpreis" ist EIN Wort, \bpreis\b verfehlte es.
+pruefe("„Dieselpreis“ bringt die Preis-Bruecke",
+  begriffe("Wie hoch ist der Dieselpreis in Bayern gerade?").includes("preis"));
+pruefe("... und die Spritbegriffe der Preisseiten",
+  begriffe("Wie hoch ist der Dieselpreis in Bayern gerade?").includes("liter"));
+pruefe("„Spritpreis“ genauso",
+  begriffe("Was ist der Spritpreis heute?").includes("preis"));
+pruefe("„Was kostet ein Liter Diesel?“ funktioniert weiter",
+  begriffe("Was kostet ein Liter Diesel gerade in Bayern?").includes("preis"));
+// Nicht zu breit werden: Ein Platzhalter ist kein Tabellenplatz.
+pruefe("„Platzhalter“ loest keine Tabellen-Bruecke aus",
+  !begriffe("Was ist ein Platzhalter in HTML?").includes("tabellenplatz"));
+
+// Auch das Nachlesen der echten Seite darf an der umgeschriebenen Frage nicht
+// scheitern — sonst bliebe es bei den Google-Schnipseln.
+const fundAttrappe = { treffer: [{ titel: "x", url: "https://bfv.de", domain: "bfv.de" }], direkt: true };
+pruefe("bei „Tabellenstand“ wird die Seite gelesen",
+  suche.brauchtSeiten(umgeschrieben, fundAttrappe) === true);
+pruefe("bei „Dieselpreis“ ebenfalls",
+  suche.brauchtSeiten("Dieselpreis Bayern", fundAttrappe) === true);
+
+// --- Der Auftrag muss woertlich ankommen -----------------------------------
+const { WERKZEUGE } = require("../lib/sprache-werkzeuge.js");
+const recherche = WERKZEUGE.find((w) => w.name === "recherchieren");
+pruefe("das Werkzeug „recherchieren“ gibt es noch", Boolean(recherche));
+pruefe("es verlangt die Frage WÖRTLICH",
+  /WÖRTLICH/.test(recherche?.input_schema?.properties?.auftrag?.description || ""));
+pruefe("und verbietet das Umschreiben in Suchbegriffe ausdruecklich",
+  /nicht in Suchbegriffe umschreiben/i.test(recherche?.input_schema?.properties?.auftrag?.description || ""));
+
 // --- Passende Stellen: Gewicht und Frische ---------------------------------
 //
 // Nachbau des Falls vom 20.08.: Oben der aktuelle Stand, unten die
