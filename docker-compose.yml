@@ -66,6 +66,10 @@ services:
       - KALENDER_ID=${KALENDER_ID:-}
       # Monatsziel im CRM-Dashboard. Leer = 30.000 wie bisher.
       - UMSATZ_ZIEL=${UMSATZ_ZIEL:-}
+      # Regie-Seite fuer die Werbeaufnahmen (/regie). Ohne die 1 existiert die
+      # Route nicht. Die Stimmen und Dokumente liegen im Ordner darunter.
+      - DREH_REGIE=${DREH_REGIE:-}
+      - DREH_ORDNER=/dreh
       # Abstand zwischen zwei Saetzen der Erzaehlspur, in Millisekunden.
       - ERZAEHL_ABSTAND_MS=${ERZAEHL_ABSTAND_MS:-5000}
       # WhatsApp-Bruecke (eigener Container). Das Dashboard zeigt die Koppelseite
@@ -128,6 +132,9 @@ services:
       - hermes
     volumes:
       - /opt/flowstate-vorlagen:/vorlagen:ro
+      # Stimmen und Dokumente fuer die Regie-Seite. Nur lesend — die Seite
+      # liefert aus, sie schreibt nicht.
+      - /opt/flowstate-dreh:/dreh:ro
       - /docker/hermes-agent-pocv/data/vault:/vault:ro
       # Zweites Gehirn: NUR diese Unterordner sind beschreibbar. Der Vault-Sync
       # (Host-Cron) committet + pusht sie nach Obsidian. Rest bleibt :ro, damit

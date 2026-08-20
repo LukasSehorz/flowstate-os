@@ -313,6 +313,13 @@ catch (e) { console.error("Sprach-Modul konnte nicht geladen werden:", e.message
 
 // Kalender (/kalender) — der Google Kalender zum Ansehen und Eintragen.
 // Steht hinter dem Auth-Gate: die Routen schreiben in ein echtes Google-Konto.
+// Regie-Seite fuer die Werbeaufnahmen. Nur mit DREH_REGIE=1 — im Betrieb gibt
+// es die Route nicht, auch nicht als 403.
+if (process.env.DREH_REGIE === "1") {
+  try { require("./lib/regie-routes.js")(app); console.log("Regie-Modul geladen (Dreh)"); }
+  catch (e) { console.error("Regie-Modul nicht geladen:", e.message); }
+}
+
 try { require("./lib/kalender-routes.js")(app); console.log("Kalender-Modul geladen"); }
 catch (e) { console.error("Kalender-Modul konnte nicht geladen werden:", e.message); }
 
