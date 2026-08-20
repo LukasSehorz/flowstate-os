@@ -1,6 +1,10 @@
 node_modules/
 data/
 .env
+# Auch jede Nebenform (.env.dreh fuer die Werbeaufnahmen). Bis 20.08.2026 stand
+# hier nur ".env" — eine .env.dreh mit dem Datenbank-Passwort waere mitgegangen.
+.env.*
+!.env.beispiel
 *.log
 shots/
 .DS_Store
