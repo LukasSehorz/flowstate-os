@@ -134,7 +134,18 @@ const BETRAG = /(\d[\d.]*\s*(€|Euro)|(tausend|hundert|million)\w*\s*Euro)/i;
 //
 // Ein Test, der nur Verbote kennt, ist mit Schweigen zufrieden. Jedes Szenario
 // braucht deshalb einen Satz darueber, was in der Antwort STEHEN muss.
-const UHRZEIT = /(\d{1,2}:\d{2}|\d{1,2} Uhr|[a-zäöü]+ Uhr)/i;
+// Uhrzeit, wie ein Mensch sie sagt. "um vier" hat der Pruefer bis 20.08.
+// durchfallen lassen und damit eine RICHTIGE Antwort als Fehler gemeldet:
+// "Zwei heute: um zehn der Anruf bei Fuchsius, um vier die Probeaufnahme."
+// Genau so soll sie sprechen — "16:00 Uhr" waere der Rueckschritt.
+const STUNDE_WORT = "(?:ein|eins|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf)";
+const UHRZEIT = new RegExp(
+  "(\\d{1,2}:\\d{2}"                              // 16:00
+  + "|\\d{1,2}\\s*Uhr"                            // 16 Uhr
+  + "|[a-zäöü]+\\s*Uhr"                           // sechzehn Uhr
+  + "|\\b(?:um|auf|ab|gegen)\\s+" + STUNDE_WORT + "\\b"  // um vier, auf sechs
+  + "|\\b(?:halb|viertel|dreiviertel)\\s+" + STUNDE_WORT + "\\b"  // halb elf
+  + ")", "i");
 const ZAHL = /(\d|null|ein|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|kein)/i;
 // Die Flugsuche hat geliefert, wenn ein Preis dasteht — nicht, wenn sie nur
 // nicht gejammert hat.
@@ -802,6 +813,21 @@ async function kalenderRaeumen(env) {
   let weg = 0;
   for (const t of meine) if (await gws(["calendar", "delete", String(t.id)])) weg++;
   const uebrig = meine.length - weg;
+
+  // Den STAND hinterher auffrischen (20.08.). Wir loeschen die Termine bei
+  // GOOGLE — das Gedaechtnis der Assistentin fuehrt sie weiter, bis die
+  // regulaere Auffrischung laeuft. Der naechste Lauf legt dann einen neuen
+  // Termin gleichen Namens an, und die Antwort lautet "Da passen mehrere —
+  // ADSTEST Probeaufnahme oder ADSTEST Probeaufnahme". Das sah wie ein
+  // Produktfehler aus und war Testmuell aus dem Lauf davor.
+  //
+  // Nur wenn wirklich etwas geloescht wurde, und Fehler sind egal: Der
+  // Kalender ist dann schon sauber, das hier ist Kosmetik am Gedaechtnis.
+  if (weg) {
+    try { await require("../lib/zustand.js").bauen(null, ["kalender"]); }
+    catch { /* der naechste regulaere Aufbau holt es nach */ }
+  }
+
   return { kalenderTermine: meine.length, kalenderGeloescht: weg,
            kalenderUebrig: uebrig || 0,
            kalenderRest: uebrig ? meine.slice(weg).map((t) => `${t.summary} (${t.start})`) : undefined };
