@@ -178,6 +178,93 @@ pruefe("bei „Tabellenstand“ wird die Seite gelesen",
 pruefe("bei „Dieselpreis“ ebenfalls",
   suche.brauchtSeiten("Dieselpreis Bayern", fundAttrappe) === true);
 
+// --- Das Netz gegen die Antwort ohne Suche ---------------------------------
+//
+// GEMESSEN AM 20.08.2026 ueber /api/chat. Zwanzig Mal dieselbe Frage in EINER
+// Sitzung, gegen den damals laufenden Stand: 5 von 20 richtig. Der Grund steht
+// woertlich im Sprachprotokoll — "aufrufe": [], "quelle": "zustand". Es wurde
+// nicht gesucht. Und schlimmer: Der Fehler frisst sich fest. Sobald einmal
+// "ich komm an die Tabelle nicht ran" im Verlauf steht, liest das Modell das
+// beim naechsten Mal als Tatsache und sucht erst recht nicht mehr:
+//
+//   [10] "Da kommt nichts mehr. Ich hab's oft genug versucht."
+//   [17] "Nein. Die Tabelle bekomme ich nicht — daran aendert sich auch beim
+//         fuenfzehnten Mal nichts."
+//
+// istNachschlagefrage() ist die Pruefung, die das aufhaelt: Kann der STAND das
+// ueberhaupt wissen? Sie muss zwei Dinge zugleich koennen — bei der Aussenfrage
+// anspringen UND bei allem Internen still bleiben. Beide Haelften stehen unten,
+// denn ein Netz, das zu oft greift, waere ein neuer Fehler.
+const STAND_PROBE = [
+  "HEUTE: 2026-08-20, 18:30 Uhr, Dorfen.",
+  "KALENDER heute: 14:00-15:00 Erstgespraech Physio Schwabing.",
+  "AUFGABEN offen: Angebot Krotzer rausschicken.",
+  "FIRMA: Sehorz & vom Hofe GbR, Performance Marketing. Team: Lukas, Jannik.",
+  "PREISE: Betreuung ab 1.500 Euro im Monat.",
+  "CRM: Krotzer und Eisele, Physio Schwabing, Zahnarztpraxis Bergmann.",
+].join("\n");
+
+for (const [f, soll] of [
+  // MUSS greifen: fremder Name + etwas, das sich taeglich aendert.
+  ["Wie steht der SV Oberbergkirchen in der Tabelle?", true],
+  ["Wie ist der Tabellenstand vom TSV Dorfen?", true],
+  ["Wie hoch ist der Dieselpreis in Bayern gerade?", true],
+  ["Wie viele Einwohner hat Erding?", true],
+  ["Was hat der FC Bayern gestern gespielt?", true],
+  // DARF NICHT greifen: alles, was der STAND oder die Datenbank beantwortet.
+  ["was steht heute an", false],
+  ["was steht morgen an", false],
+  ["wann hab ich Freitag Zeit", false],
+  ["was kostet bei uns die Betreuung", false],       // "bei uns" = eigener Laden
+  ["wie hat mein Reel Fassade performt", false],     // "mein" = eigener Laden
+  ["Stand bei Projekt Krotzer", false],              // Name steht im STAND
+  ["wie viele Leads hat Ioannis heute bekommen", false],
+  // Ein Auftrag ist keine Nachschlagefrage — eine Websuche waere hier die
+  // falsche Rettung.
+  ["schreib Jannik dass ich mich morgen melde", false],
+  ["trag mir morgen 10 Uhr Sport ein", false],
+  ["sag den Kalhofer-Anruf ab", false],
+  ["bau mir eine Praesentation ueber Performance Marketing", false],
+  ["schick den Juli-Ordner an die Steuerberaterin", false],
+]) {
+  pruefe(`${soll ? "sucht" : "sucht NICHT"}: „${f}“`,
+    suche.istNachschlagefrage(f, STAND_PROBE, []) === soll);
+}
+
+// Der zweite Teil von Lukas' Pruefsatz nennt den Verein nicht mehr. Auch er
+// muss als Aussenfrage durchgehen — sonst faellt das Netz genau bei der
+// Anschlussfrage aus, die in der Aufnahme direkt danach kommt.
+pruefe("Rueckbezug zaehlt als Aussenfrage, wenn das Thema im Verlauf steht",
+  suche.istNachschlagefrage("Wie haben sie am Wochenende gespielt?", STAND_PROBE,
+    [{ role: "user", content: "Wie steht der SV Oberbergkirchen in der Tabelle?" }]) === true);
+pruefe("... aber nicht ohne Thema (dann waere es geraten)",
+  suche.istNachschlagefrage("Wie haben sie am Wochenende gespielt?", STAND_PROBE, []) === false);
+
+// DIE FALLE, DIE DAS NETZ ZUERST WIRKUNGSLOS GEMACHT HAT (20.08.2026).
+//
+// Gemessen ueber /api/chat: 20 Laeufe, 5 richtig — obwohl das Netz eingebaut
+// war und im Sprachprotokoll `aufrufe: []` stand. Es haette greifen MUESSEN und
+// tat es nicht. Grund: sprache-routes.js haengt an den STAND die Liste der
+// laufenden Auftraege, und dort steht Lukas' Frage WOERTLICH drin
+// ("LAEUFT SEIT 3 s: Wie steht der SV Oberbergkirchen in der Tabelle?").
+// Ab der zweiten Runde stand der Vereinsname damit im uebergebenen Text — und
+// die Pruefung "kennt der STAND den Namen?" sagte ja.
+//
+// Ein STAND, der die Frage nur zurueckwirft, weiss gar nichts. Der Aufrufer
+// uebergibt jetzt den STAND ohne Anhang UND die Pruefung schneidet ihn selbst
+// ab — beides, damit es beim naechsten Umbau nicht wieder umfaellt.
+const FRAGE_TABELLE = "Wie steht der SV Oberbergkirchen in der Tabelle?";
+const STAND_MIT_ANHANG = STAND_PROBE +
+  "\n\nDEINE LAUFENDE ARBEIT:\n- LAEUFT SEIT 3 s: " + FRAGE_TABELLE;
+pruefe("Der STAND allein: die Frage geht an die Suche",
+  suche.istNachschlagefrage(FRAGE_TABELLE, STAND_PROBE, []) === true);
+pruefe("Die eigene Frage im Auftrags-Anhang zaehlt NICHT als Wissen des STANDs",
+  suche.istNachschlagefrage(FRAGE_TABELLE, STAND_MIT_ANHANG, []) === true);
+// Der Anhang darf aber auch nichts ZERSTOEREN: Was davor steht, gilt weiter.
+pruefe("Ein echter Name aus dem STAND bleibt trotz Anhang bekannt",
+  suche.istNachschlagefrage("Wie ist der Stand bei Krotzer und Eisele?",
+    STAND_MIT_ANHANG, []) === false);
+
 // --- Der Auftrag muss woertlich ankommen -----------------------------------
 const { WERKZEUGE } = require("../lib/sprache-werkzeuge.js");
 const recherche = WERKZEUGE.find((w) => w.name === "recherchieren");
