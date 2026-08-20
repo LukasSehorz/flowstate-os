@@ -72,6 +72,9 @@ services:
       - DREH_ORDNER=/dreh
       # Wie der Agent in der Oberflaeche heisst. Leer = Alexandra.
       - AGENT_NAME=${AGENT_NAME:-}
+      # Welches Creative im Drehbuch-Modus laeuft (0-3). Leer = kein Drehbuch,
+      # der Agent antwortet dann wie immer selbst.
+      - DREH_CREATIVE=${DREH_CREATIVE:-}
       # Abstand zwischen zwei Saetzen der Erzaehlspur, in Millisekunden.
       - ERZAEHL_ABSTAND_MS=${ERZAEHL_ABSTAND_MS:-5000}
       # WhatsApp-Bruecke (eigener Container). Das Dashboard zeigt die Koppelseite

@@ -63,8 +63,11 @@
   const drehFrage = new URLSearchParams(location.search).get("drehbuch");
   if (drehFrage === "aus") sessionStorage.removeItem(DREH_SPEICHER);
   else if (drehFrage !== null) sessionStorage.setItem(DREH_SPEICHER, drehFrage);
-  const DREHBUCH_NR = drehFrage === "aus" ? null
+  // Rangfolge: Link schlaegt Tab-Gedaechtnis schlaegt Servervorgabe. Der
+  // Server ist die letzte Instanz, damit der Modus einen neuen Tab ueberlebt.
+  let DREHBUCH_NR = drehFrage === "aus" ? null
     : (drehFrage !== null ? drehFrage : sessionStorage.getItem(DREH_SPEICHER));
+  let drehAus = drehFrage === "aus";
   let drehbuch = null;      // { titel, zuege: [{id, text, audio, oeffnen}] }
   let drehZug = 0;
   // Zwei Fenster: In Creative 3 liegen Rechnung und Excel nebeneinander. Ein
@@ -1334,6 +1337,9 @@
     // Im Dreh ist das Wake-Wort im Weg: "Hey Jarvis" steht in keinem Skript,
     // und die Dauererkennung greift parallel aufs Mikro. Geweckt wird
     // ausschliesslich durch Klatschen.
+    if (DREHBUCH_NR === null && !drehAus && konfig.drehbuch != null) {
+      DREHBUCH_NR = String(konfig.drehbuch);
+    }
     if (wakeAn && DREHBUCH_NR === null) wakeStarten();
     // Zweimal klatschen weckt sie — ohne Knopf, ohne Wake-Wort. Braucht die
     // Mikrofonfreigabe; ohne sie tut klatschWacheStarten() still nichts.
