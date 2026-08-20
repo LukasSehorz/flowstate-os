@@ -392,6 +392,35 @@ async function laden(c) {
   await deal({ firma: meridian, titel: "KI-Assistent Einführung", sparte: "ki",
     stufe: stufeErst, wert: K.rechnungMeridian, status: "offen", besitzer: wer(0) });
 
+  // Pipeline aus den gestern gebuchten Erstgespraechen.
+  //
+  // WARUM (20.08.2026, beim ersten Blick ins fertige Dashboard): Der Reiter
+  // "Leads" im CRM zeigt nur Leads MIT offenem Deal (crm-routes.js, liste ===
+  // "lead"). Ohne diese Deals stand dort eine einzige Firma, waehrend die
+  // Zentrale 311 Leads meldete — im Bild sieht das aus, als sei das CRM leer.
+  //
+  // Genommen werden Firmen mit dem Tag "gebucht": Wer ein Erstgespraech hat,
+  // hat auch einen Deal. Die Kaltakquise-Liste bekommt keinen — die ist noch
+  // nicht angerufen, dort waere ein Deal falsch.
+  const stufen = (await c.query(
+    `select id, name from public.pipeline_stages
+      where art='vertrieb' and name in ('Erstgespräch','Analyse & Strategie','Angebot',
+                                        'Follow-up nach Erstgespräch','Readiness-Check gebucht')
+      order by id`)).rows;
+  const { rows: gebuchte } = await c.query(
+    `select id from public.firmen
+      where status='lead' and tags @> array['gebucht']::text[] and id <> $1
+      order by id limit 12`, [nordlicht]);
+  const WERTE = [8900, 7400, 6800, 5900, 5400, 4800, 4200, 3900, 3500, 2900, 2600, 2400];
+  for (let i = 0; i < gebuchte.length; i++) {
+    const s = stufen[i % stufen.length];
+    await deal({
+      firma: gebuchte[i].id, titel: "Erstgespräch geführt",
+      sparte: /Readiness|Masterplan/.test(s.name) ? "ki" : "performance",
+      stufe: s.id, wert: WERTE[i % WERTE.length], status: "offen", besitzer: wer(i % 3),
+    });
+  }
+
   // --------------------------------------------------------------- Aufgaben
   const aufgabe = (titel, tage, firmaId) => c.query(
     `insert into public.aufgaben (firma_id, titel, faellig, erledigt, besitzer)
