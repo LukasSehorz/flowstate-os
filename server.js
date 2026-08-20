@@ -238,18 +238,33 @@ app.post("/intern/dienst-anmelden", async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, hint: String(e.message).slice(0, 120) }); }
 });
 
+// Nach der Anmeldung dorthin, wo derjenige eigentlich hinwollte.
+//
+// WARUM (20.08.2026): Beim Dreh oeffnete Jannik /sprache?drehbuch=0, wurde zur
+// Anmeldung geschickt und landete danach auf der Startseite. Die Frage im Link
+// war weg, das Drehbuch damit aus — und er sprach mit dem echten Agenten statt
+// mit der Aufnahme. Man sieht es dem Bildschirm nicht an; auffallen kann es
+// erst, wenn die falsche Antwort kommt.
+function zurueckZiel(req) {
+  const z = req.session && req.session.zurueck;
+  if (req.session) delete req.session.zurueck;
+  // Nur eigene Pfade, und nichts, was wieder auf die Anmeldung zeigt.
+  return (typeof z === "string" && z.startsWith("/") && !z.startsWith("//")
+    && !z.startsWith("/login")) ? z : "/";
+}
+
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
   if (email && process.env.DATABASE_URL) {
     try {
       const u = await require("./lib/crm.js").anmelden(email.trim(), password);
-      if (u) { req.session.crm = u; req.session.authed = true; return res.redirect("/"); }
+      if (u) { req.session.crm = u; req.session.authed = true; return res.redirect(zurueckZiel(req)); }
     } catch (e) { console.error("Anmeldung fehlgeschlagen:", e.message); }
     return res.redirect("/login?err=1");
   }
   if (PASSWORD && password === PASSWORD) {
     req.session.authed = true;
-    return res.redirect("/");
+    return res.redirect(zurueckZiel(req));
   }
   res.redirect("/login?err=1");
 });
@@ -300,6 +315,9 @@ app.use((req, res, next) => {
   if (req.session.authed || req.session.crm) return next();
   // API-Aufrufe bekommen eine klare Meldung statt einer Weiterleitung ins Nichts
   if (req.path.startsWith("/api/")) return res.status(401).json({ ok: false, hint: "Sitzung abgelaufen — bitte Seite neu laden und neu anmelden." });
+  // Das Ziel merken, samt Fragezeichen-Teil. Ohne das geht ?drehbuch=0
+  // verloren (siehe zurueckZiel oben).
+  if (req.method === "GET") req.session.zurueck = req.originalUrl;
   res.redirect("/login");
 });
 

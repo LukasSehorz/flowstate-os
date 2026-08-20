@@ -267,7 +267,11 @@
     zustand = z;
     el.kugel.dataset.zustand = z;
     if (el.zustandText) el.zustandText.textContent = text || WORTE[z] || z;
-    if (el.wort) el.wort.textContent = z === "ruhe" ? "ALEXANDRA" : (WORTE[z] || "").toUpperCase();
+    // Im Ruhezustand steht der Name des Agenten da. Er kommt vom Server
+    // (konfig.agent), damit ihn eine einzige Stelle bestimmt.
+    if (el.wort) el.wort.textContent = z === "ruhe"
+      ? (konfig.agent || "Alexandra").toUpperCase()
+      : (WORTE[z] || "").toUpperCase();
   }
 
   // ---------------------------------------------------------------- Waechter

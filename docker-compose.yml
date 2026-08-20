@@ -70,6 +70,8 @@ services:
       # Route nicht. Die Stimmen und Dokumente liegen im Ordner darunter.
       - DREH_REGIE=${DREH_REGIE:-}
       - DREH_ORDNER=/dreh
+      # Wie der Agent in der Oberflaeche heisst. Leer = Alexandra.
+      - AGENT_NAME=${AGENT_NAME:-}
       # Abstand zwischen zwei Saetzen der Erzaehlspur, in Millisekunden.
       - ERZAEHL_ABSTAND_MS=${ERZAEHL_ABSTAND_MS:-5000}
       # WhatsApp-Bruecke (eigener Container). Das Dashboard zeigt die Koppelseite
