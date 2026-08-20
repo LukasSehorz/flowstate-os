@@ -127,6 +127,7 @@ const K = {
   umsatzMonat: 32400,         // C1_04 — Stand am Drehtag, die 12.000 sind drin
   monatsziel: 60000,          // C1_04 — Ziellinie im Diagramm
   umsatzVormonat: 55000,      // C1_04 — "steigert euch um 5.000" gegenueber Juli
+  umsatzGesamt: 269400,       // Kachel "Umsatz insgesamt" und das Zwoelf-Monats-Diagramm
   leadsHeute: 50,             // C1_05
   leadsNachschub: 250,        // C1_06 — zusammen 300
 
@@ -351,7 +352,8 @@ async function laden(c) {
   // eine negative Deal-Dauer ("Ø Deal-Dauer -28 Tage") — nachgemessen am
   // 20.08.2026, weil erstellt auf now() stand und der Abschluss in der
   // Vergangenheit lag.
-  const gewinner = async (name, wert, tag, vormonat, besitzer) => {
+  // monateZurueck: 0 = laufender Monat, 1 = Vormonat, 2 = der davor …
+  const gewinner = async (name, wert, tag, monateZurueck, besitzer) => {
     const f = await firma({
       name, status: "kunde", branche: BRANCHEN[lauf % BRANCHEN.length],
       ort: ORTE[lauf % ORTE.length], besitzer,
@@ -369,20 +371,32 @@ async function laden(c) {
               erstellt = date_trunc('month', current_date)
                              - $3::int * interval '1 month' + $2::int * interval '1 day'
                              - 26 * interval '1 day'
-        where id = $1`, [id, tag, vormonat ? 1 : 0]);
+        where id = $1`, [id, tag, monateZurueck]);
     await c.query(
       `update public.firmen set kunde_seit = (date_trunc('month', current_date)
           - $2::int * interval '1 month' + $3::int * interval '1 day')::date where id = $1`,
-      [f, vormonat ? 1 : 0, tag]);
+      [f, monateZurueck, tag]);
     return { firma: f, name };
   };
+
+  // Die Monate davor — damit "Umsatz insgesamt" auf 269.400 kommt und das
+  // Zwoelf-Monats-Diagramm nicht nur zwei Balken hat. Steigend zum Heute hin,
+  // weil eine Agentur, die gerade 55.000 im Monat macht, vor einem Jahr nicht
+  // dasselbe gemacht hat — ein flacher Verlauf sieht erfunden aus.
+  const HISTORIE = [26400, 24800, 22600, 21200, 19400, 17800, 15600, 13900, 11200, 9100];
+  const kundenHistorie = [];
+  for (let m = 0; m < HISTORIE.length; m++) {
+    const gross = Math.round(HISTORIE[m] * 0.6);
+    kundenHistorie.push(await gewinner(firmenname(lauf), gross, 9, m + 2, wer(m % 3)));
+    kundenHistorie.push(await gewinner(firmenname(lauf), HISTORIE[m] - gross, 21, m + 2, wer((m + 1) % 3)));
+  }
 
   // Vormonat — die 55.000 aus C1_04 ("5.000 mehr als im Vormonat").
   const vormonatWerte = [12000, 9500, 8400, 7600, 6800, 5900, 4800];
   vormonatWerte.push(K.umsatzVormonat - vormonatWerte.reduce((a, b) => a + b, 0));
   const kundenVormonat = [];
   for (let i = 0; i < vormonatWerte.length; i++) {
-    kundenVormonat.push(await gewinner(firmenname(lauf), vormonatWerte[i], 6 + i * 3, true, wer(i % 3)));
+    kundenVormonat.push(await gewinner(firmenname(lauf), vormonatWerte[i], 6 + i * 3, 1, wer(i % 3)));
   }
 
   // Laufender Monat — die 32.400 aus C1_04. Die zwei Abschluesse von gestern
@@ -393,10 +407,10 @@ async function laden(c) {
   monatWerte.push(K.umsatzMonat - K.wertClosingsGestern - monatWerte.reduce((a, b) => a + b, 0));
   const kundenMonat = [];
   for (let i = 0; i < monatWerte.length; i++) {
-    kundenMonat.push(await gewinner(firmenname(lauf), monatWerte[i], 2 + i * 4, false, wer(i % 3)));
+    kundenMonat.push(await gewinner(firmenname(lauf), monatWerte[i], 2 + i * 4, 0, wer(i % 3)));
   }
   for (let i = 0; i < K.closingsGestern; i++) {
-    const k = await gewinner(firmenname(lauf), proClosing, 0, false, chef.id);
+    const k = await gewinner(firmenname(lauf), proClosing, 0, 0, chef.id);
     kundenMonat.push(k);
     await c.query(
       `update public.deals set geschlossen_am = current_date - 1 + time '16:30'
@@ -585,7 +599,9 @@ async function stand(c) {
          and geschlossen_am <  date_trunc('month', current_date))::numeric as umsatz_vormonat,
       (select coalesce(sum(betrag),0) from public.buchungen where art='einnahme'
          and datum >= date_trunc('month', current_date) - interval '1 month'
-         and datum <  date_trunc('month', current_date))::numeric as buchungen_vormonat`);
+         and datum <  date_trunc('month', current_date))::numeric as buchungen_vormonat,
+      (select coalesce(sum(wert),0) from public.deals
+        where status='gewonnen')::numeric as umsatz_gesamt`);
 
   const euro = (n) => Number(n).toLocaleString("de-DE", { minimumFractionDigits: 0 }) + " €";
   const zeile = (was, ist, soll) => console.log("  " + was.padEnd(24) + String(ist).padStart(10)
@@ -603,6 +619,7 @@ async function stand(c) {
   zeile("davon in buchungen", euro(z.buchungen_vormonat));
   zeile("Umsatz laufender Monat", euro(z.umsatz_monat), euro(K.umsatzMonat));
   zeile("davon gestern geclosed", euro(z.gestern_wert), euro(K.wertClosingsGestern));
+  zeile("Umsatz insgesamt", euro(z.umsatz_gesamt), euro(K.umsatzGesamt));
   console.log("\n  C1_06: --leads-nachziehen schaltet " + K.leadsNachschub
     + " frei →  " + (z.leads_offen + z.leads_reserve) + " in der Liste.");
 
@@ -614,6 +631,7 @@ async function stand(c) {
   if (Number(z.gestern_wert) !== K.wertClosingsGestern) abweichung.push("Wert der Abschlüsse von gestern");
   if (Number(z.umsatz_vormonat) !== K.umsatzVormonat) abweichung.push("Umsatz Vormonat");
   if (Number(z.umsatz_monat) !== K.umsatzMonat) abweichung.push("Umsatz laufender Monat");
+  if (Number(z.umsatz_gesamt) !== K.umsatzGesamt) abweichung.push("Umsatz insgesamt");
   if (abweichung.length) {
     console.log("\n  ACHTUNG — weicht vom Skript ab: " + abweichung.join(", "));
     console.log("  Entweder neu laden oder die Sprechzeile anpassen.");
