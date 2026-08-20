@@ -59,6 +59,9 @@
   // einmal ueber die Navigation auf /sprache geklickt und der Drehbuch-Modus
   // war aus, ohne dass man es der Seite ansieht. Am Set merkt man das erst an
   // der falschen Antwort. "?drehbuch=aus" schaltet wieder zurueck.
+  // Wie viele Zeichen eine Antwort mindestens haben muss, damit sie als
+  // Antwort zaehlt. Janniks kuerzeste Zeile ist "Ja, schick's ab." (16).
+  const DREH_MIN_ZEICHEN = 12;
   const DREH_SPEICHER = "flowstate-drehbuch";
   const drehFrage = new URLSearchParams(location.search).get("drehbuch");
   if (drehFrage === "aus") sessionStorage.removeItem(DREH_SPEICHER);
@@ -97,7 +100,9 @@
     const liste = Array.isArray(dateien) ? dateien : (dateien ? [dateien] : []);
     liste.forEach((datei, i) => {
       const name = i === 0 ? "drehmappe" : "drehmappe2";
-      const url = "/regie/datei/" + encodeURIComponent(datei);
+      const url = /^https?:\/\//.test(datei)
+        ? datei                                   // z. B. WhatsApp Web
+        : "/regie/datei/" + encodeURIComponent(datei);
       try {
         const w = mappen[name];
         if (w && !w.closed) { w.location.href = url; w.focus(); }
@@ -135,6 +140,14 @@
     // Das Dokument geht auf, BEVOR die Stimme laeuft: Im Video soll der
     // Bildschirm schon leuchten, waehrend der Satz dazu gesprochen wird.
     if (z.oeffnen && z.oeffnen.length) mappeZeigen(z.oeffnen);
+    // Eine Handlung am Zug: Was der Agent ANKUENDIGT, soll auch passieren.
+    // Losgeschickt, ohne darauf zu warten — die Stimme darf nicht haengen,
+    // wenn die WhatsApp-Bruecke gerade traege ist.
+    if (z.tat) {
+      fetch("/regie/tat/" + encodeURIComponent(z.tat), { method: "POST" })
+        .then((r) => r.json()).then((d) => console.log("Drehbuch-Tat:", z.tat, d))
+        .catch((e) => console.error("Drehbuch-Tat fehlgeschlagen:", e.message));
+    }
     zeile("sie", z.text || "");
     if (z.audio) await sagen("/regie/datei/" + encodeURIComponent(z.audio), true, z.text);
     else if (z.text) await sprich(z.text);
@@ -526,7 +539,9 @@
     if (!imGespraech) { setzeZustand("ruhe"); return; }
     letzteAktivitaet = Date.now();   // frische Geduld nach jeder Antwort
     if (pausiert) { setzeZustand("pause"); return; }   // Mikro aus -> nicht wieder anfangen
-    setTimeout(() => { if (imGespraech && !pausiert) hoeren(); }, 350);
+    // Im Dreh laenger warten: Der Lautsprecher klingt nach, und das Mikro
+    // sitzt im selben Raum. 350 ms reichten nicht.
+    setTimeout(() => { if (imGespraech && !pausiert) hoeren(); }, drehbuch ? 900 : 350);
   }
 
   // Stille Runde: Gespraech offen halten, solange die Geduld reicht — nicht
@@ -952,7 +967,24 @@
     // Verlauf — die Antwort ist der naechste Zug aus dem Drehbuch. Kein
     // "denkt nach", weil es nichts nachzudenken gibt und die Pause im Video
     // wie ein Aussetzer aussaehe.
-    if (drehbuch) return drehbuchZug();
+    if (drehbuch) {
+      // NUR ECHTE SAETZE SCHALTEN WEITER (20.08.2026).
+      //
+      // Beim ersten Durchlauf von Creative 2 lief das ganze Skript durch, ohne
+      // dass Jannik ein Wort gesagt hatte. Im Protokoll stand bei JEDEM Zug ein
+      // "hoeren" mit acht Zeichen: Das Mikro hatte den Nachhall aus dem
+      // Lautsprecher aufgeschnappt, die Erkennung machte einen Wortfetzen
+      // daraus, und der galt als Antwort.
+      //
+      // Janniks Zeilen sind ganze Saetze. Alles darunter ist Raum, Rascheln
+      // oder Echo — und wird verworfen, statt die Aufnahme zu ruinieren.
+      if (text.replace(/\s+/g, " ").trim().length < DREH_MIN_ZEICHEN) {
+        console.log("Drehbuch: zu kurz, ignoriert —", JSON.stringify(text));
+        if (el.hinweis) el.hinweis.textContent = "… (zu kurz, ich warte weiter)";
+        return weiter();
+      }
+      return drehbuchZug();
+    }
     setzeZustand("denken");
     if (el.karten) el.karten.innerHTML = "";
 
