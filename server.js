@@ -821,11 +821,18 @@ function hudWerte(d) {
   const vormonat = z ? z.umsatz.vormonat : 0;
 
   // Die Skala der Messuhr ist der beste Monat der letzten zwoelf. Bewusst kein
-  // erfundenes Monatsziel: ein Zeiger, der gegen eine ausgedachte Marke laeuft,
+  // ERFUNDENES Monatsziel: ein Zeiger, der gegen eine ausgedachte Marke laeuft,
   // behauptet etwas ueber die Firma, das niemand festgelegt hat. Der beste
   // bisherige Monat ist eine Zahl, die es wirklich gibt — und der Zeiger sagt
   // damit "so gut wie je" statt "Ziel erreicht".
-  const skala = Math.max(monat, vormonat, ...verlauf.map((v) => v.wert), 0);
+  //
+  // Wer aber UMSATZ_ZIEL setzt, HAT eines festgelegt — dann ist es nicht mehr
+  // ausgedacht, und der Zeiger darf dagegen laufen (20.08.2026). Ohne die
+  // Variable bleibt alles wie bisher.
+  const zielUmsatz = Number(process.env.UMSATZ_ZIEL) || 0;
+  const skala = zielUmsatz > 0
+    ? zielUmsatz
+    : Math.max(monat, vormonat, ...verlauf.map((v) => v.wert), 0);
   const uhrAnteil = skala > 0 ? Math.min(1, monat / skala) : 0;
   const vormonatAnteil = skala > 0 ? Math.min(1, vormonat / skala) : 0;
 
@@ -846,7 +853,7 @@ function hudWerte(d) {
   const histMax = Math.max(1, ...verlauf.map((v) => v.wert));
 
   return {
-    skala, uhrAnteil, vormonatAnteil, wachstum, verlauf, histMax,
+    skala, zielUmsatz, uhrAnteil, vormonatAnteil, wachstum, verlauf, histMax,
     nach, anrufeGesamt, anrufeHeute, callMax, todos: t, tagesLast, tagesAnteil,
     // Die flache Werteliste: genau diese Schluessel stehen als data-wert an den
     // Zahlen im HTML, und genau sie schickt /api/hud/zentrale beim Nachzug.
@@ -1257,7 +1264,7 @@ app.get("/", async (req, res) => {
         </div>
       </div>
       <div class="hud-uhr-fuss">
-        <span class="hud-mikro">Skala 0 – <b>${eur(w.skala)}</b> · bester Monat der letzten zwölf</span>
+        <span class="hud-mikro">Skala 0 – <b>${eur(w.skala)}</b> · ${w.zielUmsatz > 0 ? "Monatsziel" : "bester Monat der letzten zwölf"}</span>
         <span class="hud-mikro">${esc(vormonatName)} <b>${hudN("umsatz_vormonat", w.werte.umsatz_vormonat, "eur")}</b>${
           w.wachstum === null ? " · kein Vergleich möglich"
             : ` · <b class="${w.wachstum >= 0 ? "j-auf" : "j-ab"}">${w.wachstum >= 0 ? "+" : "−"}${Math.abs(w.wachstum)} %</b>`}</span>
