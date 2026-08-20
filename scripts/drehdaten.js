@@ -19,9 +19,10 @@
 // verlorengehen koennten.
 //
 // AUFRUF
-//   node scripts/drehdaten.js --stand      was liegt in der Dreh-Datenbank?
-//   node scripts/drehdaten.js --laden      Kulisse aufbauen (leert vorher)
-//   node scripts/drehdaten.js --leeren     Kulisse abbauen
+//   node scripts/drehdaten.js --stand              was liegt in der Dreh-Datenbank?
+//   node scripts/drehdaten.js --laden              Kulisse aufbauen (leert vorher)
+//   node scripts/drehdaten.js --leads-nachziehen   im Dreh: 250 Leads freischalten
+//   node scripts/drehdaten.js --leeren             Kulisse abbauen
 //
 // VORHER: In der Dreh-Datenbank muessen das Schema (scripts/migrieren.js) und
 // mindestens ein Konto (scripts/nutzer-anlegen.js) stehen. Ohne Konto gibt es
@@ -34,7 +35,8 @@ const argv = process.argv.slice(2);
 const LADEN = argv.includes("--laden");
 const LEEREN = argv.includes("--leeren");
 const MARKIEREN = argv.includes("--markieren");
-const STAND = argv.includes("--stand") || (!LADEN && !LEEREN && !MARKIEREN);
+const NACHZIEHEN = argv.includes("--leads-nachziehen");
+const STAND = argv.includes("--stand") || (!LADEN && !LEEREN && !MARKIEREN && !NACHZIEHEN);
 
 // ------------------------------------------------------------------ Ziel
 //
@@ -113,24 +115,30 @@ async function markieren(c) {
 // Alle Zahlen stehen hier oben, weil sie im Skript vorgelesen werden. Wer eine
 // aendert, muss die Sprechzeile mitaendern — deshalb nicht ueber die Datei
 // verstreut.
+// Stand: Skript-Fassung 2 vom 20.08.2026.
 const K = {
-  // Creative 1
-  callsGestern: 142,        // Cold Calls gestern
-  callsHeute: 18,           // schon gefuehrt, damit die Kachel nicht auf null steht
-  erstgespraecheGestern: 19,
-  salesCallsGestern: 4,
-  closingsGestern: 2,
-  umsatzJuli: 87400,
-  umsatzJuni: 78000,        // fuer "knapp 12 Prozent ueber Juni"
-  umsatzMonatVorher: 62800, // Stand, bevor die Rechnung im Dreh dazukommt
-  leadsMorgen: 50,
-  leadsNachschub: 100,
-  // Creative 3 / 4
-  belegeJuli: 33,           // der 34. wird im Dreh fotografiert
-  rechnungMeridian: 4000,
+  // ---- Creative 1 (Sales-Zahlen und Leads)
+  callsGestern: 142,          // C1_03
+  callsHeute: 18,             // damit die Kachel am Drehtag nicht auf null steht
+  erstgespraecheGestern: 12,  // C1_03 — Quote rund achteinhalb Prozent
+  salesCallsGestern: 4,       // C1_03
+  closingsGestern: 2,         // C1_03 — "Du hast beide", also Jannik
+  wertClosingsGestern: 12000, // C1_04 — zwei Operating Systems a 6.000
+  umsatzMonat: 32400,         // C1_04 — Stand am Drehtag, die 12.000 sind drin
+  monatsziel: 60000,          // C1_04 — Ziellinie im Diagramm
+  umsatzVormonat: 55000,      // C1_04 — "steigert euch um 5.000" gegenueber Juli
+  leadsHeute: 50,             // C1_05
+  leadsNachschub: 250,        // C1_06 — zusammen 300
+
+  // ---- Creative 3 (Sales Call ausgewertet, Angebot, Rechnung)
+  dealNordlicht: 8000,        // C3_02 — Voice Agent, zwei Standorte
+  belegeJuli: 33,             // C3_04 — der 34. wird im Dreh eingescannt
 };
 
-const TEAM_ANTEIL = { erste: 0.45, zweite: 0.33 };  // Rest auf die dritte Person
+// Wer im Video angesprochen wird. Fassung 2, Grundregeln: "Angesprochen wird
+// Jannik, nicht Lukas." Daran haengen die Aufgaben des Tages, die beiden
+// Abschluesse von gestern ("Du hast beide") und der Kalender.
+const CHEF_NAME = /jannik/i;
 
 // Firmennamen fuer die Cold-Call-Liste. Bewusst erfunden und bewusst
 // unauffaellig — in der Liste sieht man sie nur im Vorbeiscrollen.
@@ -179,7 +187,10 @@ async function laden(c) {
     process.exit(1);
   }
   const wer = (i) => profile[i % profile.length].id;
+  const chef = profile.find((p) => CHEF_NAME.test(p.name)) || profile[0];
   console.log("Konten gefunden: " + profile.map((p) => p.name).join(", "));
+  console.log(`Angesprochen wird: ${chef.name} — Aufgaben, Kalender und die zwei`
+    + ` Abschluesse von gestern stehen auf ihm.`);
 
   const stufe = async (sparte, name) => {
     const { rows } = await c.query(
@@ -254,13 +265,22 @@ async function laden(c) {
     return out;
   };
 
+  // Die Sparte entscheidet, unter welchem Reiter ein Lead auf /leads auftaucht.
+  //
+  // WARUM VERTEILT (20.08.2026): Zuerst trugen alle Leads nur "performance".
+  // Die Leads-Seite oeffnet aber auf dem Reiter "Webdesign", und der stand
+  // dadurch auf null Eintraegen — genau die Ansicht, in der in Creative 1 die
+  // Liste vollaufen soll. Jetzt liegt in jedem Reiter etwas.
+  const SPARTEN = ["performance", "webdesign", "ki"];
+  const sparteVon = (i) => SPARTEN[i % 5 === 4 ? 2 : i % 2];   // ~40/40/20
+
   let lauf = 0;
   const anrufTag = async (tag, anzahl, tageZurueck) => {
     for (let i = 0; i < anzahl; i++, lauf++) {
       const f = await firma({
         name: firmenname(lauf), status: "lead",
         branche: BRANCHEN[lauf % BRANCHEN.length], ort: ORTE[lauf % ORTE.length],
-        tags: ["performance", tag], besitzer: wer(lauf % 3),
+        tags: [sparteVon(lauf), tag], besitzer: wer(lauf % 3),
         temperatur: tag === "gebucht" ? "heiss" : tag === "absage" ? "kalt" : "warm",
       });
       await c.query(
@@ -271,7 +291,7 @@ async function laden(c) {
   };
 
   // Gestern: die Zahl, die im Skript vorgelesen wird. Die Erstgespraeche sind
-  // dabei fest gesetzt (19), der Rest verteilt sich.
+  // fest gesetzt (C1_03), der Rest verteilt sich.
   for (const [tag, n] of verteilen(K.callsGestern - K.erstgespraecheGestern)) {
     await anrufTag(tag, n, 1);
   }
@@ -279,32 +299,39 @@ async function laden(c) {
   // Heute: damit die Kachel am Drehtag nicht auf null steht.
   for (const [tag, n] of verteilen(K.callsHeute)) await anrufTag(tag, n, 0);
 
-  // ------------------------------------------------------------- Leads morgen
-  const listeId = (await c.query(
+  // -------------------------------------------------------- Leads fuer heute
+  //
+  // C1_05/C1_06: 50 liegen bereit, 250 kommen im Dreh dazu, zusammen 300.
+  //
+  // Der Nachschub liegt schon in der Datenbank, aber auf status 'ruht' — die
+  // Leads-Seite zeigt nur 'lead'. Damit steht die Liste vor der Aufnahme auf
+  // 50, und "--leads-nachziehen" schaltet die 250 in einer Sekunde frei. Echtes
+  // Recherchieren dauert Minuten und haette die Einstellung gesprengt.
+  const liste = async (name) => (await c.query(
     `insert into public.call_listen (name, besitzer) values ($1,$2) returning id`,
-    ["Kaltakquise " + new Date().toLocaleDateString("de-DE", { month: "long" }), wer(0)]
-  )).rows[0].id;
+    [name, chef.id])).rows[0].id;
+  const listeHeute = await liste("Kaltakquise "
+    + new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }));
+  const listeNachschub = await liste("Nachschub");
 
-  const leadAnlegen = async (n, wiedervorlage) => {
+  const leadAnlegen = async (n, { ruht, listeId }) => {
     for (let i = 0; i < n; i++, lauf++) {
       const f = await firma({
-        name: firmenname(lauf), status: "lead",
+        name: firmenname(lauf), status: ruht ? "ruht" : "lead",
         branche: BRANCHEN[lauf % BRANCHEN.length], ort: ORTE[lauf % ORTE.length],
-        tags: ["performance"], besitzer: wer(lauf % 3), temperatur: "kalt",
+        tags: [sparteVon(lauf)], besitzer: wer(lauf % 3), temperatur: "kalt",
+        telefon: "0" + (8000 + (lauf % 900)) + " " + (100000 + lauf * 7),
       });
-      if (wiedervorlage) {
-        await c.query(`update public.firmen set wiedervorlage = current_date + 1 where id = $1`, [f]);
+      if (!ruht) {
+        await c.query(`update public.firmen set wiedervorlage = current_date where id = $1`, [f]);
       }
       await c.query(
         `insert into public.call_listen_eintraege (liste_id, firma_id) values ($1,$2)`,
         [listeId, f]);
     }
   };
-  await leadAnlegen(K.leadsMorgen, true);
-  // Der Nachschub liegt schon in der Datenbank, aber ohne Wiedervorlage. "Zieh
-  // nochmal 100" setzt im Dreh nur noch das Datum — das geht in einer Sekunde,
-  // waehrend echtes Recherchieren Minuten braucht.
-  await leadAnlegen(K.leadsNachschub, false);
+  await leadAnlegen(K.leadsHeute, { ruht: false, listeId: listeHeute });
+  await leadAnlegen(K.leadsNachschub, { ruht: true, listeId: listeNachschub });
 
   // ------------------------------------------------------------------ Deals
   const deal = async (d) => {
@@ -317,80 +344,87 @@ async function laden(c) {
     return rows[0].id;
   };
 
-  // Juli — die 87.400 aus C1_03, groesster Posten Bergmann Solar mit 14.000.
-  const juli = [14000, 12800, 11500, 9900, 9400, 8600, 7800, 6900, 6500];
-  const juliSumme = juli.reduce((a, b) => a + b, 0);
-  juli.push(K.umsatzJuli - juliSumme);
-  for (let i = 0; i < juli.length; i++) {
-    const f = i === 0 ? bergmann : await firma({
-      name: firmenname(lauf++), status: "kunde", branche: BRANCHEN[i % BRANCHEN.length],
-      ort: ORTE[i % ORTE.length], besitzer: wer(i % 3), kunde_seit: "2026-07-01",
-    });
-    const id = await deal({
-      firma: f, titel: "Projekt Juli", sparte: i % 2 ? "performance" : "ki",
-      stufe: stufeGewonnen, wert: juli[i], status: "gewonnen", besitzer: wer(i % 3),
-    });
-    // Das Datum ist ein Ausdruck und geht darum nicht als Parameter mit —
-    // es wird direkt danach gesetzt. Wichtig ist nur, dass es im VORmonat
-    // liegt: daraus rechnet die Zentrale die 87.400 aus C1_03.
-    await c.query(
-      `update public.deals
-          set geschlossen_am = date_trunc('month', current_date) - interval '1 month'
-                             + $2::int * interval '1 day'
-        where id = $1`, [id, 7 + i]);
-  }
-
-  // Laufender Monat — der Stand VOR der Rechnung aus Creative 4.
-  const monat = [18500, 14200, 12100, 9800];
-  monat.push(K.umsatzMonatVorher - monat.reduce((a, b) => a + b, 0));
-  for (let i = 0; i < monat.length; i++) {
+  // Kunde + gewonnener Deal in einem Zug. gewonnenAm ist der Abstand in Tagen
+  // zum Monatsersten; vormonat verschiebt zusaetzlich um einen Monat zurueck.
+  //
+  // erstellt wird VOR den Abschluss gelegt. Ohne das steht im CRM-Dashboard
+  // eine negative Deal-Dauer ("Ø Deal-Dauer -28 Tage") — nachgemessen am
+  // 20.08.2026, weil erstellt auf now() stand und der Abschluss in der
+  // Vergangenheit lag.
+  const gewinner = async (name, wert, tag, vormonat, besitzer) => {
     const f = await firma({
-      name: firmenname(lauf++), status: "kunde", branche: BRANCHEN[i % BRANCHEN.length],
-      ort: ORTE[i % ORTE.length], besitzer: wer(i % 3), kunde_seit: "2026-08-01",
+      name, status: "kunde", branche: BRANCHEN[lauf % BRANCHEN.length],
+      ort: ORTE[lauf % ORTE.length], besitzer,
+      kunde_seit: null, telefon: "0" + (7000 + (lauf % 900)) + " " + (200000 + lauf * 3),
     });
+    lauf++;
     const id = await deal({
-      firma: f, titel: "Projekt " + (i + 1), sparte: i % 2 ? "performance" : "ki",
-      stufe: stufeGewonnen, wert: monat[i], status: "gewonnen", besitzer: wer(i % 3),
+      firma: f, titel: "Operating System", sparte: "ki",
+      stufe: stufeGewonnen, wert, status: "gewonnen", besitzer,
     });
-    await c.query(
-      `update public.deals set geschlossen_am = date_trunc('month', current_date) + $2::int * interval '1 day'
-        where id = $1`, [id, i * 3]);
-  }
-
-  // Gestern: vier Sales Calls, zwei davon abgeschlossen (C1_02). Die beiden
-  // Abschluesse sind KEINE zusaetzlichen Deals, sondern zwei aus dem laufenden
-  // Monat, auf gestern datiert — sonst waere die Monatssumme nicht mehr die
-  // 62.800, die in C4_03 hochzaehlen soll.
-  const verkaeufer = profile.find((p) => /ioannis/i.test(p.name)) || profile[1] || profile[0];
-  const { rows: gestrige } = await c.query(
-    `select id from public.deals where status='gewonnen'
-        and geschlossen_am >= date_trunc('month', current_date)
-      order by wert desc limit $1`, [K.closingsGestern]);
-  for (const g of gestrige) {
     await c.query(
       `update public.deals
-          set geschlossen_am = current_date - 1 + time '16:30', besitzer = $2
-        where id = $1`, [g.id, verkaeufer.id]);
+          set geschlossen_am = date_trunc('month', current_date)
+                             - $3::int * interval '1 month' + $2::int * interval '1 day',
+              erstellt = date_trunc('month', current_date)
+                             - $3::int * interval '1 month' + $2::int * interval '1 day'
+                             - 26 * interval '1 day'
+        where id = $1`, [id, tag, vormonat ? 1 : 0]);
+    await c.query(
+      `update public.firmen set kunde_seit = (date_trunc('month', current_date)
+          - $2::int * interval '1 month' + $3::int * interval '1 day')::date where id = $1`,
+      [f, vormonat ? 1 : 0, tag]);
+    return { firma: f, name };
+  };
+
+  // Vormonat — die 55.000 aus C1_04 ("5.000 mehr als im Vormonat").
+  const vormonatWerte = [12000, 9500, 8400, 7600, 6800, 5900, 4800];
+  vormonatWerte.push(K.umsatzVormonat - vormonatWerte.reduce((a, b) => a + b, 0));
+  const kundenVormonat = [];
+  for (let i = 0; i < vormonatWerte.length; i++) {
+    kundenVormonat.push(await gewinner(firmenname(lauf), vormonatWerte[i], 6 + i * 3, true, wer(i % 3)));
   }
-  // Die vier Gespraeche selbst — zwei gewonnen, zwei ohne Abschluss.
+
+  // Laufender Monat — die 32.400 aus C1_04. Die zwei Abschluesse von gestern
+  // stecken hier drin (je 6.000, zusammen 12.000) und gehoeren dem Chef:
+  // "Von den vier Sales Calls sind zwei geclosed. Du hast beide."
+  const proClosing = K.wertClosingsGestern / K.closingsGestern;
+  const monatWerte = [8900, 6300, 5200];
+  monatWerte.push(K.umsatzMonat - K.wertClosingsGestern - monatWerte.reduce((a, b) => a + b, 0));
+  const kundenMonat = [];
+  for (let i = 0; i < monatWerte.length; i++) {
+    kundenMonat.push(await gewinner(firmenname(lauf), monatWerte[i], 2 + i * 4, false, wer(i % 3)));
+  }
+  for (let i = 0; i < K.closingsGestern; i++) {
+    const k = await gewinner(firmenname(lauf), proClosing, 0, false, chef.id);
+    kundenMonat.push(k);
+    await c.query(
+      `update public.deals set geschlossen_am = current_date - 1 + time '16:30'
+        where firma_id = $1`, [k.firma]);
+    await c.query(
+      `update public.firmen set kunde_seit = current_date - 1 where id = $1`, [k.firma]);
+  }
+
+  // Die vier Sales Calls von gestern — zwei mit Abschluss, zwei ohne.
   for (let i = 0; i < K.salesCallsGestern; i++) {
     await c.query(
       `insert into public.aktivitaeten (firma_id, wer, art, text, zeit)
        values (null, $1, 'termin', $2, (current_date - 1) + time '14:00' + $3::int * interval '45 min')`,
-      [verkaeufer.id, i < K.closingsGestern ? "Sales Call — abgeschlossen"
+      [chef.id, i < K.closingsGestern ? "Sales Call — abgeschlossen"
         : "Sales Call — kein Abschluss", i]);
   }
-  console.log(`Die zwei Abschlüsse von gestern stehen auf: ${verkaeufer.name}`);
-  console.log(`   → In Zeile C1_02 muss dieser Name gesprochen werden.`);
 
   // Offene Deals — damit die Pipeline nicht leer aussieht.
-  await deal({ firma: nordlicht, titel: "Voice-Agent zwei Standorte", sparte: "ki",
-    stufe: stufeAngebot, wert: 4800, status: "offen", besitzer: wer(0) });
+  //
+  // Nordlicht steht auf "Erstgespraech": In Creative 3 wird der Deal im Bild
+  // geschlossen und die Rechnung ueber 8.000 daraus gebaut. Wer ihn vorher auf
+  // gewonnen setzt, nimmt der Szene ihren Sinn.
+  await deal({ firma: nordlicht, titel: "Voice Agent, zwei Standorte", sparte: "ki",
+    stufe: stufeErst, wert: K.dealNordlicht, status: "offen", besitzer: chef.id });
   await deal({ firma: bergmann, titel: "Performance Marketing Retainer", sparte: "performance",
-    stufe: stufeAngebot, wert: 3500, status: "offen", besitzer: wer(0) });
-  // Meridian steht auf "offen" und wird im Dreh gewonnen — nicht vorher.
-  await deal({ firma: meridian, titel: "KI-Assistent Einführung", sparte: "ki",
-    stufe: stufeErst, wert: K.rechnungMeridian, status: "offen", besitzer: wer(0) });
+    stufe: stufeAngebot, wert: 3500, status: "offen", besitzer: chef.id });
+  await deal({ firma: meridian, titel: "Operating System", sparte: "ki",
+    stufe: stufeAngebot, wert: 6000, status: "offen", besitzer: wer(1) });
 
   // Pipeline aus den gestern gebuchten Erstgespraechen.
   //
@@ -422,10 +456,19 @@ async function laden(c) {
   }
 
   // --------------------------------------------------------------- Aufgaben
+  //
+  // ZWEI FALLEN, beide am 20.08.2026 im fertigen Dashboard gesehen:
+  //
+  //   1. todosHeute filtert auf geplant_am, NICHT auf faellig (lib/crm.js).
+  //      Ohne geplant_am stand "Anstehend heute" auf null, obwohl vier
+  //      Aufgaben in der Tabelle lagen.
+  //   2. Die Aufgaben gehoerten wer(0) — das ist die erste Zeile der nach
+  //      Rolle und Name sortierten Liste und nicht zwangslaeufig die Person,
+  //      die im Video angesprochen wird.
   const aufgabe = (titel, tage, firmaId) => c.query(
-    `insert into public.aufgaben (firma_id, titel, faellig, erledigt, besitzer)
-     values ($1,$2, current_date + $3::int, false, $4)`,
-    [firmaId || null, titel, tage, wer(0)]);
+    `insert into public.aufgaben (firma_id, titel, faellig, geplant_am, erledigt, besitzer)
+     values ($1,$2, current_date + $3::int, current_date + $3::int, false, $4)`,
+    [firmaId || null, titel, tage, chef.id]);
   await aufgabe("Angebot Nordlicht Media freigeben und rausschicken", 0, nordlicht);
   await aufgabe("Vertrag Bergmann Solar gegenzeichnen", 0, bergmann);
   await aufgabe("Neue Creatives für die Physio-Kampagne freigeben", 0, null);
@@ -436,24 +479,35 @@ async function laden(c) {
   // Die Buchhaltungsseite rechnet aus buchungen, die Zentrale aus deals. Beide
   // muessen dieselbe Summe zeigen, sonst faellt es genau dann auf, wenn im Dreh
   // zwischen den Seiten gewechselt wird.
-  const buchung = (art, betrag, tageZurueck, kategorie, gegenstelle, firmaId) => c.query(
+  //
+  // Die Gegenstelle ist der ECHTE Kundenname aus derselben Schleife. Vorher
+  // stand hier firmenname(i) mit einem anderen Zaehler — in "Letzte Buchungen"
+  // standen dadurch Firmen, die es in der Kundenliste gar nicht gab.
+  const buchung = (art, betrag, datumSql, kategorie, gegenstelle, firmaId) => c.query(
     `insert into public.buchungen (art, datum, betrag, kategorie, gegenstelle, firma_id, bezahlt, erfasst_von)
-     values ($1, current_date - $2::int, $3, $4, $5, $6, true, $7)`,
-    [art, tageZurueck, betrag, kategorie, gegenstelle, firmaId || null, wer(0)]);
+     values ($1, ${datumSql}, $2, $3, $4, $5, true, $6)`,
+    [art, betrag, kategorie, gegenstelle, firmaId || null, chef.id]);
 
-  for (let i = 0; i < juli.length; i++) {
-    await buchung("einnahme", juli[i], 30 + i, "Projekt",
-      i === 0 ? "Bergmann Solar GmbH" : firmenname(i), i === 0 ? bergmann : null);
+  const amTag = (tag, vormonat) => `date_trunc('month', current_date) - ${vormonat ? 1 : 0}`
+    + ` * interval '1 month' + ${Number(tag)} * interval '1 day'`;
+  for (let i = 0; i < kundenVormonat.length; i++) {
+    await buchung("einnahme", vormonatWerte[i], amTag(6 + i * 3, true), "Projekt",
+      kundenVormonat[i].name, kundenVormonat[i].firma);
   }
-  for (let i = 0; i < monat.length; i++) {
-    await buchung("einnahme", monat[i], i * 3, "Projekt", firmenname(100 + i), null);
+  for (let i = 0; i < monatWerte.length; i++) {
+    await buchung("einnahme", monatWerte[i], amTag(2 + i * 4, false), "Projekt",
+      kundenMonat[i].name, kundenMonat[i].firma);
+  }
+  for (let i = 0; i < K.closingsGestern; i++) {
+    const k = kundenMonat[monatWerte.length + i];
+    await buchung("einnahme", proClosing, "current_date - 1", "Projekt", k.name, k.firma);
   }
   for (const [betrag, kat, wem, tage] of [
     [1290, "Software", "Hosting & Werkzeuge", 12],
     [640, "Werbung", "Meta Platforms", 8],
     [2400, "Personal", "Freelancer Design", 5],
     [129, "Software", "Hosting", 3],
-  ]) await buchung("ausgabe", betrag, tage, kat, wem, null);
+  ]) await buchung("ausgabe", betrag, `current_date - ${Number(tage)}`, kat, wem, null);
 
   // Belege im Juli-Ordner — 33 Stueck, der 34. wird im Dreh fotografiert.
   // Status 'gebucht': 0021 kannte noch 'offen'/'zugeordnet', 0022 und 0024 haben
@@ -466,14 +520,37 @@ async function laden(c) {
                date_trunc('month', current_date) - interval '1 month' + $3::int * interval '1 day')`,
       [`Beleg-2026-07-${String(i + 1).padStart(3, "0")}.pdf`,
        [18.9, 129, 47.5, 12.4, 89, 240, 33.1, 15.8][i % 8],
-       i, ["Bewirtung", "Software", "Fahrtkosten", "Büromaterial"][i % 4], wer(0)]);
+       i, ["Bewirtung", "Software", "Fahrtkosten", "Büromaterial"][i % 4], chef.id]);
   }
+
+  // Kontostand, damit die Buchhaltungsseite nicht mit einer gelben Warnung
+  // aufgeht ("Kontostand ist noch nie eingetragen") — die stuende im Bild.
+  await c.query(
+    `update public.finanz_einstellungen
+        set start_saldo = $1, saldo_stand = date_trunc('month', current_date)::date,
+            steuersatz = 30.0, geaendert_von = $2
+      where id = 1`, [48500, chef.id]);
 
   await c.query(
     `insert into public.dokumente (firma_id, name, pfad, art, hochgeladen_von)
-     values ($1,'Angebot-AN-2026-0231-Nordlicht-Media.pdf','dreh/angebot.pdf','angebot',$3),
+     values ($1,'Angebot-Nordlicht-Media.pdf','dreh/angebot.pdf','angebot',$3),
             ($2,'Vertrag-Bergmann-Solar.pdf','dreh/vertrag.pdf','vertrag',$3)`,
-    [nordlicht, bergmann, wer(0)]);
+    [nordlicht, bergmann, chef.id]);
+}
+
+// Die 250 Nachschub-Leads freischalten — der Moment aus C1_06.
+//
+// Sie liegen schon in der Datenbank, aber auf status 'ruht'; die Leads-Seite
+// zeigt nur 'lead'. Ein Befehl, unter einer Sekunde, und die Liste springt von
+// 50 auf 300. Echtes Recherchieren dauert Minuten und sprengt die Einstellung.
+async function leadsNachziehen(c) {
+  const { rowCount } = await c.query(
+    `update public.firmen set status = 'lead', wiedervorlage = current_date
+      where status = 'ruht'`);
+  const { rows: [z] } = await c.query(
+    `select count(*)::int as offen from public.firmen where status = 'lead'`);
+  console.log(`${rowCount} Leads freigeschaltet — in der Liste stehen jetzt ${z.offen}.`);
+  if (!rowCount) console.log("Nichts mehr auf 'ruht'. Vor dem naechsten Take: --laden");
 }
 
 // ----------------------------------------------------------------- Stand
@@ -482,7 +559,17 @@ async function stand(c) {
   const z = await eine(`select
       (select count(*) from public.firmen)::int as firmen,
       (select count(*) from public.firmen where status='kunde')::int as kunden,
-      (select count(*) from public.firmen where wiedervorlage = current_date + 1)::int as morgen,
+      -- Dieselbe Rechnung wie die Leads-Seite: status 'lead' UND noch kein
+      -- Ergebnis-Tag. Wer nur status zaehlt, bekommt die 160 schon
+      -- angerufenen dazu und vergleicht gegen die falsche Zahl.
+      (select count(*) from public.firmen
+        where status='lead' and not (tags && array['gebucht','absage','nicht-erreicht',
+              'keine-zeit','webseite-zu-gut','follow-up']::text[]))::int as leads_offen,
+      (select count(*) from public.firmen where status='ruht')::int as leads_reserve,
+      (select count(*) from public.aufgaben where not erledigt
+         and geplant_am = current_date)::int as heute_geplant,
+      (select coalesce(sum(wert),0) from public.deals where status='gewonnen'
+         and geschlossen_am::date = current_date - 1)::numeric as gestern_wert,
       (select count(*) from public.aktivitaeten where art='anruf'
          and zeit::date = current_date - 1)::int as calls_gestern,
       (select count(*) from public.aktivitaeten where art='anruf'
@@ -501,25 +588,32 @@ async function stand(c) {
          and datum <  date_trunc('month', current_date))::numeric as buchungen_vormonat`);
 
   const euro = (n) => Number(n).toLocaleString("de-DE", { minimumFractionDigits: 0 }) + " €";
+  const zeile = (was, ist, soll) => console.log("  " + was.padEnd(24) + String(ist).padStart(10)
+    + (soll === undefined ? "" : "   Skript: " + soll));
   console.log("\nStand der Dreh-Datenbank");
-  console.log("  Firmen gesamt          " + z.firmen + "  (davon Kunden: " + z.kunden + ")");
-  console.log("  Cold Calls gestern     " + z.calls_gestern + "   erwartet: " + K.callsGestern);
-  console.log("  Cold Calls heute       " + z.calls_heute + "    erwartet: " + K.callsHeute);
-  console.log("  Erstgespräche gebucht  " + z.gebucht);
-  console.log("  Leads für morgen       " + z.morgen + "    erwartet: " + K.leadsMorgen);
-  console.log("  Offene Aufgaben        " + z.aufgaben);
-  console.log("  Belege                 " + z.belege + "    erwartet: " + K.belegeJuli);
-  console.log("  Umsatz Vormonat        " + euro(z.umsatz_vormonat) + "   erwartet: " + euro(K.umsatzJuli));
-  console.log("  davon in buchungen     " + euro(z.buchungen_vormonat));
-  console.log("  Umsatz laufender Monat " + euro(z.umsatz_monat) + "   erwartet: " + euro(K.umsatzMonatVorher));
-  console.log("\n  Im Dreh kommt die Rechnung über " + euro(K.rechnungMeridian) + " dazu →  "
-    + euro(Number(z.umsatz_monat) + K.rechnungMeridian));
+  zeile("Firmen gesamt", z.firmen + " (Kunden: " + z.kunden + ")");
+  zeile("Cold Calls gestern", z.calls_gestern, K.callsGestern);
+  zeile("Cold Calls heute", z.calls_heute, K.callsHeute);
+  zeile("Erstgespräche gebucht", z.gebucht, K.erstgespraecheGestern + " von gestern + Nordlicht");
+  zeile("Leads in der Liste", z.leads_offen, K.leadsHeute);
+  zeile("Leads in Reserve", z.leads_reserve, K.leadsNachschub);
+  zeile("Aufgaben heute geplant", z.heute_geplant, 3);
+  zeile("Belege", z.belege, K.belegeJuli);
+  zeile("Umsatz Vormonat", euro(z.umsatz_vormonat), euro(K.umsatzVormonat));
+  zeile("davon in buchungen", euro(z.buchungen_vormonat));
+  zeile("Umsatz laufender Monat", euro(z.umsatz_monat), euro(K.umsatzMonat));
+  zeile("davon gestern geclosed", euro(z.gestern_wert), euro(K.wertClosingsGestern));
+  console.log("\n  C1_06: --leads-nachziehen schaltet " + K.leadsNachschub
+    + " frei →  " + (z.leads_offen + z.leads_reserve) + " in der Liste.");
 
   const abweichung = [];
   if (z.calls_gestern !== K.callsGestern) abweichung.push("Cold Calls gestern");
-  if (z.morgen !== K.leadsMorgen) abweichung.push("Leads für morgen");
-  if (Number(z.umsatz_vormonat) !== K.umsatzJuli) abweichung.push("Umsatz Vormonat");
-  if (Number(z.umsatz_monat) !== K.umsatzMonatVorher) abweichung.push("Umsatz laufender Monat");
+  if (z.leads_offen !== K.leadsHeute) abweichung.push("Leads in der Liste");
+  if (z.leads_reserve !== K.leadsNachschub) abweichung.push("Leads in Reserve");
+  if (z.heute_geplant !== 3) abweichung.push("Aufgaben für heute");
+  if (Number(z.gestern_wert) !== K.wertClosingsGestern) abweichung.push("Wert der Abschlüsse von gestern");
+  if (Number(z.umsatz_vormonat) !== K.umsatzVormonat) abweichung.push("Umsatz Vormonat");
+  if (Number(z.umsatz_monat) !== K.umsatzMonat) abweichung.push("Umsatz laufender Monat");
   if (abweichung.length) {
     console.log("\n  ACHTUNG — weicht vom Skript ab: " + abweichung.join(", "));
     console.log("  Entweder neu laden oder die Sprechzeile anpassen.");
@@ -538,12 +632,13 @@ async function stand(c) {
 
   try {
     if (MARKIEREN) { await markieren(c); return; }
-    if ((LADEN || LEEREN) && !(await markeVorhanden(c))) {
+    if ((LADEN || LEEREN || NACHZIEHEN) && !(await markeVorhanden(c))) {
       console.error("\nABBRUCH: Diese Datenbank trägt keine Dreh-Marke.");
       console.error("Wenn es wirklich die Dreh-Datenbank ist (leer, frisch migriert):");
       console.error("   node scripts/drehdaten.js --markieren");
       process.exit(1);
     }
+    if (NACHZIEHEN) { await leadsNachziehen(c); return; }
     if (LEEREN) {
       await leeren(c);
       console.log("Kulisse abgebaut — alle Geschäftstabellen sind leer.");
