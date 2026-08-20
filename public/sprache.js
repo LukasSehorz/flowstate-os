@@ -32,6 +32,85 @@
   let pegelLaeuft = false;
   let begruessungUrl = null;      // einmal erzeugt, danach wiederverwendet
   let letzteFrageAt = 0;
+
+  // ------------------------------------------------------- Drehbuch (Dreh)
+  //
+  // Fuer die Werbeaufnahmen. Alles laeuft wie immer — Klatschen weckt, das
+  // Mikro hoert zu, die Stille beendet den Zug, das Gehirn wechselt seine
+  // Zustaende. NUR die Antwort kommt nicht vom Modell, sondern als fertige
+  // Tonspur aus einer Liste.
+  //
+  // WARUM UEBERHAUPT: In einer Anzeige darf keine Formulierung ueberraschen
+  // und keine Wartezeit entstehen. Das Modell braucht je nach Frage zwei bis
+  // zwoelf Sekunden und formuliert jedes Mal anders — beides ist in einer
+  // 55-Sekunden-Aufnahme toedlich.
+  //
+  // WARUM NICHT EINFACH ABSPIELEN: Weil dann das Gehirn stillstuende. Der Weg
+  // durch sagen() setzt "spricht", haengt den Playback-Analyser an und laesst
+  // die Kugel zur Stimme atmen. Man sieht der Aufnahme an, dass da wirklich
+  // jemand redet.
+  //
+  // OHNE ?drehbuch=… IST NICHTS DAVON AKTIV. Im Betrieb aendert sich nichts.
+  const DREHBUCH_NR = new URLSearchParams(location.search).get("drehbuch");
+  let drehbuch = null;      // { titel, zuege: [{id, text, audio, oeffnen}] }
+  let drehZug = 0;
+  let mappe = null;         // das Fenster auf dem zweiten Bildschirm
+
+  // Ein Fenster, das SPAETER ohne Nutzergeste weiterspringen darf.
+  //
+  // window.open braucht eine Geste, sonst blockt der Browser. Ein Klatschen
+  // ist keine. Also wird das Fenster beim ersten Klick auf die Seite geoeffnet
+  // (leer) und danach nur noch umgelenkt — location.href braucht keine Geste.
+  function mappeVorbereiten() {
+    const einmal = () => {
+      document.removeEventListener("click", einmal);
+      try { mappe = window.open("about:blank", "drehmappe"); } catch {}
+    };
+    document.addEventListener("click", einmal);
+  }
+
+  function mappeZeigen(datei) {
+    const url = "/regie/datei/" + encodeURIComponent(datei);
+    try {
+      if (mappe && !mappe.closed) { mappe.location.href = url; mappe.focus(); }
+      else { mappe = window.open(url, "drehmappe"); }
+    } catch { window.open(url, "drehmappe"); }
+  }
+
+  async function drehbuchLaden() {
+    if (DREHBUCH_NR === null) return;
+    try {
+      const r = await fetch("/regie/drehbuch.json?c=" + encodeURIComponent(DREHBUCH_NR));
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      drehbuch = await r.json();
+      drehZug = 0;
+      mappeVorbereiten();
+      if (el.hinweis) el.hinweis.textContent =
+        "Drehbuch: " + drehbuch.titel + " · " + drehbuch.zuege.length + " Züge";
+      console.log("Drehbuch geladen:", drehbuch.titel, drehbuch.zuege.length + " Züge");
+    } catch (e) {
+      console.error("Drehbuch nicht geladen:", e.message);
+      if (el.hinweis) el.hinweis.textContent = "Drehbuch fehlt: " + e.message;
+    }
+  }
+
+  // Der naechste Zug. Wird nach dem Klatschen einmal aufgerufen und danach
+  // jedes Mal, wenn Jannik zu Ende geredet hat.
+  async function drehbuchZug() {
+    const z = drehbuch.zuege[drehZug];
+    if (!z) {
+      zeile("sie", "— Drehbuch zu Ende —");
+      return gespraechBeenden();
+    }
+    drehZug++;
+    // Das Dokument geht auf, BEVOR die Stimme laeuft: Im Video soll der
+    // Bildschirm schon leuchten, waehrend der Satz dazu gesprochen wird.
+    if (z.oeffnen) mappeZeigen(z.oeffnen);
+    zeile("sie", z.text || "");
+    if (z.audio) await sagen("/regie/datei/" + encodeURIComponent(z.audio), true, z.text);
+    else if (z.text) await sprich(z.text);
+    weiter();
+  }
   let imGespraech = false;        // laeuft gerade ein zusammenhaengendes Gespraech?
   let redetGerade = false;        // genau EIN Sprech-Kanal, nie ueberlappend
   let bargeSR = null;             // lauscht WAEHREND des Sprechens auf Unterbrechung
@@ -351,6 +430,9 @@
     klatschWacheStoppen();
     try { wakeErkennung?.stop(); } catch {}
     await gespraechStarten(false);          // Gruss kommt gleich, aber unser eigener
+    // Im Dreh ist der erste Zug der Gruss — der steht im Drehbuch und darf
+    // nicht von einem zweiten, selbst gebauten ueberlagert werden.
+    if (drehbuch) { drehZug = 0; await drehbuchZug(); geduld(); return; }
     await sprich(klatschGruss()).catch(() => {});
     geduld();                                // ab hier normal zuhoeren
   }
@@ -827,6 +909,11 @@
     const begonnen = performance.now();
     letzteFrageAt = Date.now();
     zeile("ich", text);
+    // Im Dreh geht die Frage NICHT ans Modell. Was Jannik gesagt hat, steht im
+    // Verlauf — die Antwort ist der naechste Zug aus dem Drehbuch. Kein
+    // "denkt nach", weil es nichts nachzudenken gibt und die Pause im Video
+    // wie ein Aussetzer aussaehe.
+    if (drehbuch) return drehbuchZug();
     setzeZustand("denken");
     if (el.karten) el.karten.innerHTML = "";
 
@@ -1207,10 +1294,14 @@
     if (el.stimmeInfo) {
       el.stimmeInfo.textContent = k.elevenlabs ? "Stimme: ElevenLabs" : "Stimme: Browser (ElevenLabs nicht eingerichtet)";
     }
-    if (wakeAn) wakeStarten();   // Wunsch ueberlebt den Seitenwechsel
+    // Im Dreh ist das Wake-Wort im Weg: "Hey Jarvis" steht in keinem Skript,
+    // und die Dauererkennung greift parallel aufs Mikro. Geweckt wird
+    // ausschliesslich durch Klatschen.
+    if (wakeAn && DREHBUCH_NR === null) wakeStarten();
     // Zweimal klatschen weckt sie — ohne Knopf, ohne Wake-Wort. Braucht die
     // Mikrofonfreigabe; ohne sie tut klatschWacheStarten() still nichts.
     klatschWacheStarten();
+    drehbuchLaden();
   }).catch(() => {});
 
   // STANDORT MELDEN (07.08.2026, Wunsch Lukas: "er soll immer wissen, wo ich
