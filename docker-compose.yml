@@ -60,6 +60,10 @@ services:
       # Wie weit der Kalender im STAND nach vorn reicht (Stufe 3, 25.07.):
       # 14 Tage waren zu knapp — "was steht in drei Wochen an?" lief ins Leere.
       - KALENDER_TAGE=${KALENDER_TAGE:-35}
+      # Welcher Google-Kalender gelesen und beschrieben wird. Leer = der
+      # Hauptkalender, also unveraendert. Nur fuer die Werbeaufnahmen zeigt das
+      # auf einen zweiten Kalender desselben Kontos (siehe docs/dreh-umgebung.md).
+      - KALENDER_ID=${KALENDER_ID:-}
       # Abstand zwischen zwei Saetzen der Erzaehlspur, in Millisekunden.
       - ERZAEHL_ABSTAND_MS=${ERZAEHL_ABSTAND_MS:-5000}
       # WhatsApp-Bruecke (eigener Container). Das Dashboard zeigt die Koppelseite
