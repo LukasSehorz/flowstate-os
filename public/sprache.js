@@ -73,93 +73,58 @@
   let drehAus = drehFrage === "aus";
   let drehbuch = null;      // { titel, zuege: [{id, text, audio, oeffnen}] }
   let drehZug = 0;
-  // EIN Fenster, viele Reiter — die Drehmappe (/regie/mappe).
+  // EIN ECHTER TAB JE INHALT, und jeder geht erst auf, wenn er dran ist.
   //
-  // WARUM NICHT MEHRERE FENSTER (20.08.2026): Chrome erlaubt pro Nutzergeste
-  // genau EIN window.open. Beim Dreh ging deshalb das Angebot auf und danach
-  // nichts mehr; die Creatives und der Kalender wurden stillschweigend
-  // geblockt. Nachgemessen: headless gehen vier von vier durch, im echten
-  // Browser eines von vier. Also ein Fenster, und die Inhalte kommen als
-  // Reiter darin an.
-  let mappe = null;
-  let mappeBereit = false;
-  const mappeWarteschlange = [];
-
-  function mappeSenden(url) {
-    try {
-      if (!mappe || mappe.closed) return false;
-      mappe.postMessage({ typ: "zeigen", url }, location.origin);
-      mappe.focus();
-      return true;
-    } catch { return false; }
-  }
-
-  function mappeVorbereiten() {
-    const einmal = () => {
-      document.removeEventListener("click", einmal);
-      try {
-        mappe = window.open("/regie/mappe", "drehmappe");
-        console.log("Drehbuch: Drehmappe geöffnet:", Boolean(mappe));
-        if (!mappe && el.hinweis) {
-          el.hinweis.textContent = "Popup blockiert — bitte für diese Seite erlauben.";
-        }
-      } catch (e) { console.error("Drehmappe:", e.message); }
-    };
-    document.addEventListener("click", einmal);
-    // Die Mappe meldet sich, sobald ihr Skript laeuft. Erst dann kommen
-    // Nachrichten an — vorher gesendete gingen ins Leere.
-    window.addEventListener("message", (e) => {
-      if (e.origin !== location.origin) return;
-      if (e.data && e.data.typ === "mappe-bereit") {
-        mappeBereit = true;
-        while (mappeWarteschlange.length) mappeSenden(mappeWarteschlange.shift());
-      }
-    });
-  }
-
-  // Was sich NICHT einbetten laesst. WhatsApp Web schickt X-Frame-Options und
-  // bleibt im Rahmen weiss — das muss ein eigenes Fenster bekommen.
-  const NICHT_EINBETTBAR = /web\.whatsapp\.com|accounts\.google\.com/;
-
-  // Eigenes Fenster fuer genau diese Faelle.
+  // WEG UEBER DIE DREHMAPPE (ein Fenster mit eigenen Reitern) war der Umweg,
+  // solange der Popup-Schutz nur EIN window.open pro Klick zuliess. Sobald
+  // Pop-ups fuer die Seite erlaubt sind, braucht es den Umweg nicht mehr:
+  // window.open geht dann auch ohne Nutzergeste, und Chrome macht daraus einen
+  // normalen Tab statt eines Fensterchens — kein features-Argument uebergeben.
   //
-  // Ohne Nutzergeste blockt Chrome das. Wer Pop-ups fuer die Seite einmal
-  // erlaubt, bekommt es trotzdem — und weil das der einzige Weg ist, WhatsApp
-  // im Bild zu haben, wird es versucht und der Fehlschlag SICHTBAR gemeldet
-  // statt still geschluckt.
-  function externZeigen(url) {
-    let w = null;
-    try { w = window.open(url, "dreh-extern"); } catch { /* geblockt */ }
-    if (!w) {
-      console.warn("Fenster blockiert:", url);
-      if (el.hinweis) {
-        el.hinweis.textContent = "Pop-up blockiert — WhatsApp bitte von Hand öffnen.";
-      }
-      return false;
-    }
-    try { w.focus(); } catch {}
-    return true;
+  // Der Tabname kommt aus der Adresse. Zwei Zuege auf dieselbe Seite (C2_05
+  // und C2_07 den Kalender) landen dadurch im selben Tab und laden ihn neu,
+  // statt einen zweiten Kalender daneben zu stellen.
+  //
+  // /regie/mappe bleibt als Rueckfallebene bestehen, falls jemand ohne
+  // erlaubte Pop-ups drehen muss.
+  function tabName(datei) {
+    const basis = String(datei).split("?")[0].split("#")[0];
+    return "dreh-" + basis.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
   }
+
+  let popupGewarnt = false;
 
   function mappeZeigen(dateien) {
     const liste = Array.isArray(dateien) ? dateien : (dateien ? [dateien] : []);
     liste.forEach((datei) => {
-      if (NICHT_EINBETTBAR.test(datei)) return void externZeigen(datei);
       let url;
       if (/^https?:\/\//.test(datei)) {
         // Der Google-Kalender MUSS neu laden, sonst fehlt in C2_07 der gerade
-        // angelegte Termin. Andere fremde Adressen bleiben unangetastet.
+        // angelegte Termin. WhatsApp bleibt unangetastet — ein Anhaengsel
+        // wuerde dort die Sitzung durcheinanderbringen.
         url = /calendar\.google\.com/.test(datei)
           ? datei + (datei.includes("?") ? "&" : "?") + "_=" + Date.now()
           : datei;
       } else if (datei.startsWith("/")) {
         // Eigene Seiten zwingend mit drehbuch=aus: Jede Seite des OS laedt die
-        // Sprachsteuerung mit und wuerde sonst die Fuehrung uebernehmen.
+        // Sprachsteuerung mit und wuerde sonst die Fuehrung uebernehmen —
+        // dann waere der Haupt-Tab stumm.
         url = datei + (datei.includes("?") ? "&" : "?") + "drehbuch=aus&_=" + Date.now();
       } else {
         url = "/regie/datei/" + encodeURIComponent(datei);
       }
-      if (!mappeBereit || !mappeSenden(url)) mappeWarteschlange.push(url);
+
+      let w = null;
+      try { w = window.open(url, tabName(datei)); } catch { /* geblockt */ }
+      if (w) { try { w.focus(); } catch {} return; }
+
+      // Sichtbar melden statt still schlucken: Im Take steht man sonst davor
+      // und weiss nicht, warum nichts kommt.
+      console.warn("Tab blockiert:", url);
+      if (!popupGewarnt && el.hinweis) {
+        popupGewarnt = true;
+        el.hinweis.textContent = "Pop-ups blockiert — für diese Seite erlauben (chrome://settings/content/popups).";
+      }
     });
   }
 
@@ -170,7 +135,6 @@
       if (!r.ok) throw new Error("HTTP " + r.status);
       drehbuch = await r.json();
       drehZug = 0;
-      mappeVorbereiten();
       drehFuehrungUebernehmen();
       if (el.hinweis) el.hinweis.textContent =
         "Drehbuch: " + drehbuch.titel + " · " + drehbuch.zuege.length + " Züge";
