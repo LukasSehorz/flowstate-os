@@ -54,7 +54,9 @@
   const DREHBUCH_NR = new URLSearchParams(location.search).get("drehbuch");
   let drehbuch = null;      // { titel, zuege: [{id, text, audio, oeffnen}] }
   let drehZug = 0;
-  let mappe = null;         // das Fenster auf dem zweiten Bildschirm
+  // Zwei Fenster: In Creative 3 liegen Rechnung und Excel nebeneinander. Ein
+  // einziges Fenster wuerde die erste Datei durch die zweite ersetzen.
+  const mappen = { drehmappe: null, drehmappe2: null };
 
   // Ein Fenster, das SPAETER ohne Nutzergeste weiterspringen darf.
   //
@@ -64,17 +66,28 @@
   function mappeVorbereiten() {
     const einmal = () => {
       document.removeEventListener("click", einmal);
-      try { mappe = window.open("about:blank", "drehmappe"); } catch {}
+      try {
+        mappen.drehmappe = window.open("about:blank", "drehmappe");
+        mappen.drehmappe2 = window.open("about:blank", "drehmappe2");
+        // Das zweite Fenster nach hinten: Solange nur eine Datei aufgeht, soll
+        // das erste vorne liegen.
+        try { mappen.drehmappe.focus(); } catch {}
+      } catch {}
     };
     document.addEventListener("click", einmal);
   }
 
-  function mappeZeigen(datei) {
-    const url = "/regie/datei/" + encodeURIComponent(datei);
-    try {
-      if (mappe && !mappe.closed) { mappe.location.href = url; mappe.focus(); }
-      else { mappe = window.open(url, "drehmappe"); }
-    } catch { window.open(url, "drehmappe"); }
+  function mappeZeigen(dateien) {
+    const liste = Array.isArray(dateien) ? dateien : (dateien ? [dateien] : []);
+    liste.forEach((datei, i) => {
+      const name = i === 0 ? "drehmappe" : "drehmappe2";
+      const url = "/regie/datei/" + encodeURIComponent(datei);
+      try {
+        const w = mappen[name];
+        if (w && !w.closed) { w.location.href = url; w.focus(); }
+        else { mappen[name] = window.open(url, name); }
+      } catch { window.open(url, name); }
+    });
   }
 
   async function drehbuchLaden() {
@@ -105,7 +118,7 @@
     drehZug++;
     // Das Dokument geht auf, BEVOR die Stimme laeuft: Im Video soll der
     // Bildschirm schon leuchten, waehrend der Satz dazu gesprochen wird.
-    if (z.oeffnen) mappeZeigen(z.oeffnen);
+    if (z.oeffnen && z.oeffnen.length) mappeZeigen(z.oeffnen);
     zeile("sie", z.text || "");
     if (z.audio) await sagen("/regie/datei/" + encodeURIComponent(z.audio), true, z.text);
     else if (z.text) await sprich(z.text);
