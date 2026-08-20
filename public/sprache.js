@@ -93,6 +93,7 @@
   }
 
   let popupGewarnt = false;
+  let drehPassiv = false;
 
   function mappeZeigen(dateien) {
     const liste = Array.isArray(dateien) ? dateien : (dateien ? [dateien] : []);
@@ -126,6 +127,39 @@
         el.hinweis.textContent = "Pop-ups blockiert — für diese Seite erlauben (chrome://settings/content/popups).";
       }
     });
+  }
+
+  // NUR EIN TAB DARF DAS DREHBUCH FUEHREN.
+  //
+  // Im Protokoll standen doppelte Aufnahmen zur selben Sekunde: zwei Seiten
+  // hoerten gleichzeitig zu, beide schalteten weiter, und pro Antwort liefen
+  // ZWEI Zuege. Auf dem Bildschirm sieht das aus, als haette der Agent einen
+  // Schritt uebersprungen.
+  //
+  // Der zuletzt geoeffnete Tab gewinnt: Wer gerade eine Seite aufmacht, will
+  // mit dieser arbeiten.
+  let drehKanal = null;
+
+  function drehPassivSchalten() {
+    if (drehPassiv) return;
+    drehPassiv = true;
+    drehbuch = null;
+    try { klatschWacheStoppen(); } catch {}
+    try { erkennung?.abort?.(); } catch {}
+    imGespraech = false;
+    setzeZustand("ruhe");
+    if (el.hinweis) {
+      el.hinweis.textContent = "Ein anderer Tab führt das Drehbuch — diese Seite hält still.";
+    }
+    console.warn("Drehbuch: anderer Tab hat uebernommen, diese Seite ist passiv.");
+  }
+
+  function drehFuehrungUebernehmen() {
+    try {
+      drehKanal = new BroadcastChannel("flowstate-drehbuch");
+      drehKanal.onmessage = (e) => { if (e.data === "uebernehme") drehPassivSchalten(); };
+      drehKanal.postMessage("uebernehme");
+    } catch { /* alter Browser ohne BroadcastChannel — dann eben ohne Riegel */ }
   }
 
   async function drehbuchLaden() {
