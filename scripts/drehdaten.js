@@ -21,7 +21,8 @@
 // AUFRUF
 //   node scripts/drehdaten.js --stand              was liegt in der Dreh-Datenbank?
 //   node scripts/drehdaten.js --laden              Kulisse aufbauen (leert vorher)
-//   node scripts/drehdaten.js --leads-nachziehen   im Dreh: 250 Leads freischalten
+//   node scripts/drehdaten.js --leads-nachziehen      im Dreh: 250 Leads freischalten
+//   node scripts/drehdaten.js --leads-zuruecksetzen  fuer den naechsten Take zurueck
 //   node scripts/drehdaten.js --leeren             Kulisse abbauen
 //
 // VORHER: In der Dreh-Datenbank muessen das Schema (scripts/migrieren.js) und
@@ -36,7 +37,9 @@ const LADEN = argv.includes("--laden");
 const LEEREN = argv.includes("--leeren");
 const MARKIEREN = argv.includes("--markieren");
 const NACHZIEHEN = argv.includes("--leads-nachziehen");
-const STAND = argv.includes("--stand") || (!LADEN && !LEEREN && !MARKIEREN && !NACHZIEHEN);
+const ZURUECK = argv.includes("--leads-zuruecksetzen");
+const STAND = argv.includes("--stand")
+  || (!LADEN && !LEEREN && !MARKIEREN && !NACHZIEHEN && !ZURUECK);
 
 // ------------------------------------------------------------------ Ziel
 //
@@ -561,10 +564,32 @@ async function leadsNachziehen(c) {
   const { rowCount } = await c.query(
     `update public.firmen set status = 'lead', wiedervorlage = current_date
       where status = 'ruht'`);
+  // Dieselbe Rechnung wie die Leads-Seite: 'lead' UND noch kein Ergebnis-Tag.
+  // Wer nur den Status zaehlt, meldet die 160 schon angerufenen mit und sagt
+  // 461 statt 300 — im Dreh der Moment, in dem man am Bildschirm zweifelt.
   const { rows: [z] } = await c.query(
-    `select count(*)::int as offen from public.firmen where status = 'lead'`);
+    `select count(*)::int as offen from public.firmen
+      where status='lead' and not (tags && array['gebucht','absage','nicht-erreicht',
+            'keine-zeit','webseite-zu-gut','follow-up']::text[])`);
   console.log(`${rowCount} Leads freigeschaltet — in der Liste stehen jetzt ${z.offen}.`);
-  if (!rowCount) console.log("Nichts mehr auf 'ruht'. Vor dem naechsten Take: --laden");
+  if (!rowCount) console.log("Nichts mehr in Reserve. Fuer einen neuen Take: --leads-zuruecksetzen");
+}
+
+// Zurueck auf Anfang fuer den naechsten Take.
+//
+// WARUM ES DAS GIBT: Ein zweiter Take braucht die Liste wieder bei 50. Ueber
+// --laden ginge das auch, dauert aber gut zwei Minuten und baut die ganze
+// Kulisse neu — am Set ist das eine Ewigkeit. Hier sind es Sekunden, und die
+// Nachschub-Liste sagt eindeutig, welche 250 gemeint sind.
+async function leadsZuruecksetzen(c) {
+  const { rowCount } = await c.query(
+    `update public.firmen f set status = 'ruht', wiedervorlage = null
+      where f.status = 'lead'
+        and exists (select 1 from public.call_listen_eintraege e
+                      join public.call_listen l on l.id = e.liste_id
+                     where e.firma_id = f.id and l.name = 'Nachschub')`);
+  console.log(`${rowCount} Leads zurueck in die Reserve. Die Liste steht wieder auf `
+    + `${K.leadsHeute} — bereit fuer den naechsten Take.`);
 }
 
 // ----------------------------------------------------------------- Stand
@@ -650,13 +675,14 @@ async function stand(c) {
 
   try {
     if (MARKIEREN) { await markieren(c); return; }
-    if ((LADEN || LEEREN || NACHZIEHEN) && !(await markeVorhanden(c))) {
+    if ((LADEN || LEEREN || NACHZIEHEN || ZURUECK) && !(await markeVorhanden(c))) {
       console.error("\nABBRUCH: Diese Datenbank trägt keine Dreh-Marke.");
       console.error("Wenn es wirklich die Dreh-Datenbank ist (leer, frisch migriert):");
       console.error("   node scripts/drehdaten.js --markieren");
       process.exit(1);
     }
     if (NACHZIEHEN) { await leadsNachziehen(c); return; }
+    if (ZURUECK) { await leadsZuruecksetzen(c); return; }
     if (LEEREN) {
       await leeren(c);
       console.log("Kulisse abgebaut — alle Geschäftstabellen sind leer.");
