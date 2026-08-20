@@ -111,6 +111,44 @@
     });
   }
 
+  // NUR EIN TAB DARF DAS DREHBUCH FUEHREN (20.08.2026).
+  //
+  // Im Protokoll standen doppelte Aufnahmen zur selben Sekunde: zwei Seiten
+  // hoerten gleichzeitig zu, beide schalteten weiter, und pro Antwort liefen
+  // ZWEI Zuege. Auf dem Bildschirm sieht das aus, als haette der Agent einen
+  // Schritt uebersprungen — bei Creative 2 kam der Terminkalender, wo die
+  // Creatives haetten kommen muessen.
+  //
+  // Der zuletzt geoeffnete Tab gewinnt. Das ist die richtige Richtung: Wer
+  // gerade eine Seite aufmacht, will mit dieser arbeiten; die alte ist
+  // vergessen worden und soll stillhalten.
+  let drehPassiv = false;
+  let drehKanal = null;
+
+  function drehPassivSchalten() {
+    if (drehPassiv) return;
+    drehPassiv = true;
+    drehbuch = null;              // dieser Tab loest keine Zuege mehr aus
+    try { klatschWacheStoppen(); } catch {}
+    try { erkennung?.abort?.(); } catch {}
+    imGespraech = false;
+    setzeZustand("ruhe");
+    if (el.hinweis) {
+      el.hinweis.textContent = "Ein anderer Tab führt das Drehbuch — diese Seite hält still.";
+    }
+    console.warn("Drehbuch: anderer Tab hat uebernommen, diese Seite ist passiv.");
+  }
+
+  function drehFuehrungUebernehmen() {
+    try {
+      drehKanal = new BroadcastChannel("flowstate-drehbuch");
+      drehKanal.onmessage = (e) => {
+        if (e.data === "uebernehme") drehPassivSchalten();
+      };
+      drehKanal.postMessage("uebernehme");
+    } catch { /* alter Browser ohne BroadcastChannel — dann eben ohne Riegel */ }
+  }
+
   async function drehbuchLaden() {
     if (DREHBUCH_NR === null) return;
     try {
@@ -119,6 +157,7 @@
       drehbuch = await r.json();
       drehZug = 0;
       mappeVorbereiten();
+      drehFuehrungUebernehmen();
       if (el.hinweis) el.hinweis.textContent =
         "Drehbuch: " + drehbuch.titel + " · " + drehbuch.zuege.length + " Züge";
       console.log("Drehbuch geladen:", drehbuch.titel, drehbuch.zuege.length + " Züge");
@@ -131,6 +170,7 @@
   // Der naechste Zug. Wird nach dem Klatschen einmal aufgerufen und danach
   // jedes Mal, wenn Jannik zu Ende geredet hat.
   async function drehbuchZug() {
+    if (drehPassiv || !drehbuch) return;
     const z = drehbuch.zuege[drehZug];
     if (!z) {
       zeile("sie", "— Drehbuch zu Ende —");
