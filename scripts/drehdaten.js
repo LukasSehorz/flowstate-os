@@ -427,11 +427,13 @@ async function laden(c) {
   ]) await buchung("ausgabe", betrag, tage, kat, wem, null);
 
   // Belege im Juli-Ordner — 33 Stueck, der 34. wird im Dreh fotografiert.
+  // Status 'gebucht': 0021 kannte noch 'offen'/'zugeordnet', 0022 und 0024 haben
+  // die Werte auf neu | gebucht | fehler | verworfen umgestellt.
   for (let i = 0; i < K.belegeJuli; i++) {
     await c.query(
       `insert into public.belege (dateiname, betrag, datum, status, notiz, von, erstellt)
        values ($1,$2, date_trunc('month', current_date) - interval '1 month' + $3::int * interval '1 day',
-               'zugeordnet', $4, $5,
+               'gebucht', $4, $5,
                date_trunc('month', current_date) - interval '1 month' + $3::int * interval '1 day')`,
       [`Beleg-2026-07-${String(i + 1).padStart(3, "0")}.pdf`,
        [18.9, 129, 47.5, 12.4, 89, 240, 33.1, 15.8][i % 8],
