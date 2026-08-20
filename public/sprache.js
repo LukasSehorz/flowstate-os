@@ -100,8 +100,8 @@
     const liste = Array.isArray(dateien) ? dateien : (dateien ? [dateien] : []);
     liste.forEach((datei, i) => {
       const name = i === 0 ? "drehmappe" : "drehmappe2";
-      const url = /^https?:\/\//.test(datei)
-        ? datei                                   // z. B. WhatsApp Web
+      const url = /^https?:\/\//.test(datei) || datei.startsWith("/")
+        ? datei                            // WhatsApp Web oder eine eigene Seite
         : "/regie/datei/" + encodeURIComponent(datei);
       try {
         const w = mappen[name];
@@ -179,18 +179,23 @@
     drehZug++;
     // Das Dokument geht auf, BEVOR die Stimme laeuft: Im Video soll der
     // Bildschirm schon leuchten, waehrend der Satz dazu gesprochen wird.
-    if (z.oeffnen && z.oeffnen.length) mappeZeigen(z.oeffnen);
-    // Eine Handlung am Zug: Was der Agent ANKUENDIGT, soll auch passieren.
-    // Losgeschickt, ohne darauf zu warten — die Stimme darf nicht haengen,
-    // wenn die WhatsApp-Bruecke gerade traege ist.
+    // Erst die Handlung, dann das Fenster. Beim Kalender ist die Reihenfolge
+    // entscheidend: Wer die Seite laedt, bevor der Termin steht, sieht ihn
+    // nicht — und ein zweites Neuladen gibt es im Take nicht.
     if (z.tat) {
-      fetch("/regie/tat/" + encodeURIComponent(z.tat), { method: "POST" })
+      const lauf = fetch("/regie/tat/" + encodeURIComponent(z.tat), { method: "POST" })
         .then((r) => r.json()).then((d) => console.log("Drehbuch-Tat:", z.tat, d))
         .catch((e) => console.error("Drehbuch-Tat fehlgeschlagen:", e.message));
+      if (z.tatWarten) await lauf;
     }
+    if (z.oeffnen && z.oeffnen.length) mappeZeigen(z.oeffnen);
     zeile("sie", z.text || "");
     if (z.audio) await sagen("/regie/datei/" + encodeURIComponent(z.audio), true, z.text);
     else if (z.text) await sprich(z.text);
+    // Steht der naechste Zug direkt dahinter (keine Zeile von Jannik dazwischen),
+    // gleich weiterreden statt auf eine Antwort zu warten, die es nicht gibt.
+    const naechster = drehbuch && drehbuch.zuege[drehZug];
+    if (naechster && naechster.sofort) return drehbuchZug();
     weiter();
   }
   let imGespraech = false;        // laeuft gerade ein zusammenhaengendes Gespraech?
