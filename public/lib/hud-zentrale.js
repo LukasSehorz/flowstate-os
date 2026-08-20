@@ -357,7 +357,7 @@
       .then(function (d) {
         if (d.leer) {
           el.innerHTML = '<div class="hud-leer"><div><b>Kein Briefing</b>' +
-            "Oben auf „Briefing erstellen“ — Alexandra stellt Termine, Mails und Prioritäten zusammen.</div></div>";
+            "Oben auf „Briefing erstellen“ — der Agent stellt Termine, Mails und Prioritäten zusammen.</div></div>";
           return;
         }
         // d.html kommt aus dem eigenen Vault (Markdown, von Alexandra

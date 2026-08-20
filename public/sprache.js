@@ -51,7 +51,18 @@
   // jemand redet.
   //
   // OHNE ?drehbuch=… IST NICHTS DAVON AKTIV. Im Betrieb aendert sich nichts.
-  const DREHBUCH_NR = new URLSearchParams(location.search).get("drehbuch");
+  // Die Wahl bleibt haengen, solange der Tab offen ist.
+  //
+  // WARUM (20.08.2026): Beim ersten Drehversuch war die Frage im Link weg —
+  // einmal ueber die Navigation auf /sprache geklickt und der Drehbuch-Modus
+  // war aus, ohne dass man es der Seite ansieht. Am Set merkt man das erst an
+  // der falschen Antwort. "?drehbuch=aus" schaltet wieder zurueck.
+  const DREH_SPEICHER = "flowstate-drehbuch";
+  const drehFrage = new URLSearchParams(location.search).get("drehbuch");
+  if (drehFrage === "aus") sessionStorage.removeItem(DREH_SPEICHER);
+  else if (drehFrage !== null) sessionStorage.setItem(DREH_SPEICHER, drehFrage);
+  const DREHBUCH_NR = drehFrage === "aus" ? null
+    : (drehFrage !== null ? drehFrage : sessionStorage.getItem(DREH_SPEICHER));
   let drehbuch = null;      // { titel, zuege: [{id, text, audio, oeffnen}] }
   let drehZug = 0;
   // Zwei Fenster: In Creative 3 liegen Rechnung und Excel nebeneinander. Ein

@@ -6,6 +6,8 @@ const fs = require("fs");
 const path = require("path");
 const { marked } = require("marked");
 const { schale, ICON, S } = require("./lib/schale.js");
+// Wie der Agent in der Oberflaeche heisst (AGENT_NAME). Leer = Alexandra.
+const AGENT = process.env.AGENT_NAME || "Alexandra";
 const verlauf = require("./lib/verlauf.js");
 
 // Zusaetzliche Zeichen fuer die Zentrale. ICON aus schale.js hat schon alles,
@@ -1321,7 +1323,7 @@ app.get("/", async (req, res) => {
         <div class="hud-zeilen" id="hud-termine"><div class="hud-leer">${ICON.kalender}<b>Lädt</b></div></div>
       </section>
       <section class="j-panel hud-log-briefing">
-        ${titel('Tages-Briefing <span id="hud-briefing-stand"></span>', darf("chat") ? weg("/chat", "Alexandra") : "")}
+        ${titel('Tages-Briefing <span id="hud-briefing-stand"></span>', darf("chat") ? weg("/chat", AGENT) : "")}
         <div id="hud-briefing"><div class="hud-leer">${ICON.funke}<b>Lädt</b></div></div>
       </section>
     </div>`;
@@ -1460,7 +1462,7 @@ app.get("/", async (req, res) => {
   const wege = [
     knopfAdmin ? `<form method="post" action="/briefing/neu"><button class="hud-modul tat" type="submit">${ICON.sonne}Briefing erstellen</button></form>` : "",
     knopfAdmin ? `<form method="post" action="/skill/mail-triage"><button class="hud-modul tat" type="submit">${ZT.post}Mail-Triage starten</button></form>` : "",
-    darf("chat") ? modul("/chat", ICON.funke, "Alexandra") : "",
+    darf("chat") ? modul("/chat", ICON.funke, AGENT) : "",
     darf("sprache") ? modul("/sprache", ICON.megafon, "Sprache") : "",
     darf("leads") ? modul("/leads", ICON.leads, "Lead-Maschine") : "",
     darf("crm") ? modul("/crm", ICON.kunden, "Kunden &amp; CRM") : "",
@@ -1777,21 +1779,21 @@ app.get("/chat", (req, res) => {
     return trenner + `<div class="msg ${n.rolle === "user" ? "user" : "agent"}" title="${esc(uhr(n.zeit))}">${esc(n.text)}</div>`;
   }).join("");
 
-  res.send(layout("Alexandra — direkte Leitung zum Agenten", "chat", `
+  res.send(layout(AGENT + " — direkte Leitung zum Agenten", "chat", `
     ${configured ? "" : `<div class="card placeholder"><h2>🔌 Verbindung wird eingerichtet</h2>
-      <p>Die Chat-Tür zu Alexandra (Hermes-Webhook) ist noch nicht konfiguriert. Bis dahin erreichst du sie über Telegram.</p></div>`}
+      <p>Die Chat-Tür zu ${AGENT} (Hermes-Webhook) ist noch nicht konfiguriert. Bis dahin erreichst du sie über Telegram.</p></div>`}
     <div class="chat-kopf">
       <span class="caption">${bisher.length ? bisher.length + " Nachrichten im Verlauf · dauerhaft gespeichert"
         : "Noch kein Verlauf — der erste Austausch wird gespeichert."}</span>
       ${bisher.length ? `<form method="post" action="/chat/leeren" class="inline"
-        onsubmit="return confirm('Den ganzen Chatverlauf mit Alexandra löschen? Das lässt sich nicht rückgängig machen.')">
+        onsubmit="return confirm('Den ganzen Chatverlauf mit ${AGENT} löschen? Das lässt sich nicht rückgängig machen.')">
         <button class="danger tiny" type="submit">Verlauf löschen</button></form>` : ""}
     </div>
     <div class="chat-wrap${configured ? "" : " disabled"}">
       <div id="chat-log" class="chat-log">${verlaufHtml
         || `<div class="msg agent">Hallo${req.session.crm ? " " + esc(req.session.crm.name.split(" ")[0]) : ""}! Schreib mir hier wie in Telegram — ich habe denselben Kopf, dasselbe Gedächtnis und dieselben Regeln. ✦</div>`}</div>
       <form id="chat-form" class="chat-form">
-        <input id="chat-input" placeholder="Nachricht an Alexandra…" autocomplete="off" ${configured ? "" : "disabled"}>
+        <input id="chat-input" placeholder="Nachricht an ${AGENT}…" autocomplete="off" ${configured ? "" : "disabled"}>
         <button type="submit" ${configured ? "" : "disabled"}>Senden</button>
       </form>
     </div>
@@ -1922,7 +1924,7 @@ app.get("/leads", (req, res) => {
       </form>
       <p class="muted small">Ablauf: Apify-Rohdaten → technischer Vorfilter → Screenshot-Bewertung durch parallele Subagenten (Score 1–10, ab 7 = Lead) → Google Sheet + Tabelle hier.</p>
     </div>
-    ${runBlocks || '<div class="card"><p class="muted">Noch keine Läufe. Starte oben den ersten — oder warte, bis Alexandra den lead-gen-Skill fertig hat.</p></div>'}
+    ${runBlocks || '<div class="card"><p class="muted">Noch keine Läufe. Starte oben den ersten — oder warte, bis ${AGENT} den lead-gen-Skill fertig hat.</p></div>'}
     <div class="card"><h2>✍️ Manuelle Leads</h2><form method="post" action="/leads/add" class="lead-form">
       <input name="name" placeholder="Name / Praxis" required>
       <input name="telefon" placeholder="Telefon">
@@ -1977,7 +1979,7 @@ app.post("/leads/delete", (req, res) => {
 app.get("/agenten", (req, res) => {
   res.send(layout("Agenten & Skills", "agenten", `
     <div class="head-row">
-      <div><p class="muted">Was Alexandra kann und gerade tut — Zuschauen stört sie nicht.</p></div>
+      <div><p class="muted">Was ${AGENT} kann und gerade tut — Zuschauen stört sie nicht.</p></div>
       <div class="qa"><button onclick="location.reload()">🔄 Aktualisieren</button></div>
     </div>
     <div class="tiles">
@@ -1987,7 +1989,7 @@ app.get("/agenten", (req, res) => {
       <div class="tile" data-tile2="cron"><span class="tile-num">–</span><span class="tile-label">Routinen</span></div>
     </div>
     <div class="grid">
-      <div class="card"><h2>⚙️ Alexandras Zustand</h2><div class="card-body" data-load="/api/agent/status">Lade…</div></div>
+      <div class="card"><h2>⚙️ ${AGENT}s Zustand</h2><div class="card-body" data-load="/api/agent/status">Lade…</div></div>
       <div class="card"><h2>⏰ Routinen (Cron)</h2><div class="card-body" data-load="/api/agent/cron">Lade…</div></div>
       <div class="card wide"><h2>🧩 Eigene Skills <span class="muted small">im Vault — von uns und ihr selbst gebaut</span></h2><div class="card-body" data-load="/api/agent/skills">Lade…</div></div>
       <div class="card wide"><h2>📋 Entscheidungs-Log <span class="muted small">was wann warum entschieden wurde</span></h2><div class="card-body" data-load="/api/agent/entscheidungen">Lade…</div></div>
@@ -2334,7 +2336,7 @@ function layout(title, active, content, req) {
       }
       if (src.includes("briefing")) {
         if (d.leer) return "<p class='caption'>Noch kein Briefing für heute. Oben auf <strong>Briefing erstellen</strong> — " +
-          "Alexandra stellt Termine, Mails und Prioritäten zusammen (dauert 1–3 Minuten).</p>";
+          AGENT + " stellt Termine, Mails und Prioritäten zusammen (dauert 1–3 Minuten).</p>";
         return "<div class='md'>" + d.html + "</div>" +
           "<p class='caption zt-fuss'>Stand: " + d.stand +
           (d.alterMin > 240 ? " <span class='badge b-bernstein'>" + Math.round(d.alterMin / 60) + " Std alt</span>" : "") + "</p>";
