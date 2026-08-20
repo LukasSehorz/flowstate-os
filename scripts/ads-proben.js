@@ -60,6 +60,31 @@ const EXTRA_ENV = wert("--env", process.env.ADS_ENV || "");
 const NUR_LISTE = argv.includes("--liste");
 const KEIN_AUFRAEUMEN = argv.includes("--kein-aufraeumen");
 const AUSFUEHRLICH = argv.includes("--ausfuehrlich");
+// Laeuft der Lauf trotz fehlender Voraussetzungen? Siehe die Pruefung im
+// Hauptlauf — ohne diesen Schalter bricht er dort ab.
+const TROTZDEM = argv.includes("--trotzdem");
+// WIE OFT (20.08.2026). Agent 2 formuliert seine Abnahmen als Wiederholung —
+// "10 von 10", "5 von 5", "20x hintereinander". Genau dafuer: Jedes gewaehlte
+// Szenario laeuft N mal, jedes Mal mit frischer Sitzung. Ein Fehler, der nur
+// bei jedem dritten Lauf auftritt, ist in einer Aufnahme derselbe Totalausfall
+// wie einer, der immer auftritt — er faellt beim einmaligen Pruefen nur nicht auf.
+const WIEDERHOLEN = Math.max(1, Number(wert("--wiederholen", 1)));
+
+// FERNMODUS: gegen einen schon laufenden Server messen statt einen eigenen zu
+// starten (20.08.2026).
+//
+// Anlass: Kalender und Postfach haengen an gws-cli, das nur IM CONTAINER liegt.
+// Ein Lauf auf dem Entwicklungsrechner kann Creative 2 deshalb grundsaetzlich
+// nicht pruefen — er misst dort immer nur seine eigene fehlende Umgebung.
+//
+//   node scripts/ads-proben.js --ziel https://flowstate…  --nur c2-3
+//
+// ACHTUNG, DER UNTERSCHIED IST WICHTIG: Im Fernmodus laeuft der Probemodus
+// NICHT (er haengt an ADS_PROBE im Serverprozess, und den startet hier keiner).
+// Eine Mail oder WhatsApp, die dort freigegeben wird, geht WIRKLICH raus.
+// Deshalb: nur ausdruecklich benannte Szenarien, kein Rundumschlag.
+const ZIEL_URL = wert("--ziel", "");
+const FERN = Boolean(ZIEL_URL);
 
 const MAIL = process.env.ADS_MAIL || "lukas.sehorz@flowstate-ai.net";
 const PASSWORT = process.env.ADS_PASSWORT || "flowstate2026";
@@ -95,6 +120,11 @@ const PANNE = /(hat nicht geklappt|ist etwas schiefgegangen|steckengeblieben|nic
 // lib/sprache-routes.js — sie steht dort als Messgroesse, hier als Pruefung).
 const INTERN = /\b(hermes|sonnet|haiku|token|prompt|json|werkzeug\w*|lange_arbeit|auftrag-id|sql|datenbank)\b/i;
 
+// Ein Geldbetrag — als Ziffern ("5.000 €", "7000 Euro") oder ausgeschrieben
+// ("Siebentausend Euro"). Beides ist eine Antwort auf "wie viel Umsatz";
+// eine Liste von Kundennamen ist keine.
+const BETRAG = /(\d[\d.]*\s*(€|Euro)|(tausend|hundert|million)\w*\s*Euro)/i;
+
 const SZENARIEN = [
   // ============================================================ Creative 1
   {
@@ -114,8 +144,16 @@ const SZENARIEN = [
   {
     id: "c1-3", gruppe: "kern", titel: "Leads fuer morgen + Nachschub",
     zuege: [
+      // KEIN Werkzeug erzwungen (20.08.2026): Seit die Zahl als Kennzahl im
+      // STAND steht (lib/crm.js, anrufbare_leads), antwortet Alexandra ohne
+      // Abfrage — in 3,6 s statt 7,5 s und jedes Mal mit derselben Zahl. Ein
+      // Test, der hier daten_fragen verlangt, wuerde den besseren Weg
+      // durchfallen lassen. Geprueft wird die ANTWORT: eine Menge Leads, und
+      // keine Aufteilung nach Personen.
       { frage: "Wie viele Leads haben wir für morgen zur Verfügung?",
-        werkzeug: ["daten_fragen", "nachschlagen"], verboten: PANNE, maxMs: 30000 },
+        enthaelt: /(1[.\s]?7\d\d|siebzehnhundert|tausendsiebenhundert)/i,
+        verboten: /(Ioannis|Jannik|pro Mitarbeiter)/i,
+        maxMs: 30000 },
       { frage: "Das ist zu wenig. Such nochmal hundert weitere raus.",
         werkzeug: ["leads_nachschub", "lange_arbeit"], verboten: PANNE, maxMs: 45000 },
     ],
@@ -141,8 +179,13 @@ const SZENARIEN = [
       { frage: "Was sind meine Termine heute?", verboten: PANNE, maxMs: 25000 },
       { frage: `Trag mir heute um 16 Uhr ${PRAEFIX} Probeaufnahme ein.`,
         werkzeug: ["termin_eintragen"], maxMs: 30000 },
+      // enthaelt/verboten statt nur werkzeug: Im Fernmodus gibt es kein
+      // Sprachprotokoll, und genau dort ist der Fehler aufgetreten — der
+      // Termin stand im Kalender, der STAND kannte ihn noch nicht, und die
+      // Antwort war "Ich finde keinen Termin". Der Wortlaut faengt das ueberall.
       { frage: `Sag den Termin ${PRAEFIX} Probeaufnahme wieder ab.`,
-        werkzeug: ["termin_absagen"], maxMs: 30000 },
+        werkzeug: ["termin_absagen"], enthaelt: /(Abgesagt|ist raus)/i,
+        verboten: /finde keinen Termin/i, maxMs: 30000 },
     ],
   },
   {
@@ -247,12 +290,18 @@ const SZENARIEN = [
     { frage: "Wann ist mein nächster Termin?", verboten: PANNE, maxMs: 25000 }] },
   { id: "k-3", gruppe: "kalender", titel: "Termin anlegen und verschieben", schreibt: true, zuege: [
     { frage: `Trag mir morgen um neun ${PRAEFIX} Kamera-Check ein.`, werkzeug: ["termin_eintragen"], maxMs: 30000 },
-    { frage: `Schieb ${PRAEFIX} Kamera-Check auf halb elf.`, werkzeug: ["termin_verschieben"], maxMs: 30000 },
-    { frage: `Und sag ihn doch wieder ab.`, werkzeug: ["termin_absagen"], maxMs: 30000 }] },
+    { frage: `Schieb ${PRAEFIX} Kamera-Check auf halb elf.`, werkzeug: ["termin_verschieben"],
+      enthaelt: /(Verschoben|Geändert)/i, verboten: /finde keinen Termin/i, maxMs: 30000 },
+    { frage: `Und sag ihn doch wieder ab.`, werkzeug: ["termin_absagen"],
+      enthaelt: /(Abgesagt|ist raus)/i, verboten: /finde keinen Termin/i, maxMs: 30000 }] },
   { id: "k-4", gruppe: "kalender", titel: "Termin ohne Uhrzeit", schreibt: true, zuege: [
     { frage: `Trag mir am Freitag ${PRAEFIX} Drehtag ganztägig ein.`, werkzeug: ["termin_eintragen"], maxMs: 30000 }] },
+  // Kein "Mach ich" vor einem Werkzeug, das scheitern kann. Live gemessen:
+  // "Mach ich, der Kamera-Check morgen fliegt raus. Ich finde keinen Termin …"
   { id: "k-5", gruppe: "kalender", titel: "Nicht existierender Termin", zuege: [
-    { frage: "Sag den Termin mit dem Bundeskanzler ab.", verboten: /abgesagt|ist raus/i, maxMs: 30000 }] },
+    { frage: "Sag den Termin mit dem Bundeskanzler ab.",
+      verboten: /(abgesagt|ist raus|fliegt raus|mach ich|sag ich ab|schieb ich)/i,
+      enthaelt: /finde keinen Termin/i, maxMs: 30000 }] },
   { id: "k-6", gruppe: "kalender", titel: "Freie Zeit finden", zuege: [
     { frage: "Wann hab ich diese Woche zwei Stunden am Stück frei?", maxMs: 35000 }] },
   { id: "k-7", gruppe: "kalender", titel: "Termin plus Aufgabe in einem Satz", schreibt: true, zuege: [
@@ -362,6 +411,51 @@ const SZENARIEN = [
   { id: "s-15", gruppe: "sprache", titel: "Anruf anfordern", zuege: [
     { frage: "Ruf mich in zehn Sekunden an.", werkzeug: ["anrufen"], maxMs: 30000 }] },
 
+  // ============================================== Nachgereicht am 20.08.
+  //
+  // Jeder Fall hier stammt aus einer Messung am laufenden Server, nicht aus
+  // einer Vermutung. Die Gruppe heisst "rueckfall", weil genau das ihr Zweck
+  // ist: dass diese fünf nicht ein zweites Mal auftreten.
+  //
+  // Rohdaten duerfen NIE in der gesprochenen Antwort landen. Diese Wendungen
+  // standen am 20.08. woertlich in einer Flugantwort.
+  { id: "r-1", gruppe: "rueckfall", titel: "Flugantwort ohne Google-Rohtext", zuege: [
+    { frage: "Buch mir den günstigsten Flieger nach Barcelona, abgestimmt mit meinem Terminkalender.",
+      werkzeug: ["computer_auftrag"],
+      verboten: /(CO2|gesch(ä|ae)tzt|Durchgef(ü|ue)hrt von|kg CO2e)/i, maxMs: 60000 }] },
+
+  // "Umsatz" muss IMMER zu einer Summe fuehren, nicht nur mit Monatsnennung.
+  // Gemessen: "9 Deals diesen Monat: Ralph Richter Malereibetrieb, Frau
+  // Ladenhauf …" — gefragt war nach Geld.
+  // GEPRUEFT WIRD DIE ANTWORT, NICHT DER WEG. Auf "diesen Monat" antwortete sie
+  // in 4,5 s aus dem STAND — ohne Abfrage, mit "Siebentausend Euro". Richtig
+  // und schneller als jede Datenbankrunde. Ein Test, der hier ein Werkzeug
+  // erzwingt, wuerde die bessere Loesung durchfallen lassen.
+  //
+  // BETRAG heisst: Ziffern mit Euro ODER ausgeschrieben. Beides ist eine Zahl,
+  // nur die Aufzaehlung von Kundennamen ist keine.
+  { id: "r-2", gruppe: "rueckfall", titel: "Umsatz diesen Monat ist ein Betrag", zuege: [
+    { frage: "Wie viel Umsatz haben wir diesen Monat gemacht?", enthaelt: BETRAG, maxMs: 40000 }] },
+  { id: "r-3", gruppe: "rueckfall", titel: "Umsatz dieses Jahr ist ein Betrag", zuege: [
+    { frage: "Wie viel haben wir dieses Jahr eingenommen?", enthaelt: BETRAG, maxMs: 40000 }] },
+  { id: "r-4", gruppe: "rueckfall", titel: "Umsatz letzte Woche ist ein Betrag", zuege: [
+    { frage: "Was haben wir letzte Woche umgesetzt?", enthaelt: BETRAG, maxMs: 40000 }] },
+
+  // Duenner Nachrichtenauftrag: formulieren und vorlegen, nicht zurueckfragen.
+  // Drehbuch Creative 2d. Gemessen: "Was soll's morgen sein — Termin, Calls,
+  // oder was Bestimmtes? Ohne das schreib ich ihm nur Luft."
+  { id: "r-5", gruppe: "rueckfall", titel: "WhatsApp mit duennem Auftrag", zuege: [
+    { frage: "Formulier eine WhatsApp an Jannik wegen morgen.",
+      werkzeug: ["whatsapp_senden"], maxMs: 40000 }] },
+
+  // Ein Teilfehler darf nie roh im Text stehen ("spawn gws-cli ENOENT").
+  { id: "r-6", gruppe: "rueckfall", titel: "Briefing ohne technische Fehlermeldung", zuege: [
+    { frage: "Guten Morgen — gib mir mein Morning Briefing.",
+      // "null" steht hier bewusst NICHT: Auf Deutsch ist das eine ganz normale
+      // Zahl ("für morgen null Wiedervorlagen"), und der Test hat genau darauf
+      // angeschlagen. Gesucht sind technische Reste, keine deutschen Wörter.
+      verboten: /(ENOENT|spawn |gws-cli|ECONNREFUSED|undefined|\[object |Error:|: null)/i, maxMs: 45000 }] },
+
   // ==================================================== Leads-Nachschub
   { id: "l-1", gruppe: "leads", titel: "Nachschub mit Ort und Branche", zuege: [
     { frage: "Such mir fünfzig neue Zahnarztpraxen in München als Leads raus.",
@@ -415,13 +509,20 @@ function umgebungBauen(datenPfad) {
 }
 
 // ---------------------------------------------------------------- HTTP
+// Wohin die Anfragen gehen: eigener Server auf 127.0.0.1 oder der ferne.
+const FERNZIEL = FERN ? new URL(ZIEL_URL) : null;
+const NETZ = FERN && FERNZIEL.protocol === "https:" ? require("https") : http;
+
 function anfrage(pfad, { methode = "GET", body = null, typ = "application/json", cookie = "", timeoutMs = 180000 } = {}) {
   return new Promise((ok, fehler) => {
     const daten = body == null ? null : (typ === "application/json" ? JSON.stringify(body) : body);
     const kopf = {};
     if (daten) { kopf["content-type"] = typ; kopf["content-length"] = Buffer.byteLength(daten); }
     if (cookie) kopf.cookie = cookie;
-    const r = http.request({ host: "127.0.0.1", port: PORT, path: pfad, method: methode, headers: kopf, timeout: timeoutMs },
+    const r = NETZ.request({
+      host: FERN ? FERNZIEL.hostname : "127.0.0.1",
+      port: FERN ? (FERNZIEL.port || undefined) : PORT,
+      path: pfad, method: methode, headers: kopf, timeout: timeoutMs },
       (res) => {
         let roh = "";
         res.setEncoding("utf-8");
@@ -533,10 +634,12 @@ async function zugFahren(zug, cookie, datenPfad) {
   const maengel = [];
   if (fehler) maengel.push("Fehler: " + fehler);
   if (!antwort) maengel.push("Keine Antwort");
-  if (zug.werkzeug?.length && !zug.werkzeug.some((w) => namen.includes(w))) {
+  // Im Fernmodus liegt das Sprachprotokoll auf dem anderen Rechner. Eine
+  // Werkzeugpruefung waere dann keine Pruefung, sondern ein garantiertes Nein.
+  if (!FERN && zug.werkzeug?.length && !zug.werkzeug.some((w) => namen.includes(w))) {
     maengel.push(`Kein Werkzeug aus [${zug.werkzeug.join(", ")}] — aufgerufen: [${namen.join(", ") || "keins"}]`);
   }
-  if (zug.kein_werkzeug?.length) {
+  if (!FERN && zug.kein_werkzeug?.length) {
     const verboten = zug.kein_werkzeug.filter((w) => namen.includes(w));
     if (verboten.length) maengel.push("Verbotenes Werkzeug: " + verboten.join(", "));
   }
@@ -617,6 +720,10 @@ async function aufraeumen(env) {
 (async () => {
   let liste = SZENARIEN;
   if (NUR.length) liste = liste.filter((s) => NUR.includes(s.id) || NUR.includes(s.gruppe));
+  if (WIEDERHOLEN > 1) {
+    liste = liste.flatMap((s) => Array.from({ length: WIEDERHOLEN },
+      (_, i) => ({ ...s, id: `${s.id}#${i + 1}` })));
+  }
   if (!liste.length) { console.log("Kein Szenario passt zu --nur " + NUR.join(",")); process.exit(1); }
 
   if (NUR_LISTE) {
@@ -629,8 +736,80 @@ async function aufraeumen(env) {
   fs.mkdirSync(datenPfad, { recursive: true });
   const env = umgebungBauen(datenPfad);
 
-  if (!env.DATABASE_URL) console.log("⚠  DATABASE_URL fehlt — CRM, Aufgaben und Zahlen können nicht antworten.");
-  if (!env.SCHNELL_API_KEY) console.log("⚠  SCHNELL_API_KEY fehlt — ohne ihn versteht Alexandra gar nichts. (--env <pfad> mitgeben)");
+  // --- Fernmodus: kein eigener Server, keine Umgebungspruefung -------------
+  //
+  // Gemessen wird, was dort laeuft. Werkzeugaufrufe kommen im Fernmodus NICHT
+  // mit — das Sprachprotokoll liegt auf dem anderen Rechner. Der Bericht sagt
+  // das, statt "kein Werkzeug" zu behaupten.
+  if (FERN) {
+    if (!NUR.length) {
+      console.log("Fernmodus braucht --nur. Ein Rundumschlag gegen den laufenden Server "
+        + "wäre keine Probe, sondern echter Betrieb — der Probemodus greift dort nicht.");
+      process.exit(2);
+    }
+    console.log(`FERNMODUS gegen ${ZIEL_URL}`);
+    console.log("ACHTUNG: Der Probemodus läuft dort NICHT. Freigegebene Nachrichten gehen wirklich raus.");
+    console.log("Geschrieben wird nur mit " + PRAEFIX + "-Präfix; Kalendereinträge räumst du mit gws-cli nach.");
+    const start = Date.now();
+    const ergebnisse = [];
+    for (const sz of liste) ergebnisse.push(await szenarioFahren(sz, datenPfad));
+    const zuegeAlle = ergebnisse.flatMap((e) => e.zuege);
+    const bericht = {
+      zeit: new Date().toISOString(),
+      lauf: { fern: ZIEL_URL, nur: NUR, praefix: PRAEFIX,
+              hinweis: "Fernmodus: Werkzeugnamen fehlen (Protokoll liegt auf dem Server), Probemodus inaktiv." },
+      zusammenfassung: {
+        szenarien: ergebnisse.length,
+        bestanden: ergebnisse.filter((e) => e.bestanden).length,
+        zuege: zuegeAlle.length,
+        zuegeBestanden: zuegeAlle.filter((z) => z.bestanden).length,
+        medianMs: median(zuegeAlle.map((z) => z.dauerMs)),
+        gesamtMs: Date.now() - start,
+      },
+      ergebnisse,
+    };
+    fs.mkdirSync(ZIEL, { recursive: true });
+    const datei = path.join(ZIEL, "fern-" + new Date().toISOString().replace(/[:.]/g, "-") + ".json");
+    fs.writeFileSync(datei, JSON.stringify(bericht, null, 2));
+    console.log(`
+Szenarien: ${bericht.zusammenfassung.bestanden}/${bericht.zusammenfassung.szenarien} · Züge: ${bericht.zusammenfassung.zuegeBestanden}/${bericht.zusammenfassung.zuege}`);
+    console.log("Bericht: " + path.relative(WURZEL, datei));
+    return process.exit(bericht.zusammenfassung.bestanden === bericht.zusammenfassung.szenarien ? 0 : 1);
+  }
+
+  // ABBRECHEN STATT FALSCH MESSEN (20.08.2026).
+  //
+  // Der erste grosse Lauf lief ausserhalb des Containers. Dort fehlt gws-cli,
+  // und HERMES_CHAT_URL war leer. Ergebnis: 74 Szenarien, ein ordentlich
+  // aussehender Bericht — und JEDER Kalender- und Mail-Fehlschlag darin war
+  // ein Artefakt der Testumgebung, nicht des Produkts. Live lief der Kalender
+  // die ganze Zeit einwandfrei. Ein Messwerkzeug, das so etwas als Befund
+  // ausgibt, ist schlimmer als keines: Es lenkt die Arbeit auf Probleme, die
+  // es nicht gibt, und verdeckt die, die es gibt.
+  //
+  // Deshalb faellt der Lauf hier hart aus, wenn eine Voraussetzung fehlt.
+  // --trotzdem laesst ihn laufen (fuer den Fall, dass jemand bewusst nur die
+  // Sprachschicht messen will) und schreibt den Vorbehalt in den Bericht.
+  const fehlt = [];
+  if (!env.DATABASE_URL) fehlt.push("DATABASE_URL — CRM, Aufgaben und Zahlen können nicht antworten");
+  if (!env.SCHNELL_API_KEY) fehlt.push("SCHNELL_API_KEY — ohne ihn versteht Alexandra gar nichts");
+  if (!env.HERMES_CHAT_URL) fehlt.push("HERMES_CHAT_URL — lange_arbeit scheitert dann immer");
+  try {
+    require("child_process").execFileSync("gws-cli", ["--help"], { stdio: "ignore", env });
+  } catch {
+    fehlt.push("gws-cli nicht im PATH — Kalender und Mail scheitern dann IMMER, und zwar ohne dass es am Produkt liegt");
+  }
+  if (fehlt.length) {
+    console.log("\nDieser Lauf würde falsch messen. Es fehlt:");
+    for (const f of fehlt) console.log("  · " + f);
+    if (!TROTZDEM) {
+      console.log("\nRichtiger Ort für den Lauf ist der Container:");
+      console.log("  docker exec -w /app flowstate-dashboard node scripts/ads-proben.js --nur kern");
+      console.log("\n(Mit --trotzdem laufen lassen — der Bericht trägt den Vorbehalt dann mit.)");
+      process.exit(2);
+    }
+    console.log("\n--trotzdem gesetzt: Lauf startet, Vorbehalt steht im Bericht.\n");
+  }
 
   console.log(`Server startet auf Port ${PORT} · Daten: ${datenPfad}`);
   const srv = spawn(process.execPath, ["server.js"], { cwd: WURZEL, env, stdio: AUSFUEHRLICH ? "inherit" : "ignore" });
@@ -684,7 +863,10 @@ async function aufraeumen(env) {
   const bericht = {
     zeit: new Date().toISOString(),
     lauf: { port: PORT, datenPfad, gleichzeitig: GLEICHZEITIG, nur: NUR, praefix: PRAEFIX,
-            modellVerstehen: env.SPRACHE_VERSTEHEN_MODEL || env.SCHNELL_MODEL || "(unbekannt)" },
+            modellVerstehen: env.SPRACHE_VERSTEHEN_MODEL || env.SCHNELL_MODEL || "(unbekannt)",
+            // Steht hier etwas, ist der Bericht NUR unter diesem Vorbehalt zu
+            // lesen — die betroffenen Wege scheitern dann aus Umgebungsgruenden.
+            vorbehalt: fehlt },
     zusammenfassung: {
       szenarien: ergebnisse.length,
       bestanden: ergebnisse.filter((e) => e.bestanden).length,
