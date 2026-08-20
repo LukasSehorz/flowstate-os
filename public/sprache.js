@@ -160,6 +160,10 @@
   //
   // Der zuletzt geoeffnete Tab gewinnt: Wer gerade eine Seite aufmacht, will
   // mit dieser arbeiten.
+  // Hat ein anderer Tab die Fuehrung uebernommen? Stand bis eben neben einer
+  // Variablen, die bei einem Umbau wegfiel — und ohne Deklaration bricht das
+  // ganze Skript beim ersten Zugriff ab. Jetzt bei den anderen Drehbuch-Werten.
+  let drehPassiv = false;
   let drehKanal = null;
 
   function drehPassivSchalten() {
@@ -492,7 +496,32 @@
   // ---------------------------------------------------------------- Gespraech
 
   // Auf das Wake-Word: Gespraech mit Begruessung starten.
-  function geweckt() { gespraechStarten(true); }
+  // Wecken — durch Klatschen, Klick auf die Kugel oder Leertaste.
+  //
+  // WARUM MEHRERE WEGE (20.08.2026): Die Klatsch-Erkennung laeuft auf
+  // requestAnimationFrame, und das steht in einem Tab, der nicht sichtbar ist,
+  // KOMPLETT still. Sobald die Drehmappe aufgeht und den Vordergrund nimmt,
+  // hoert die Sprachseite auf, Klatschen zu bemerken. Am Set faellt das als
+  // "ich klatsche und nichts passiert" auf, und man sucht am falschen Ende.
+  //
+  // Der Klick auf die Kugel und die Leertaste brauchen kein Mikrofon und
+  // keinen Vordergrund-Zufall. Im Video sieht man davon nichts — geklatscht
+  // wird trotzdem, das bleibt die Geste fuer die Kamera.
+  async function drehbuchStarten() {
+    if (imGespraech) return;
+    try { document.dispatchEvent(new CustomEvent("alexandra-geweckt")); } catch {}
+    klatschWacheStoppen();
+    try { wakeErkennung?.stop(); } catch {}
+    await gespraechStarten(false, true);   // erst der Zug, dann das Mikrofon
+    drehZug = 0;
+    await drehbuchZug();
+    geduld();
+  }
+
+  function geweckt() {
+    if (drehbuch) return void drehbuchStarten();
+    gespraechStarten(true);
+  }
 
   // ------------------------------------------------------ Zweimal klatschen
   //
@@ -704,7 +733,9 @@
   // weiterreden, OHNE "Hey Alexandra" zu sagen. Ergebnisse aus dem Hintergrund
   // sagt sie auch waehrend der Pause weiterhin an.
   function pauseUmschalten() {
-    if (!imGespraech) return gespraechStarten(false);   // aus der Ruhe: Gespraech starten
+    // Aus der Ruhe heraus: im Dreh das Drehbuch, sonst ein normales Gespraech.
+    if (!imGespraech && drehbuch) return void drehbuchStarten();
+    if (!imGespraech) return gespraechStarten(false);
     pausiert ? fortsetzen() : pausieren();
   }
 
@@ -1445,6 +1476,11 @@
   // mehr das ganze Gespraech. Zum Beenden gibt es "Stopp" (Knopf oder gesagt)
   // und die Verabschiedung ("passt, fertig").
   el.kugel.addEventListener("click", () => {
+    // Im Dreh startet ein Klick auf die Kugel das Drehbuch — derselbe Weg wie
+    // das Klatschen, nur ohne Mikrofon. Gebraucht wird er, weil die
+    // Klatsch-Erkennung auf requestAnimationFrame laeuft und in einem Tab, der
+    // gerade nicht sichtbar ist, komplett still steht.
+    if (drehbuch && zustand === "ruhe" && !imGespraech) return void drehbuchStarten();
     if (zustand === "ruhe" && !imGespraech) return gespraechStarten(false);
     if (redetGerade) return unterbrechen();   // sie redet -> reinreden bleibt reinreden
     pauseUmschalten();
@@ -1561,6 +1597,18 @@
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 900000 }
     );
   }
+  // Leertaste startet den Dreh, wenn die Kugel nichts tut. Nur auf der grossen
+  // Seite und nur, solange ein Drehbuch geladen ist — sonst scrollt sie normal.
+  document.addEventListener("keydown", (e) => {
+    if (!drehbuch || !istGrosseSeite) return;
+    if (e.code !== "Space" && e.code !== "Enter") return;
+    const z = document.activeElement && document.activeElement.tagName;
+    if (z === "INPUT" || z === "TEXTAREA") return;
+    e.preventDefault();
+    if (!imGespraech) drehbuchStarten();
+    else if (!redetGerade) { try { erkennung?.stop(); } catch {} }  // Zug vorziehen
+  });
+
   standortMelden();
   // Alle 15 Minuten nachfassen, solange die Seite offen ist: Lukas arbeitet
   // unterwegs, und ein Ort von heute Morgen ist kein "wo ich gerade bin".
