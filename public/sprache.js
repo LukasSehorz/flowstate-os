@@ -73,111 +73,69 @@
   let drehAus = drehFrage === "aus";
   let drehbuch = null;      // { titel, zuege: [{id, text, audio, oeffnen}] }
   let drehZug = 0;
-  // EIN FENSTER JE INHALT, und alle bleiben offen (20.08.2026, Wunsch Lukas).
+  // EIN Fenster, viele Reiter — die Drehmappe (/regie/mappe).
   //
-  // Vorher gab es zwei feste Fenster, und jedes neue Dokument ersetzte das
-  // vorige. Jetzt bekommt jeder Inhalt sein eigenes — der Name wird aus der
-  // Adresse abgeleitet. Zwei Zuege, die dieselbe Seite zeigen (C2_05 und C2_07
-  // den Kalender), landen damit von selbst im selben Fenster und laden es neu,
-  // statt einen zweiten Kalender-Tab aufzumachen.
-  const mappen = {};          // Name -> Fenster
-  let mappenNamen = [];       // alle, die dieses Drehbuch braucht
+  // WARUM NICHT MEHRERE FENSTER (20.08.2026): Chrome erlaubt pro Nutzergeste
+  // genau EIN window.open. Beim Dreh ging deshalb das Angebot auf und danach
+  // nichts mehr; die Creatives und der Kalender wurden stillschweigend
+  // geblockt. Nachgemessen: headless gehen vier von vier durch, im echten
+  // Browser eines von vier. Also ein Fenster, und die Inhalte kommen als
+  // Reiter darin an.
+  let mappe = null;
+  let mappeBereit = false;
+  const mappeWarteschlange = [];
 
-  function fensterName(datei) {
-    const basis = String(datei).split("?")[0].split("#")[0];
-    return "dreh-" + basis.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+  function mappeSenden(url) {
+    try {
+      if (!mappe || mappe.closed) return false;
+      mappe.postMessage({ typ: "zeigen", url }, location.origin);
+      mappe.focus();
+      return true;
+    } catch { return false; }
   }
 
-  // Ein Fenster, das SPAETER ohne Nutzergeste weiterspringen darf.
-  //
-  // window.open braucht eine Geste, sonst blockt der Browser. Ein Klatschen
-  // ist keine. Also wird das Fenster beim ersten Klick auf die Seite geoeffnet
-  // (leer) und danach nur noch umgelenkt — location.href braucht keine Geste.
   function mappeVorbereiten() {
     const einmal = () => {
       document.removeEventListener("click", einmal);
-      // ALLE auf einmal, und zwar JETZT: window.open braucht eine Nutzergeste,
-      // ein Klatschen ist keine. Spaeter wird nur noch umgelenkt.
-      mappenNamen.forEach((name) => {
-        try { mappen[name] = window.open("about:blank", name); } catch {}
-      });
-      console.log("Drehbuch: " + mappenNamen.length + " Fenster vorbereitet");
+      try {
+        mappe = window.open("/regie/mappe", "drehmappe");
+        console.log("Drehbuch: Drehmappe geöffnet:", Boolean(mappe));
+        if (!mappe && el.hinweis) {
+          el.hinweis.textContent = "Popup blockiert — bitte für diese Seite erlauben.";
+        }
+      } catch (e) { console.error("Drehmappe:", e.message); }
     };
     document.addEventListener("click", einmal);
+    // Die Mappe meldet sich, sobald ihr Skript laeuft. Erst dann kommen
+    // Nachrichten an — vorher gesendete gingen ins Leere.
+    window.addEventListener("message", (e) => {
+      if (e.origin !== location.origin) return;
+      if (e.data && e.data.typ === "mappe-bereit") {
+        mappeBereit = true;
+        while (mappeWarteschlange.length) mappeSenden(mappeWarteschlange.shift());
+      }
+    });
   }
 
   function mappeZeigen(dateien) {
     const liste = Array.isArray(dateien) ? dateien : (dateien ? [dateien] : []);
     liste.forEach((datei) => {
-      const name = fensterName(datei);
       let url;
       if (/^https?:\/\//.test(datei)) {
-        // WhatsApp Web bleibt, wie es ist — ein Anhaengsel wuerde dort die
-        // Sitzung durcheinanderbringen. Der Google-Kalender dagegen MUSS neu
-        // laden, sonst fehlt in C2_07 der gerade angelegte Termin.
+        // Der Google-Kalender MUSS neu laden, sonst fehlt in C2_07 der gerade
+        // angelegte Termin. Andere fremde Adressen bleiben unangetastet.
         url = /calendar\.google\.com/.test(datei)
           ? datei + (datei.includes("?") ? "&" : "?") + "_=" + Date.now()
           : datei;
       } else if (datei.startsWith("/")) {
-        // Eigene Seite — und zwingend mit drehbuch=aus.
-        //
-        // WARUM (20.08.2026): Jede Seite des OS laedt die Sprachsteuerung mit.
-        // Ohne das Aus haette der Kalender-Tab das Drehbuch ebenfalls geladen,
-        // die Fuehrung uebernommen — und der Haupt-Tab waere stumm geworden.
-        // Genau das ist im Dreh passiert: Sobald der Kalender aufging, ging
-        // nichts mehr.
-        //
-        // Das frische Anhaengsel muss dazu: Sonst laedt der Browser dieselbe
-        // Adresse NICHT neu, und C2_07 zeigte den gerade angelegten Termin nicht.
-        url = datei + (datei.includes("?") ? "&" : "?")
-          + "drehbuch=aus&_=" + Date.now();
+        // Eigene Seiten zwingend mit drehbuch=aus: Jede Seite des OS laedt die
+        // Sprachsteuerung mit und wuerde sonst die Fuehrung uebernehmen.
+        url = datei + (datei.includes("?") ? "&" : "?") + "drehbuch=aus&_=" + Date.now();
       } else {
         url = "/regie/datei/" + encodeURIComponent(datei);
       }
-      try {
-        const w = mappen[name];
-        if (w && !w.closed) { w.location.href = url; w.focus(); }
-        else { mappen[name] = window.open(url, name); }
-      } catch { window.open(url, name); }
+      if (!mappeBereit || !mappeSenden(url)) mappeWarteschlange.push(url);
     });
-  }
-
-  // NUR EIN TAB DARF DAS DREHBUCH FUEHREN (20.08.2026).
-  //
-  // Im Protokoll standen doppelte Aufnahmen zur selben Sekunde: zwei Seiten
-  // hoerten gleichzeitig zu, beide schalteten weiter, und pro Antwort liefen
-  // ZWEI Zuege. Auf dem Bildschirm sieht das aus, als haette der Agent einen
-  // Schritt uebersprungen — bei Creative 2 kam der Terminkalender, wo die
-  // Creatives haetten kommen muessen.
-  //
-  // Der zuletzt geoeffnete Tab gewinnt. Das ist die richtige Richtung: Wer
-  // gerade eine Seite aufmacht, will mit dieser arbeiten; die alte ist
-  // vergessen worden und soll stillhalten.
-  let drehPassiv = false;
-  let drehKanal = null;
-
-  function drehPassivSchalten() {
-    if (drehPassiv) return;
-    drehPassiv = true;
-    drehbuch = null;              // dieser Tab loest keine Zuege mehr aus
-    try { klatschWacheStoppen(); } catch {}
-    try { erkennung?.abort?.(); } catch {}
-    imGespraech = false;
-    setzeZustand("ruhe");
-    if (el.hinweis) {
-      el.hinweis.textContent = "Ein anderer Tab führt das Drehbuch — diese Seite hält still.";
-    }
-    console.warn("Drehbuch: anderer Tab hat uebernommen, diese Seite ist passiv.");
-  }
-
-  function drehFuehrungUebernehmen() {
-    try {
-      drehKanal = new BroadcastChannel("flowstate-drehbuch");
-      drehKanal.onmessage = (e) => {
-        if (e.data === "uebernehme") drehPassivSchalten();
-      };
-      drehKanal.postMessage("uebernehme");
-    } catch { /* alter Browser ohne BroadcastChannel — dann eben ohne Riegel */ }
   }
 
   async function drehbuchLaden() {
@@ -187,11 +145,6 @@
       if (!r.ok) throw new Error("HTTP " + r.status);
       drehbuch = await r.json();
       drehZug = 0;
-      const gesehen = new Set();
-      (drehbuch.zuege || []).forEach((z) => (z.oeffnen || []).forEach((d) => {
-        const n = fensterName(d);
-        if (!gesehen.has(n)) { gesehen.add(n); mappenNamen.push(n); }
-      }));
       mappeVorbereiten();
       drehFuehrungUebernehmen();
       if (el.hinweis) el.hinweis.textContent =
