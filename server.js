@@ -319,7 +319,16 @@ app.use((req, res, next) => {
   if (req.path.startsWith("/api/")) return res.status(401).json({ ok: false, hint: "Sitzung abgelaufen — bitte Seite neu laden und neu anmelden." });
   // Das Ziel merken, samt Fragezeichen-Teil. Ohne das geht ?drehbuch=0
   // verloren (siehe zurueckZiel oben).
-  if (req.method === "GET") req.session.zurueck = req.originalUrl;
+  //
+  // NUR ECHTE SEITEN: Der Browser holt nebenbei favicon, Stylesheets und
+  // Skripte. Die laufen durch denselben Torwaechter, und wer zuletzt kam,
+  // gewinnt — im Test landete die Anmeldung auf /favicon.ico. Nach dem
+  // Anmelden steht man dann vor einem Bild statt vor der Sprachseite.
+  const istSeite = req.method === "GET"
+    && !/\.(ico|css|js|png|jpe?g|svg|woff2?|map|webmanifest)$/i.test(req.path)
+    && !req.path.startsWith("/api/")
+    && (req.get("accept") || "").includes("text/html");
+  if (istSeite) req.session.zurueck = req.originalUrl;
   res.redirect("/login");
 });
 
