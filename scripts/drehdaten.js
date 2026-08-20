@@ -542,10 +542,16 @@ async function laden(c) {
 
   // Kontostand, damit die Buchhaltungsseite nicht mit einer gelben Warnung
   // aufgeht ("Kontostand ist noch nie eingetragen") — die stuende im Bild.
+  // Steuerkanzlei: C3_04 nennt sie beim Namen ("raus an eure Steuerberaterin
+  // Frau Keller"). Steht hier etwas anderes, widerspricht der Bildschirm der
+  // Stimme — und die Buchhaltungsseite zeigt den Namen im Klartext.
   await c.query(
     `update public.finanz_einstellungen
         set start_saldo = $1, saldo_stand = date_trunc('month', current_date)::date,
-            steuersatz = 30.0, geaendert_von = $2
+            steuersatz = 30.0, geaendert_von = $2,
+            steuer_anrede = 'Frau', steuer_name = 'Keller',
+            steuer_mail = 'kanzlei.keller@example.de',
+            steuer_notiz = 'Kanzlei Keller & Partner, Erding · Mandant 4711'
       where id = 1`, [48500, chef.id]);
 
   await c.query(
