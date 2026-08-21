@@ -123,6 +123,75 @@
     return "dreh-" + basis.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
   }
 
+  // ----------------------------------------------------------- Kino-Modus
+  //
+  // Nur das Gehirn, sonst nichts. Fuer die Anzeigen soll der Bildschirm
+  // aussehen wie das fertige Video und nicht wie ein Arbeitsplatz: keine
+  // Navigation, keine Kopfzeile mit Datum und Uhrzeit, kein Knopfband, kein
+  // Name in der Ecke. Alles davon steht sonst im Bild und verraet, dass hier
+  // jemand vor einem Dashboard sitzt.
+  //
+  // Umgeschaltet wird mit der Taste K oder mit ?kino=1 in der Adresse. Die
+  // Taste ist wichtiger als der Parameter: Am Set will man den Ausschnitt
+  // einrichten, ohne die Seite neu zu laden — ein Neuladen wuerde die
+  // Mikrofon-Freigabe und die Drehmappe mitnehmen.
+  //
+  // Die Wahl bleibt fuer diesen Tab gemerkt, damit ein Neuladen zwischen zwei
+  // Takes nicht wieder die Leisten hereinholt.
+  const KINO_SPEICHER = "flowstate-kino";
+  function kinoStil() {
+    if (document.getElementById("kino-stil")) return;
+    const s = document.createElement("style");
+    s.id = "kino-stil";
+    s.textContent = `
+      /* Links und oben WEG: Die Flaeche waechst, die Kugel rueckt in die
+         Mitte des Bildes. */
+      body.kino .rail,
+      body.kino .topbar { display: none !important; }
+      /* Kopf und Fuss der Buehne dagegen nur UNSICHTBAR, nicht entfernt.
+         Die Kugel wird zwischen ihnen ausgerichtet — nimmt man ihnen den
+         Platz, rutscht sie ins obere Drittel. Gemessen am 21.08.: mit
+         display:none sass sie bei 32 % statt bei 50 % der Bildhoehe. */
+      body.kino .gh-kopf,
+      body.kino .gh-fuss { visibility: hidden !important; }
+      /* Der Inhalt ruecht auf, wo die Leiste war — sonst bliebe links ein
+         schwarzer Streifen, den man im Schnitt wegschneiden muesste. */
+      body.kino .inhalt { margin: 0 !important; padding: 0 !important; }
+      body.kino .shell { padding: 0 !important; }
+      body.kino main { padding: 0 !important; }
+      /* Der Rahmen um die Buehne gehoert zur Oberflaeche, nicht ins Bild. */
+      body.kino .gh-rahmen { visibility: hidden !important; }
+      body.kino .gh, body.kino .gh-canvas { inset: 0 !important; }
+    `;
+    document.head.appendChild(s);
+  }
+  function kinoSetzen(an) {
+    kinoStil();
+    document.body.classList.toggle("kino", an);
+    try { sessionStorage.setItem(KINO_SPEICHER, an ? "1" : "0"); } catch { /* privater Modus */ }
+    // Die Kugel haengt an der Groesse der Flaeche. Ohne diesen Anstoss bliebe
+    // sie in der Ecke, bis jemand das Fenster anfasst.
+    try { window.dispatchEvent(new Event("resize")); } catch {}
+    console.log("Kino-Modus:", an ? "an" : "aus");
+  }
+  (function kinoStarten() {
+    let an = new URLSearchParams(location.search).get("kino");
+    if (an === null) { try { an = sessionStorage.getItem(KINO_SPEICHER); } catch { an = null; } }
+    if (an === "1" || an === "an") kinoSetzen(true);
+    document.addEventListener("keydown", (e) => {
+      // Nicht waehrend jemand tippt, und nicht mit Zusatztaste — sonst faengt
+      // das hier ein Strg+K der Adresszeile ab.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const z = e.target;
+      if (z && /^(INPUT|TEXTAREA|SELECT)$/.test(z.tagName)) return;
+      if (z && z.isContentEditable) return;
+      if (e.key === "k" || e.key === "K") {
+        e.preventDefault();
+        kinoSetzen(!document.body.classList.contains("kino"));
+      }
+    });
+  })();
+
   // Ist die Drehmappe da und offen?
   const mappeOffen = () => Boolean(mappe && !mappe.closed);
 
