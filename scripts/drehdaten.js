@@ -782,7 +782,12 @@ async function stand(c) {
       (select count(*) from public.firmen where tags @> array['gebucht']::text[]
          )::int as gebucht,
       (select count(*) from public.aufgaben where not erledigt)::int as aufgaben,
-      (select count(*) from public.belege)::int as belege,
+      -- Nur GEBUCHTE zaehlen, wie es auch die Buchhaltungsseite tut
+      -- ("N gebuchte Belege"). Zurueckgenommene Belege bleiben als
+      -- 'verworfen' liegen — das Archiv laesst kein Loeschen zu — und wurden
+      -- hier bis zum 21.08. mitgezaehlt. Der Stand meldete dann eine
+      -- Abweichung vom Skript, wo gar keine war.
+      (select count(*) from public.belege where status = 'gebucht')::int as belege,
       (select coalesce(sum(wert),0) from public.deals where status='gewonnen'
          and geschlossen_am >= date_trunc('month', current_date))::numeric as umsatz_monat,
       (select coalesce(sum(wert),0) from public.deals where status='gewonnen'
