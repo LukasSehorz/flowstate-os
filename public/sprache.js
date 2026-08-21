@@ -930,13 +930,25 @@
         }
         klatschBewerten(spitze);
       };
-      // Ein ScriptProcessor laeuft nur, wenn er irgendwo endet. Ueber einen
-      // Regler auf null, sonst kaeme das Mikrofon aus den Lautsprechern.
-      klatschStumm = ctx.createGain();
-      klatschStumm.gain.value = 0;
+      // Ein ScriptProcessor laeuft nur, wenn er irgendwo endet — er wird vom
+      // Ausgang her "gezogen".
+      //
+      // NICHT AN ctx.destination (21.08.2026). Zuerst ging der Weg ueber einen
+      // Regler auf null an den Lautsprecherausgang. Auf einem Rechner mit
+      // Soundkarte faellt das nicht auf; im Testcontainer, der keine hat, blieb
+      // danach die GANZE Tonausgabe stehen: Die Tonspur des Drehbuchs wurde
+      // nicht einmal mehr geladen, und der Zug hing in "spricht".
+      //
+      //   vor der Aenderung:  C2_01.mp3 geholt, Zustand "lauschen"
+      //   mit destination:    nichts geholt, Zustand "spricht" (haengt)
+      //
+      // Ein MediaStreamDestination zieht den Knoten genauso, ruehrt den
+      // Lautsprecherausgang aber nicht an. Damit kann die Klatsch-Wache die
+      // Stimme unter keinen Umstaenden mehr stoeren — und den erzeugten Strom
+      // hoert ohnehin niemand ab.
+      klatschStumm = ctx.createMediaStreamDestination();
       q.connect(klatschKnoten);
       klatschKnoten.connect(klatschStumm);
-      klatschStumm.connect(ctx.destination);
       if (KLATSCH_TEST) klatschAnzeigeBauen();
       console.log("Klatsch-Wache an · Schwelle " + KLATSCH.schwelle
         + " · Aufbereitung aus · Takt: Tonsystem");
