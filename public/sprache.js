@@ -864,55 +864,123 @@
   // eingeschalteter Unterdrueckung kommt vom Klatschen fast nichts an.
   // autoGainControl aus demselben Grund aus: Sie wuerde den Pegel nachregeln
   // und den Unterschied zwischen Sprache und Knall einebnen.
+  // WARUM NICHT MEHR ueber requestAnimationFrame (21.08.2026):
+  //
+  // Am Set kam von fuenfzehn Klatschern einer an. Zwei Ursachen, beide
+  // gemessen, beide hier behoben:
+  //
+  // 1. DIE HALBE TONSPUR WURDE NIE ANGESEHEN. Der Lauscher lief auf
+  //    requestAnimationFrame — rund 60 Bilder je Sekunde, also alle 16,7 ms
+  //    ein Blick. Angesehen hat er dabei das Analysefenster von 512 Werten,
+  //    bei 48 kHz also 10,7 ms. Zwischen zwei Blicken lagen damit 6 ms, die
+  //    niemand las. Ein Klatschen ist wenige Millisekunden lang: Rein
+  //    rechnerisch ging jeder dritte verloren, und wenn das Fenster nicht
+  //    im Vordergrund ist, drosselt Chrome rAF zusaetzlich — bis auf einen
+  //    Blick je Sekunde. Genau das ist ihr Aufbau: Die Sprachseite laeuft
+  //    auf dem Fernseher, gearbeitet wird am Laptop.
+  //
+  //    Jetzt haengt die Erkennung an einem ScriptProcessor. Der wird vom
+  //    Tonsystem getaktet, nicht von der Bildwiederholung, und bekommt JEDEN
+  //    Abtastwert zu sehen — ohne Luecke und ohne Drosselung.
+  //
+  // 2. DIE ECHOUNTERDRUECKUNG HAT DEN KNALL WEGGEBUEGELT. Sie stand auf an.
+  //    Solange Mikrofon und Lautsprecher zum selben Geraet gehoeren, ist das
+  //    harmlos. Seit der Ton ueber den Fernseher geht und das Mikrofon im
+  //    Laptop sitzt, hat Chrome keine brauchbare Referenz mehr — und die
+  //    Unterdrueckung greift ins Leere, drueckt aber weiter Spitzen weg.
+  //    Fuer einen Knall ist sie ohnehin das Falsche: Sie ist gebaut, um
+  //    genau solche Transienten zu daempfen.
+  //
+  // Alle drei Aufbereitungen sind jetzt aus. Der Lauscher wacht nur im
+  // Ruhezustand, die eigene Stimme kann ihn also nicht ausloesen.
+  const klatschFrage = new URLSearchParams(location.search);
   const KLATSCH = {
-    schwelle: 0.55,   // Spitze (0..1) — deutlich ueber normaler Sprache
+    // Ueber die Adresse nachstellbar, ohne Deploy: ?klatschschwelle=0.4
+    // Am Set zaehlt, was ankommt — und das haengt an Mikrofon und Abstand.
+    schwelle: Number(klatschFrage.get("klatschschwelle")) || 0.45,
     ruhe: 0.18,       // davor muss es leise gewesen sein: ein Knall, kein Anschwellen
     minAbstand: 120,  // ms — schneller klatscht niemand zweimal
     maxAbstand: 900,  // ms — laenger ist es kein Doppelklatschen mehr
     sperre: 2500,     // ms Ruhe nach dem Ausloesen, damit es nicht doppelt zuendet
   };
-  let klatschStrom = null, klatschAnalyser = null, klatschRAF = 0;
-  let klatschDaten = null, letzterKnall = 0, letztesAusloesen = 0, warLaut = false;
+  // Mitschreiben, was das Mikrofon liefert — sichtbar mit ?klatschtest=1.
+  // Ohne diese Anzeige raet man am Set an der Schwelle herum.
+  const KLATSCH_TEST = /^(1|an|ja)$/i.test(klatschFrage.get("klatschtest") || "");
+  let klatschStrom = null, klatschKnoten = null, klatschStumm = null;
+  let letzterKnall = 0, letztesAusloesen = 0, warLaut = false;
+  let klatschHoch = 0, klatschAnzeige = null;
 
   async function klatschWacheStarten() {
-    if (klatschAnalyser || konfig.klatsch === false) return;
+    if (klatschKnoten || konfig.klatsch === false) return;
     try {
       const ctx = audioKontext();
+      try { if (ctx.state === "suspended") await ctx.resume(); } catch {}
       klatschStrom = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false },
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
       const q = ctx.createMediaStreamSource(klatschStrom);
-      klatschAnalyser = ctx.createAnalyser();
-      klatschAnalyser.fftSize = 512;
-      q.connect(klatschAnalyser);
-      klatschDaten = new Uint8Array(klatschAnalyser.fftSize);
-      klatschPruefen();
-    } catch { /* ohne Mikrofonfreigabe gibt es die Klatsch-Wache eben nicht */ }
+      // 1024 Werte je Block, rund 21 ms — und LUECKENLOS aneinander.
+      klatschKnoten = ctx.createScriptProcessor(1024, 1, 1);
+      klatschKnoten.onaudioprocess = (e) => {
+        const daten = e.inputBuffer.getChannelData(0);
+        let spitze = 0;
+        for (let i = 0; i < daten.length; i++) {
+          const v = Math.abs(daten[i]);
+          if (v > spitze) spitze = v;
+        }
+        klatschBewerten(spitze);
+      };
+      // Ein ScriptProcessor laeuft nur, wenn er irgendwo endet. Ueber einen
+      // Regler auf null, sonst kaeme das Mikrofon aus den Lautsprechern.
+      klatschStumm = ctx.createGain();
+      klatschStumm.gain.value = 0;
+      q.connect(klatschKnoten);
+      klatschKnoten.connect(klatschStumm);
+      klatschStumm.connect(ctx.destination);
+      if (KLATSCH_TEST) klatschAnzeigeBauen();
+      console.log("Klatsch-Wache an · Schwelle " + KLATSCH.schwelle
+        + " · Aufbereitung aus · Takt: Tonsystem");
+    } catch (e) {
+      console.warn("Klatsch-Wache nicht gestartet:", e.message);
+    }
   }
 
   function klatschWacheStoppen() {
-    if (klatschRAF) cancelAnimationFrame(klatschRAF);
-    klatschRAF = 0;
+    try { if (klatschKnoten) klatschKnoten.onaudioprocess = null; } catch {}
+    try { klatschKnoten?.disconnect(); klatschStumm?.disconnect(); } catch {}
     try { klatschStrom?.getTracks().forEach((t) => t.stop()); } catch {}
     klatschStrom = null;
-    klatschAnalyser = null;
+    klatschKnoten = null;
+    klatschStumm = null;
   }
 
-  function klatschPruefen() {
-    klatschRAF = requestAnimationFrame(klatschPruefen);
-    if (!klatschAnalyser) return;
+  // Die Anzeige fuer ?klatschtest=1: Was kommt an, und was zaehlt als Knall?
+  function klatschAnzeigeBauen() {
+    if (klatschAnzeige) return;
+    klatschAnzeige = document.createElement("div");
+    klatschAnzeige.setAttribute("style",
+      "position:fixed;left:12px;top:12px;z-index:10000;padding:10px 14px;"
+      + "border-radius:10px;background:rgba(0,0,0,.82);color:#fff;"
+      + "font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;min-width:250px");
+    document.body.appendChild(klatschAnzeige);
+    setInterval(() => {
+      if (!klatschAnzeige) return;
+      const balken = (w) => "█".repeat(Math.round(Math.min(1, w) * 24));
+      klatschAnzeige.innerHTML =
+        "Klatsch-Test<br>Schwelle&nbsp; " + KLATSCH.schwelle.toFixed(2)
+        + "<br>Spitze&nbsp;&nbsp;&nbsp; " + klatschHoch.toFixed(2)
+        + "<br>" + balken(klatschHoch)
+        + "<br>Zustand&nbsp;&nbsp; " + zustand;
+      klatschHoch = 0;             // fuer das naechste Zehntel zuruecksetzen
+    }, 100);
+  }
+
+  function klatschBewerten(spitze) {
+    if (spitze > klatschHoch) klatschHoch = spitze;
     // Nur im Ruhezustand. Waehrend sie spricht oder zuhoert, hat ein Knall
     // nichts auszuloesen — und ihre eigene Stimme soll ihn gar nicht erst
     // ausloesen koennen.
     if (imGespraech || zustand !== "ruhe") { warLaut = false; return; }
-
-    // Zeitbereich, nicht Frequenz: Ein Klatschen ist ein AUSSCHLAG, kein Ton.
-    klatschAnalyser.getByteTimeDomainData(klatschDaten);
-    let spitze = 0;
-    for (let i = 0; i < klatschDaten.length; i++) {
-      const v = Math.abs(klatschDaten[i] - 128) / 128;
-      if (v > spitze) spitze = v;
-    }
 
     const jetzt = Date.now();
     if (spitze < KLATSCH.ruhe) { warLaut = false; return; }
