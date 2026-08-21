@@ -3,9 +3,9 @@
 # WARUM (21.08.2026): Waehrend der Anzeigen-Aufnahmen soll das Dashboard auf der
 # Drehdatenbank laufen (erfundene Kunden, erfundene Zahlen). Gleichzeitig wird
 # am echten System weitergearbeitet. Beides in EINEM Container heisst: Jeder
-# Deploy stellt die Umgebung des jeweils anderen um. Genau das ist heute zweimal
-# passiert — mitten im Aufbau stand das Dashboard wieder auf echten Kundennamen,
-# und die Dreh-Konten konnten sich nicht mehr anmelden.
+# Deploy stellt die Umgebung des jeweils anderen um. Genau das ist an einem
+# Vormittag dreimal passiert — mitten im Aufbau stand das Dashboard wieder auf
+# echten Kundennamen, und die Dreh-Konten konnten sich nicht mehr anmelden.
 #
 # Also zwei Container:
 #
@@ -21,49 +21,52 @@
 #
 # Das -p ist wesentlich: Ein eigener Projektname gibt eigene Volumes, also eine
 # eigene Sitzungsablage. Sonst teilten sich beide Seiten die Anmeldungen, und
-# eine Anmeldung an der Kulisse wuerde im Betrieb weitergelten.
+# wer sich an der Kulisse anmeldet, waere im Betrieb mit angemeldet.
+#
+# ZU DEN !override-MARKEN: Compose HAENGT Listen aneinander, statt sie zu
+# ersetzen. Ohne die Marke stuenden auf diesem Container beide Portangaben
+# (8090 gehoert dem Betrieb — der Start scheiterte mit "port is already
+# allocated") und beide Traefik-Regeln, also zwei Container fuer denselben
+# Hostnamen. Gemessen beim ersten Startversuch.
 services:
   dashboard:
     container_name: flowstate-dreh
     environment:
-      # Die Bruecke laeuft nur EINMAL, im Betriebsprojekt. Ein zweite braeuchte
+      # Die Bruecke laeuft nur EINMAL, im Betriebsprojekt. Eine zweite braeuchte
       # eine eigene QR-Kopplung, und WhatsApp erlaubt keine zwei Sitzungen fuer
-      # dasselbe Geraet. Die Kulisse spricht darum ueber das gemeinsame
-      # Docker-Netz mit derselben Bruecke — im Dreh geht so eine echte
-      # Nachricht in die Teamgruppe, und genau das soll man ja sehen.
+      # dasselbe Geraet. Die Kulisse spricht darum dieselbe Bruecke an — im Dreh
+      # geht so eine echte Nachricht in die Teamgruppe, und genau das soll man
+      # ja sehen. Erreichbar ist sie ueber ihren Containernamen, weil
+      # Dienstnamen nur innerhalb ihres eigenen Projekts aufloesen.
       - WA_BRIDGE_URL=http://flowstate-whatsapp:3100
-    volumes:
-      # Das /wa-Volume gehoert dem Betriebsprojekt. Ohne diesen Eintrag legte
-      # Compose ein zweites, leeres an — und die Kulisse haette keine Chats.
-      - flowstate-dashboard_wa-state:/wa
-    ports:
-      # 8090 gehoert dem Betrieb. Zwei Container auf demselben Port starten
-      # nicht — der zweite bliebe stumm liegen.
+    ports: !override
       - "8091:3000"
-    labels:
+    labels: !override
       - traefik.enable=true
       - traefik.http.routers.flowstatedreh.rule=Host(`dreh.srv1044804.hstgr.cloud`)
       - traefik.http.routers.flowstatedreh.entrypoints=websecure
       - traefik.http.routers.flowstatedreh.tls.certresolver=letsencrypt
       - traefik.http.services.flowstatedreh.loadbalancer.server.port=3000
-    networks:
-      - default
-      - hermes
-      - betrieb
 
-  # Die Bruecke des Betriebsprojekts wird NICHT mitgestartet. Compose verlangt
-  # trotzdem eine Beschreibung, weil sie in der Hauptdatei steht — hier auf ein
-  # Bild ohne Aufgabe gesetzt und mit Profil versehen, damit sie nie hochkommt.
+  # Die Bruecke des Betriebsprojekts wird NICHT mitgestartet. Das Profil sorgt
+  # dafuer, dass sie auch bei einem unbedachten "up" ohne Dienstnamen liegen
+  # bleibt — eine zweite Bruecke wuerde die WhatsApp-Kopplung zerlegen.
   whatsapp:
     profiles: ["nie"]
 
 networks:
-  # Das Netz des Betriebsprojekts, damit die Kulisse die WhatsApp-Bruecke
-  # erreicht. Es heisst so, weil Compose Netze mit dem Projektnamen praefixt.
-  betrieb:
+  # Das Netz des Betriebs, nicht ein eigenes: Nur darin ist die WhatsApp-Bruecke
+  # erreichbar. Compose praefixt Netznamen mit dem Projektnamen, daher der
+  # ausgeschriebene Name.
+  default:
     external: true
     name: flowstate-dashboard_default
 
 volumes:
-  flowstate-dashboard_wa-state:
+  # /wa gehoert dem Betriebsprojekt. Ohne diesen Eintrag legte Compose ein
+  # zweites, leeres Volume an — und die Kulisse haette keine Chats.
+  wa-state:
     external: true
+    name: flowstate-dashboard_wa-state
+  # Die Sitzungsablage bleibt dagegen EIGEN (kein external): Anmeldungen an der
+  # Kulisse haben im Betrieb nichts verloren.
