@@ -248,10 +248,19 @@
   // das halbe Skript durchgerauscht ist (das Mikro hatte den Lautsprecher
   // gehoert). Ein Test, der diese Pruefung umgeht, prueft das Falsche.
   //
-  // Ausserhalb des Drehbuch-Betriebs gibt es window.__drehSagen nicht.
-  if (DREHBUCH_NR !== null) {
-    window.__drehSagen = (t) => verarbeiten(String(t || ""));
-  }
+  // Der Griff wird IMMER gelegt und entscheidet erst beim Aufruf, ob er etwas
+  // tut. Er hing zuerst an "if (DREHBUCH_NR !== null)" — und genau dann fehlte
+  // er, wenn man ihn am meisten braucht: Steht keine Nummer im Link, kommt sie
+  // erst mit der Serverantwort, also LANGE nach dieser Zeile. Beim Aufruf von
+  // /sprache ohne Parameter war window.__drehSagen darum nie da, und der Test
+  // von Creative 2 brach nach dem ersten Zug ab.
+  window.__drehSagen = (t) => {
+    if (DREHBUCH_NR === null) {
+      console.warn("Kein Drehbuch aktiv — __drehSagen tut nichts.");
+      return;
+    }
+    return verarbeiten(String(t || ""));
+  };
 
   // Auf den Beleg warten, den Lukas gerade mit dem Handy fotografiert.
   //
