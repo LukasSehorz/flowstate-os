@@ -87,6 +87,9 @@
   let drehAus = drehFrage === "aus";
   let drehbuch = null;      // { titel, zuege: [{id, text, audio, oeffnen}] }
   let drehZug = 0;
+  // Wie viele Belege gebucht waren, als das Drehbuch losging. Creative 3
+  // vergleicht dagegen, um zu merken, dass der fotografierte Bon durch ist.
+  let drehBelegBasis = null;
   // DIE INHALTE LIEGEN IN DER DREHMAPPE, NICHT HIER.
   //
   // WARUM (20.08.2026): window.open landet in dem Fenster, aus dem es
@@ -220,6 +223,38 @@
     }
   }
 
+  // Auf den Beleg warten, den Lukas gerade mit dem Handy fotografiert.
+  //
+  // Der Stand wird beim Start des Drehbuchs gemerkt (drehBelegBasis). Sobald
+  // die Buchhaltung einen gebuchten Beleg mehr zaehlt als damals, ist der Bon
+  // durch. Zwei Minuten Geduld — laenger dauert kein Take, und danach lieber
+  // weiterreden als stehenbleiben: Ein Video mit einer falschen Zahl im Bild
+  // laesst sich schneiden, ein Take, der nie weitergeht, nicht.
+  const DREH_BELEG_FRIST = 120000;
+  async function belegStand() {
+    try {
+      const r = await fetch("/regie/belegstand", { cache: "no-store" });
+      const d = await r.json();
+      return typeof d.gebucht === "number" ? d.gebucht : null;
+    } catch { return null; }
+  }
+  async function aufBelegWarten() {
+    if (drehBelegBasis === null) drehBelegBasis = await belegStand();
+    if (drehBelegBasis === null) return false;   // ohne Ausgangswert kein Vergleich
+    const bis = Date.now() + DREH_BELEG_FRIST;
+    if (el.hinweis) el.hinweis.textContent = "Warte auf den Beleg aus Telegram …";
+    while (Date.now() < bis) {
+      const jetzt = await belegStand();
+      if (jetzt !== null && jetzt > drehBelegBasis) {
+        drehBelegBasis = jetzt;
+        console.log("Drehbuch: Beleg ist da —", jetzt, "gebuchte Belege.");
+        return true;
+      }
+      await new Promise((f) => setTimeout(f, 1500));
+    }
+    return false;
+  }
+
   // Der naechste Zug. Wird nach dem Klatschen einmal aufgerufen und danach
   // jedes Mal, wenn Jannik zu Ende geredet hat.
   async function drehbuchZug() {
@@ -240,6 +275,16 @@
       return gespraechBeenden();
     }
     drehZug++;
+    // Erst warten, wenn dieser Zug auf etwas draussen wartet.
+    //
+    // In Creative 3 fotografiert Lukas den Bon vom Team-Essen mit dem Handy und
+    // schickt ihn in den Telegram-Chat. Das dauert eine halbe Minute: Foto,
+    // Rueckfrage vom Bot, "ja". Erst danach darf C3_04 "Beleg ist erfasst"
+    // sagen — davor waere es eine Behauptung, und im Bild stuende noch die alte
+    // Zahl.
+    if (z.wartenAuf === "beleg" && !(await aufBelegWarten())) {
+      console.warn("Drehbuch: kein Beleg angekommen — Zug laeuft trotzdem weiter.");
+    }
     // Das Dokument geht auf, BEVOR die Stimme laeuft: Im Video soll der
     // Bildschirm schon leuchten, waehrend der Satz dazu gesprochen wird.
     // Erst die Handlung, dann das Fenster. Beim Kalender ist die Reihenfolge
@@ -528,6 +573,10 @@
     try { wakeErkennung?.stop(); } catch {}
     await gespraechStarten(false, true);   // erst der Zug, dann das Mikrofon
     drehZug = 0;
+    // Den Belegstand JETZT merken, am Anfang des Takes. Erst beim Warten zu
+    // fragen waere zu spaet: Wenn Lukas den Bon frueher losschickt, waere der
+    // Ausgangswert schon der neue, und C3_04 wartete auf einen zweiten.
+    drehBelegBasis = await belegStand();
     await drehbuchZug();
     geduld();
   }
