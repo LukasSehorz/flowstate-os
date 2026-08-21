@@ -23,6 +23,7 @@
 //   node scripts/drehdaten.js --laden              Kulisse aufbauen (leert vorher)
 //   node scripts/drehdaten.js --leads-nachziehen      im Dreh: 250 Leads freischalten
 //   node scripts/drehdaten.js --leads-zuruecksetzen  fuer den naechsten Take zurueck
+//   node scripts/drehdaten.js --beleg-zuruecksetzen  C3: den gescannten Beleg wieder weg
 //   node scripts/drehdaten.js --leeren             Kulisse abbauen
 //
 // VORHER: In der Dreh-Datenbank muessen das Schema (scripts/migrieren.js) und
@@ -84,8 +85,9 @@ const LEEREN = argv.includes("--leeren");
 const MARKIEREN = argv.includes("--markieren");
 const NACHZIEHEN = argv.includes("--leads-nachziehen");
 const ZURUECK = argv.includes("--leads-zuruecksetzen");
+const BELEG_ZURUECK = argv.includes("--beleg-zuruecksetzen");
 const STAND = argv.includes("--stand")
-  || (!LADEN && !LEEREN && !MARKIEREN && !NACHZIEHEN && !ZURUECK);
+  || (!LADEN && !LEEREN && !MARKIEREN && !NACHZIEHEN && !ZURUECK && !BELEG_ZURUECK);
 
 // ------------------------------------------------------------------ Ziel
 //
@@ -625,7 +627,13 @@ async function laden(c) {
   for (let i = 0; i < K.belegeJuli; i++) {
     const tag = i % julitage;
     const betrag = [18.9, 129, 47.5, 12.4, 89, 240, 33.1, 15.8][i % 8];
-    const kategorie = ["Bewirtung", "Software", "Fahrtkosten", "Büromaterial"][i % 4];
+    // Die Namen stammen aus AUSGABE_KATEGORIEN in lib/buchhaltung.js. Erfundene
+    // Namen ("Bewirtung", "Fahrtkosten") standen nicht in der Auswahlliste: Das
+    // Kuchendiagramm "Ausgaben nach Kategorie" zeigte dann Beschriftungen, die
+    // es im Programm gar nicht gibt — und der Beleg, den Erik im Dreh einliest,
+    // landet unter "Essen & Getränke" und passte zu keinem der anderen.
+    const kategorie = ["Essen & Getränke", "Software & Tools",
+      "Fahrzeug & Tanken", "Büro & Ausstattung"][i % 4];
     const wem = BELEG_HAENDLER[i % BELEG_HAENDLER.length];
     const name = `Beleg-2026-07-${String(i + 1).padStart(3, "0")}.pdf`;
     const amTag = `date_trunc('month', current_date) - interval '1 month' + ${tag} * interval '1 day'`;
@@ -703,6 +711,51 @@ async function leadsZuruecksetzen(c) {
                      where e.firma_id = f.id and l.name = 'Nachschub')`);
   console.log(`${rowCount} Leads zurueck in die Reserve. Die Liste steht wieder auf `
     + `${K.leadsHeute} — bereit fuer den naechsten Take.`);
+}
+
+// ------------------------------------------------- C3: den Beleg zuruecknehmen
+//
+// WARUM ES DAS BRAUCHT: Beim Hochladen prueft buchhaltung.js die SHA-256-Summe
+// der Datei und weist ein zweites Mal dasselbe Foto als "doppelt" ab. Beim
+// zweiten Take waere der Beleg also schon da, der Zaehler bliebe auf 34 stehen
+// und der schoenste Moment des Creatives — die Zahl springt hoch — faende
+// nicht statt. Gemessen am 21.08.: die zweite Ablage kam mit doppelt:true
+// zurueck.
+//
+// GELOESCHT WIRD NICHTS. Auf belege liegt ein Trigger (0024_eigenarchiv), der
+// Loeschen verbietet — ein Archiv, aus dem man Zeilen entfernen kann, ist
+// keins. Der Beleg wird stattdessen auf 'verworfen' gesetzt; die
+// Doppelt-Pruefung uebergeht verworfene Belege ausdruecklich, also ist der Weg
+// danach wieder frei. Die zugehoerige Buchung muss weg, sonst bleibt der
+// Juli-Ordner auf 42 Bewegungen stehen.
+//
+// ERKANNT WIRD ER AM DATEINAMEN: Alles, was die Kulisse selbst angelegt hat,
+// heisst "Beleg-2026-07-NNN.pdf". Was anders heisst, kam im Dreh dazu.
+async function belegZuruecksetzen(c) {
+  const { rows } = await c.query(
+    `select id, dateiname, betrag, buchung_id from public.belege
+      where dateiname not like 'Beleg-2026-07-%'
+        and status <> 'verworfen'`);
+  if (!rows.length) {
+    console.log("Kein eingescannter Beleg da — es gibt nichts zurueckzunehmen.");
+    return;
+  }
+  for (const b of rows) {
+    if (b.buchung_id) await c.query("delete from public.buchungen where id = $1", [b.buchung_id]);
+    await c.query(
+      `update public.belege
+          set status = 'verworfen', buchung_id = null,
+              verworfen_am = now(), verworfen_grund = 'Drehaufnahme zurueckgesetzt'
+        where id = $1`, [b.id]);
+    console.log(`  zurueckgenommen: ${b.dateiname} (${b.betrag} EUR)`);
+  }
+  const { rows: [z] } = await c.query(
+    `select (select count(*) from public.belege where status = 'gebucht')::int as gebucht,
+            (select count(*) from public.buchungen
+              where date_trunc('month', bezahlt_am) = date_trunc('month', current_date)
+                    - interval '1 month')::int as juli`);
+  console.log(`Stand: ${z.gebucht} gebuchte Belege, Juli-Ordner ${z.juli} Bewegungen.`);
+  console.log("Derselbe Zettel kann jetzt noch einmal fotografiert werden.");
 }
 
 // ----------------------------------------------------------------- Stand
@@ -788,7 +841,7 @@ async function stand(c) {
 
   try {
     if (MARKIEREN) { await markieren(c); return; }
-    if ((LADEN || LEEREN || NACHZIEHEN || ZURUECK) && !(await markeVorhanden(c))) {
+    if ((LADEN || LEEREN || NACHZIEHEN || ZURUECK || BELEG_ZURUECK) && !(await markeVorhanden(c))) {
       console.error("\nABBRUCH: Diese Datenbank trägt keine Dreh-Marke.");
       console.error("Wenn es wirklich die Dreh-Datenbank ist (leer, frisch migriert):");
       console.error("   node scripts/drehdaten.js --markieren");
@@ -796,6 +849,7 @@ async function stand(c) {
     }
     if (NACHZIEHEN) { await leadsNachziehen(c); return; }
     if (ZURUECK) { await leadsZuruecksetzen(c); return; }
+    if (BELEG_ZURUECK) { await belegZuruecksetzen(c); return; }
     if (LEEREN) {
       await leeren(c);
       console.log("Kulisse abgebaut — alle Geschäftstabellen sind leer.");

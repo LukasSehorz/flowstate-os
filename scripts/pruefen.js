@@ -108,6 +108,9 @@ const TESTS = [
   // Datenbank: Ohne ihn faellt "stumm verworfen" beim naechsten Umbau sofort
   // wieder zurueck, weil man es der Seite nicht ansieht.
   "test-buchhaltung-fehler",
+  // 21.08.2026: aus 37,30 Euro wurden beim Buchen ueber Telegram 373,00 —
+  // zuBetrag() las den Punkt einer fertigen Zahl als Tausenderpunkt.
+  "test-betrag",
 ];
 
 // NICHT hier drin, mit Grund:
