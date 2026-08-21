@@ -75,6 +75,13 @@ services:
       # Welches Creative im Drehbuch-Modus laeuft (0-3). Leer = kein Drehbuch,
       # der Agent antwortet dann wie immer selbst.
       - DREH_CREATIVE=${DREH_CREATIVE:-}
+      # Wohin die Rechnung am Ende von Creative 3 geht. Frau Bergmann gibt es
+      # nicht — die Mail geht an einen echten eigenen Posteingang.
+      - DREH_MAIL_ZIEL=${DREH_MAIL_ZIEL:-}
+      # Steuerkanzlei als Rueckfallebene, falls das Feld in der Buchhaltung
+      # leer ist. Im Dreh steht es in der Datenbank; hier nur der Notnagel.
+      - STEUER_MAIL=${STEUER_MAIL:-}
+      - STEUER_NAME=${STEUER_NAME:-}
       # Abstand zwischen zwei Saetzen der Erzaehlspur, in Millisekunden.
       - ERZAEHL_ABSTAND_MS=${ERZAEHL_ABSTAND_MS:-5000}
       # WhatsApp-Bruecke (eigener Container). Das Dashboard zeigt die Koppelseite
@@ -108,6 +115,11 @@ services:
       # SELF_URL: das Dashboard ruft seine eigene Schnellspur intern auf.
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_ALLOWED_CHAT=${TELEGRAM_ALLOWED_CHAT:-}
+      # Nur senden, nicht zuhoeren. Braucht die Drehkulisse: Sie laeuft als
+      # zweiter Container mit demselben Bot-Ausweis, und Telegram gibt eine
+      # eingehende Nachricht nur EINEM Abholer. Ohne den Schalter verloere der
+      # Bot im Alltag zufaellig Nachrichten an die Kulisse.
+      - TELEGRAM_LAUSCHEN=${TELEGRAM_LAUSCHEN:-}
       - SELF_URL=http://127.0.0.1:3000
       # Melde-Kanal: Secret, mit dem Hermes-Crons proaktiv ueber die Stimme
       # abliefern duerfen (/api/melde steht vor dem Login-Gate).
