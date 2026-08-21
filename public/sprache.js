@@ -80,10 +80,23 @@
     : suche.get("drehbuch");
   if (drehFrage === "aus") sessionStorage.removeItem(DREH_SPEICHER);
   else if (drehFrage !== null) sessionStorage.setItem(DREH_SPEICHER, drehFrage);
-  // Rangfolge: Link schlaegt Tab-Gedaechtnis schlaegt Servervorgabe. Der
-  // Server ist die letzte Instanz, damit der Modus einen neuen Tab ueberlebt.
+  // Rangfolge: Link schlaegt SERVER schlaegt Tab-Gedaechtnis (21.08.2026).
+  //
+  // Vorher stand das Gedaechtnis vor dem Server, und genau daran ist der Dreh
+  // auf dem zweiten Laptop gescheitert: Auf dem Server stand C2, im Tab lag
+  // noch eine 0 von einem frueheren Aufruf — und die Seite zeigte "C1 —
+  // Sales-Zahlen und Leads". Am Bildschirm sah alles richtig aus, nur eben
+  // das falsche Skript. Wer das Creative auf dem Server umstellt, erwartet,
+  // dass alle dasselbe sehen; ein alter Wert in irgendeinem Tab darf das
+  // nicht ueberstimmen.
+  //
+  // Das Gedaechtnis bleibt fuer den Fall, dass der Server GAR NICHTS vorgibt
+  // — dann ueberlebt ein ?drehbuch=… weiterhin einen neuen Tab.
   let DREHBUCH_NR = drehFrage === "aus" ? null
     : (drehFrage !== null ? drehFrage : sessionStorage.getItem(DREH_SPEICHER));
+  // Merken, WOHER der Wert kommt: Nur ein Wert aus dem Gedaechtnis darf spaeter
+  // von der Servervorgabe ueberschrieben werden. Ein Link bleibt ein Link.
+  const nrAusGedaechtnis = drehFrage === null && DREHBUCH_NR !== null;
   let drehAus = drehFrage === "aus";
   let drehbuch = null;      // { titel, zuege: [{id, text, audio, oeffnen}] }
   let drehZug = 0;
@@ -1639,8 +1652,20 @@
     //
     // Wer eine andere Seite ausdruecklich mit ?drehbuch=… aufruft, bekommt es
     // weiterhin. Nur die stille Vorgabe bleibt auf der Buehne.
-    if (DREHBUCH_NR === null && !drehAus && istGrosseSeite && konfig.drehbuch != null) {
+    //
+    // Sie schlaegt seit dem 21.08. auch das TAB-GEDAECHTNIS — siehe die
+    // Rangfolge oben. Ein Wert, der aus einem Link kam, bleibt unangetastet.
+    if (!drehAus && istGrosseSeite && konfig.drehbuch != null
+        && (DREHBUCH_NR === null || nrAusGedaechtnis)) {
+      const vorher = DREHBUCH_NR;
       DREHBUCH_NR = String(konfig.drehbuch);
+      // Das Gedaechtnis mitziehen, sonst zeigt derselbe Tab beim naechsten
+      // Laden wieder den alten Wert und der Fehler kaeme zurueck.
+      try { sessionStorage.setItem(DREH_SPEICHER, DREHBUCH_NR); } catch (e) { /* privater Modus */ }
+      if (vorher !== null && vorher !== DREHBUCH_NR) {
+        console.log("Drehbuch: Tab-Gedaechtnis " + vorher + " durch Servervorgabe "
+          + DREHBUCH_NR + " ersetzt.");
+      }
     }
     // "?drehbuch=aus" heisst: Diese Seite fasst das Mikrofon NICHT an.
     //
