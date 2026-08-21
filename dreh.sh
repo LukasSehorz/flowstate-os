@@ -11,6 +11,7 @@
 #   ./dreh.sh aus         Kulisse stoppen und entfernen
 #   ./dreh.sh stand       worauf steht welcher Container?
 #   ./dreh.sh creative N  Creative 1–4 als Vorgabe der Kulisse setzen
+#   ./dreh.sh kalender    die vier Calls aus C2_05 auf HEUTE setzen
 #   ./dreh.sh log         die letzten Zeilen aus dem Kulissen-Container
 set -e
 cd "$(dirname "$0")"
@@ -68,7 +69,14 @@ case "$1" in
     sleep 6
     stand
     ;;
+  kalender)
+    # Die vier Calls aus C2_05 auf HEUTE setzen. Vor jedem Drehtag einmal.
+    # Ohne das steht am naechsten Tag ein leeres Tagesraster im Bild, waehrend
+    # Erik vier Termine vorliest.
+    docker cp scripts/dreh-kalender.js flowstate-dreh:/app/scripts/dreh-kalender.js >/dev/null
+    docker exec -w /app flowstate-dreh node scripts/dreh-kalender.js "$2"
+    ;;
   log)  docker logs --tail "${2:-40}" flowstate-dreh ;;
   stand|"") stand ;;
-  *) echo "Unbekannt: $1  —  an | aus | stand | creative N | log"; exit 1 ;;
+  *) echo "Unbekannt: $1  —  an | aus | stand | creative N | kalender | log"; exit 1 ;;
 esac
