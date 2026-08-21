@@ -63,7 +63,21 @@
   // Antwort zaehlt. Janniks kuerzeste Zeile ist "Ja, schick's ab." (16).
   const DREH_MIN_ZEICHEN = 12;
   const DREH_SPEICHER = "flowstate-drehbuch";
-  const drehFrage = new URLSearchParams(location.search).get("drehbuch");
+
+  // ZWEI SCHREIBWEISEN, weil die eine zu Verwechslungen fuehrt.
+  //
+  // "drehbuch" zaehlt ab null: drehbuch=1 ist Creative ZWEI. Das ist intern
+  // richtig und im Gespraech eine Falle — wer "Creative 3" drehen will, tippt
+  // eine 3 und landet bei Creative 4.
+  //
+  // "creative" zaehlt so, wie alle reden: creative=3 ist Creative 3. Das ist
+  // die Schreibweise fuer die Zettel am Set; "drehbuch" bleibt fuer alles,
+  // was schon darauf zeigt.
+  const suche = new URLSearchParams(location.search);
+  const creativeFrage = suche.get("creative");
+  const drehFrage = creativeFrage !== null
+    ? (creativeFrage === "aus" ? "aus" : String(Math.max(0, (Number(creativeFrage) || 1) - 1)))
+    : suche.get("drehbuch");
   if (drehFrage === "aus") sessionStorage.removeItem(DREH_SPEICHER);
   else if (drehFrage !== null) sessionStorage.setItem(DREH_SPEICHER, drehFrage);
   // Rangfolge: Link schlaegt Tab-Gedaechtnis schlaegt Servervorgabe. Der
