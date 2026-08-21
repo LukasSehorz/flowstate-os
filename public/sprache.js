@@ -223,6 +223,23 @@
     }
   }
 
+  // NUR IM DREH: ein Griff von aussen, um eine Zeile von Jannik zu setzen.
+  //
+  // WOZU: Ein Drehbuch laesst sich sonst nicht pruefen, ohne dass jemand ins
+  // Mikrofon spricht. Im Testbrowser gibt es kein Mikrofon, und mit einem
+  // erfundenen Tonsignal erkennt Chrome nichts — die Kette bleibt nach dem
+  // ersten Zug stehen und man weiss danach nichts ueber die restlichen vier.
+  //
+  // Der Griff geht bewusst auf verarbeiten() und nicht auf drehbuchZug(): So
+  // laeuft auch die Mindestlaenge mit, an der beim ersten Take von Creative 2
+  // das halbe Skript durchgerauscht ist (das Mikro hatte den Lautsprecher
+  // gehoert). Ein Test, der diese Pruefung umgeht, prueft das Falsche.
+  //
+  // Ausserhalb des Drehbuch-Betriebs gibt es window.__drehSagen nicht.
+  if (DREHBUCH_NR !== null) {
+    window.__drehSagen = (t) => verarbeiten(String(t || ""));
+  }
+
   // Auf den Beleg warten, den Lukas gerade mit dem Handy fotografiert.
   //
   // Der Stand wird beim Start des Drehbuchs gemerkt (drehBelegBasis). Sobald
