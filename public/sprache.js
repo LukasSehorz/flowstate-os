@@ -138,6 +138,35 @@
   //
   // Die Wahl bleibt fuer diesen Tab gemerkt, damit ein Neuladen zwischen zwei
   // Takes nicht wieder die Leisten hereinholt.
+  // ZWEI VERSCHIEDENE DINGE, DIE BEIDE "OHNE LEISTEN" HEISSEN (21.08.2026):
+  //
+  //   K        Vollbild. Weg sind die Tableiste und die Adresszeile von Chrome
+  //            und die Windows-Taskleiste unten. Die Anzeigen des Systems —
+  //            JARVIS, ZUSTAND, Datum, Uhrzeit, das Knopfband, SIGNAL —
+  //            BLEIBEN. Das ist der Normalfall fuer den Dreh: Man soll das
+  //            Betriebssystem sehen, nur eben nicht den Browser drumherum.
+  //
+  //   Shift+K  Zusaetzlich die Oberflaeche des Systems ausblenden, bis nur das
+  //            Gehirn uebrig ist. Fuer Einstellungen, in denen nichts ausser
+  //            der Kugel im Bild sein soll.
+  //
+  // Der erste Versuch hatte nur den zweiten Modus — und damit genau das
+  // weggenommen, was im Bild bleiben sollte.
+  //
+  // Vollbild geht NUR aus einer Nutzergeste heraus. Ein Tastendruck ist eine;
+  // beim Laden der Seite laesst es kein Browser zu. Darum gibt es dafuer auch
+  // keinen Adressparameter.
+  function vollbild(an) {
+    try {
+      if (an && !document.fullscreenElement) {
+        const v = document.documentElement.requestFullscreen();
+        if (v && v.catch) v.catch((e) => console.warn("Vollbild abgelehnt:", e.message));
+      } else if (!an && document.fullscreenElement) {
+        document.exitFullscreen();
+      }
+    } catch (e) { console.warn("Vollbild:", e.message); }
+  }
+
   const KINO_SPEICHER = "flowstate-kino";
   function kinoStil() {
     if (document.getElementById("kino-stil")) return;
@@ -185,9 +214,15 @@
       const z = e.target;
       if (z && /^(INPUT|TEXTAREA|SELECT)$/.test(z.tagName)) return;
       if (z && z.isContentEditable) return;
-      if (e.key === "k" || e.key === "K") {
-        e.preventDefault();
+      if (e.key !== "k" && e.key !== "K") return;
+      e.preventDefault();
+      if (e.shiftKey) {
+        // Shift+K: auch die Oberflaeche des Systems weg, nur das Gehirn bleibt.
         kinoSetzen(!document.body.classList.contains("kino"));
+      } else {
+        // K: nur Vollbild. Browser- und Windows-Leiste weg, das System bleibt
+        // vollstaendig sichtbar.
+        vollbild(!document.fullscreenElement);
       }
     });
   })();
