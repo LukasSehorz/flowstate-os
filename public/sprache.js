@@ -123,17 +123,90 @@
     return "dreh-" + basis.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
   }
 
+  // Ist die Drehmappe da und offen?
+  const mappeOffen = () => Boolean(mappe && !mappe.closed);
+
+  // Die Drehmappe aufmachen. Gibt zurueck, ob sie jetzt steht.
+  //
+  // MUSS AUS EINER NUTZERGESTE HERAUS AUFGERUFEN WERDEN — Klick oder
+  // Tastendruck. Ohne Geste blockt jeder Browser das Fenster.
+  function mappeOeffnen() {
+    if (mappeOffen()) { try { mappe.focus(); } catch {} return true; }
+    try {
+      mappe = window.open("/regie/mappe?c=" + encodeURIComponent(DREHBUCH_NR || 0), "drehmappe");
+    } catch (e) { console.error("Drehmappe:", e.message); mappe = null; }
+    if (!mappeOffen()) {
+      console.warn("Drehmappe blockiert — Pop-ups für diese Seite erlauben.");
+      if (el.hinweis) el.hinweis.textContent =
+        "Drehmappe blockiert — im Schloss-Symbol der Adresszeile Pop-ups erlauben, dann hier klicken.";
+      knopfZeigen();
+      return false;
+    }
+    knopfWeg();
+    return true;
+  }
+
+  // Ein sichtbarer Knopf, wenn die Mappe nicht aufgeht.
+  //
+  // WARUM (21.08.2026): Bisher hing das Aufgehen an einem unsichtbaren
+  // Zuhoerer auf dem ersten Klick irgendwo auf der Seite — und der entfernte
+  // sich SOFORT wieder, auch wenn der Browser das Fenster gerade geblockt
+  // hatte. Ein blockierter Versuch, und fuer den Rest des Takes ging kein
+  // einziges Dokument mehr auf. Wer geklatscht statt geklickt hat, hatte nie
+  // eine Geste und damit nie eine Mappe.
+  //
+  // Am Set ist beides nicht zu erkennen: Erik redet weiter, die Bildschirme
+  // bleiben leer. Darum jetzt ein Knopf, den man sieht, der beliebig oft
+  // gedrueckt werden darf und erst verschwindet, wenn die Mappe wirklich steht.
+  // Was der Blocker geschluckt hat. Ein Klick auf den Knopf holt es nach:
+  // Ein Klick IST eine Nutzergeste, und die laesst jeder Browser durch, auch
+  // ohne dauerhafte Erlaubnis. Chrome oeffnet allerdings nur EIN Fenster je
+  // Geste — darum steht die Anzahl auf dem Knopf, und man drueckt so oft, wie
+  // noch offen ist.
+  const nachzuholen = [];
+  let knopf = null;
+  function knopfBeschriften() {
+    if (!knopf) return;
+    knopf.textContent = nachzuholen.length
+      ? "Dokument öffnen (" + nachzuholen.length + " offen)"
+      : "Drehmappe öffnen";
+  }
+  function knopfZeigen() {
+    if (knopf) { knopfBeschriften(); return; }
+    knopf = document.createElement("button");
+    knopf.type = "button";
+    knopf.textContent = "Drehmappe öffnen";
+    knopf.setAttribute("style",
+      "position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:9999;"
+      + "padding:12px 22px;border-radius:999px;border:none;cursor:pointer;"
+      + "background:#111;color:#fff;font:600 15px/1 -apple-system,'Segoe UI',sans-serif;"
+      + "box-shadow:0 6px 24px rgba(0,0,0,.28)");
+    knopf.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!mappeOeffnen()) return;              // erst die Mappe, dann Inhalte
+      const naechstes = nachzuholen.shift();
+      if (naechstes) {
+        try { mappe.open(naechstes.url, naechstes.name); }
+        catch (err) { console.error("Nachholen:", err.message); }
+      }
+      if (nachzuholen.length) knopfBeschriften(); else knopfWeg();
+    });
+    document.body.appendChild(knopf);
+    knopfBeschriften();
+  }
+  function knopfWeg() {
+    if (!knopf) return;
+    knopf.remove();
+    knopf = null;
+  }
+
   function mappeVorbereiten() {
-    const einmal = () => {
-      document.removeEventListener("click", einmal);
-      try {
-        mappe = window.open("/regie/mappe?c=" + encodeURIComponent(DREHBUCH_NR || 0), "drehmappe");
-        if (!mappe && el.hinweis) {
-          el.hinweis.textContent = "Pop-up blockiert — für diese Seite erlauben.";
-        }
-      } catch (e) { console.error("Drehmappe:", e.message); }
+    // Der Zuhoerer bleibt, bis die Mappe wirklich steht. Vorher wurde er beim
+    // ERSTEN Klick entfernt — auch wenn dabei nichts aufgegangen ist.
+    const beiKlick = () => {
+      if (mappeOeffnen()) document.removeEventListener("click", beiKlick);
     };
-    document.addEventListener("click", einmal);
+    document.addEventListener("click", beiKlick);
     window.addEventListener("message", (e) => {
       if (e.origin !== location.origin) return;
       const d = e.data || {};
@@ -159,15 +232,46 @@
         url = "/regie/datei/" + encodeURIComponent(datei);
       }
 
-      if (!mappe || mappe.closed) {
+      if (!mappeOffen()) {
+        // Noch einen Versuch, statt nur zu klagen: Manchmal steht die Mappe
+        // einfach noch nicht, weil bis hierher niemand geklickt hat (geklatscht
+        // ist keine Geste). Klappt es nicht, kommt der sichtbare Knopf — und
+        // der Rest des Takes laeuft weiter, statt an dieser Stelle blind zu
+        // werden.
         console.warn("Drehmappe fehlt:", url);
-        if (el.hinweis) el.hinweis.textContent = "Drehmappe ist zu — Seite neu laden und einmal klicken.";
-        return;
+        if (!mappeOeffnen()) { knopfZeigen(); return; }
       }
       try {
         // Oeffnet IN der Mappe. Ist der Tab dort schon geladen (vorgeladen),
         // wird er nur nach vorn geholt — ohne Wartezeit.
-        mappe.open(url, tabName(datei));
+        const tab = mappe.open(url, tabName(datei));
+
+        // NULL HEISST: DER POP-UP-BLOCKER HAT ES GESCHLUCKT (21.08.2026).
+        //
+        // Dieser Aufruf kommt aus dem Ablauf des Drehbuchs, nicht aus einem
+        // Klick. Ohne Nutzergeste laesst Chrome ihn nur durch, wenn Pop-ups
+        // fuer DIESE Adresse erlaubt sind — und diese Erlaubnis haengt am
+        // Hostnamen. Nach dem Umzug auf dreh.…hstgr.cloud war sie weg.
+        //
+        // Am Set sah das so aus: Erik redet weiter, Telegram und WhatsApp
+        // kommen an, aber kein Dokument geht auf, und nichts sagt warum.
+        //
+        // Gemessen am 21.08. im selben Browser, einmal mit und einmal ohne
+        // Erlaubnis: Die Drehmappe geht BEIDE Male auf (sie haengt an einem
+        // Klick), die Dokumente nur mit Erlaubnis. Der Unterschied ist also
+        // genau diese Einstellung — und sie haengt am Hostnamen.
+        //
+        // Ein geblocktes window.open gibt null zurueck. Darauf verlassen wir
+        // uns nicht allein: Der Knopf unten ist der sichtbare Teil, und er
+        // erscheint auch schon, bevor der erste Zug laeuft.
+        if (!tab) {
+          console.warn("Pop-up-Blocker: Tab wurde nicht geoeffnet —", url);
+          if (el.hinweis) el.hinweis.textContent =
+            "Pop-ups sind für diese Seite blockiert — im Schloss-Symbol der "
+            + "Adresszeile erlauben, sonst geht kein Dokument auf.";
+          nachzuholen.push({ url, name: tabName(datei) });
+          knopfZeigen();
+        }
       } catch (e) { console.error("Tab nicht erreichbar:", e.message); }
     });
   }
@@ -230,6 +334,11 @@
       if (el.hinweis) el.hinweis.textContent =
         "Drehbuch: " + drehbuch.titel + " · " + drehbuch.zuege.length + " Züge";
       console.log("Drehbuch geladen:", drehbuch.titel, drehbuch.zuege.length + " Züge");
+      // Den Knopf gleich zeigen, nicht erst wenn das erste Dokument fehlt.
+      // Wer klatscht statt zu klicken, hat nie eine Nutzergeste — und ohne die
+      // laesst kein Browser ein Fenster aufgehen. Am Set soll man das VOR dem
+      // Take sehen und nicht mittendrin merken.
+      if (!mappeOffen()) knopfZeigen();
     } catch (e) {
       console.error("Drehbuch nicht geladen:", e.message);
       if (el.hinweis) el.hinweis.textContent = "Drehbuch fehlt: " + e.message;
