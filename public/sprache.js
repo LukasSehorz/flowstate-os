@@ -259,8 +259,17 @@
     if (drehBelegBasis === null) drehBelegBasis = await belegStand();
     if (drehBelegBasis === null) return false;   // ohne Ausgangswert kein Vergleich
     const bis = Date.now() + DREH_BELEG_FRIST;
-    if (el.hinweis) el.hinweis.textContent = "Warte auf den Beleg aus Telegram …";
+    console.log("Drehbuch: warte auf den Beleg — Stand", drehBelegBasis);
     while (Date.now() < bis) {
+      // Den Hinweis bei JEDEM Durchgang neu setzen, nicht nur einmal davor.
+      // Die Spracherkennung schreibt zwischendurch ihre eigenen Meldungen
+      // dorthin ("… (zu kurz, ich warte weiter)"), und dann steht am Set
+      // nichts mehr davon, dass hier auf etwas gewartet wird — es sieht aus,
+      // als haenge die Aufnahme.
+      if (el.hinweis) {
+        const rest = Math.ceil((bis - Date.now()) / 1000);
+        el.hinweis.textContent = "Warte auf den Beleg aus Telegram … (" + rest + " s)";
+      }
       const jetzt = await belegStand();
       if (jetzt !== null && jetzt > drehBelegBasis) {
         drehBelegBasis = jetzt;
