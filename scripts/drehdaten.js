@@ -30,6 +30,52 @@
 // keine profiles-Zeile, an der Anrufe und Deals haengen koennen.
 
 const { Client } = require("pg");
+const crypto = require("crypto");
+
+// ------------------------------------------------------- Ein Blatt Papier
+//
+// Jeder Juli-Beleg braucht eine echte Datei: Der Monatsordner packt sie unter
+// "Belege/..." ins ZIP und listet ihre SHA-256-Pruefsumme daneben. Ein PDF von
+// Hand ist hier die ehrlichste Loesung — keine weitere Abhaengigkeit, und was
+// im ZIP landet, laesst sich wirklich oeffnen. Vier Zeilen Text reichen; im
+// Video sieht man diese Dateien ohnehin nie einzeln.
+const pruefsumme = (daten) => crypto.createHash("sha256").update(daten).digest("hex");
+
+function belegBlatt({ wem, betrag, kategorie, nummer }) {
+  const zeilen = [
+    "Beleg " + String(nummer),
+    String(wem),
+    kategorie + "  -  " + betrag.toFixed(2).replace(".", ",") + " EUR",
+    "Kulisse fuer die Meta-Aufnahmen - kein echter Beleg.",
+  ];
+  // Klammern und Backslash muessen im PDF-Text maskiert werden, sonst bricht
+  // der Textstrom mitten im Wort ab.
+  const roh = (t) => String(t).replace(/([\\()])/g, "\\$1");
+  const strom = "BT /F1 14 Tf 60 760 Td 20 TL\n"
+    + zeilen.map((z) => "(" + roh(z) + ") Tj T*").join("\n") + "\nET";
+
+  const objekte = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+      + "/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+    "<< /Length " + Buffer.byteLength(strom, "latin1") + " >>\nstream\n" + strom + "\nendstream",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+  ];
+
+  let pdf = "%PDF-1.4\n";
+  const stellen = [];
+  objekte.forEach((o, i) => {
+    stellen.push(Buffer.byteLength(pdf, "latin1"));
+    pdf += (i + 1) + " 0 obj\n" + o + "\nendobj\n";
+  });
+  const xref = Buffer.byteLength(pdf, "latin1");
+  pdf += "xref\n0 " + (objekte.length + 1) + "\n0000000000 65535 f \n"
+    + stellen.map((b) => String(b).padStart(10, "0") + " 00000 n \n").join("")
+    + "trailer\n<< /Size " + (objekte.length + 1) + " /Root 1 0 R >>\n"
+    + "startxref\n" + xref + "\n%%EOF\n";
+  return Buffer.from(pdf, "latin1");
+}
 
 // -------------------------------------------------------------- Argumente
 const argv = process.argv.slice(2);
@@ -137,6 +183,13 @@ const K = {
   // ---- Creative 3 (Sales Call ausgewertet, Angebot, Rechnung)
   dealNordlicht: 8000,        // C3_02 — Voice Agent, zwei Standorte
   belegeJuli: 33,             // C3_04 — der 34. wird im Dreh eingescannt
+
+  // Wohin der Juli-Ordner in Creative 3 wirklich geht. Die Adresse steht
+  // NICHT im Quelltext: sie gehoert einem echten Menschen, und dieses
+  // Verzeichnis liegt auf GitHub. Gesetzt wird sie in .env.dreh auf dem
+  // Server; ohne sie bleibt die unverfaengliche Beispieladresse stehen, und
+  // dann geht im Dreh nichts raus — was besser ist als an die Falsche.
+  steuerMail: process.env.STEUER_MAIL_DREH || "kanzlei.keller@example.de",
 };
 
 // Wer im Video angesprochen wird. Fassung 2, Grundregeln: "Angesprochen wird
@@ -500,9 +553,22 @@ async function laden(c) {
   // Die Gegenstelle ist der ECHTE Kundenname aus derselben Schleife. Vorher
   // stand hier firmenname(i) mit einem anderen Zaehler — in "Letzte Buchungen"
   // standen dadurch Firmen, die es in der Kundenliste gar nicht gab.
+  // bezahlt_am MUSS gesetzt sein (21.08.2026).
+  //
+  // Die Buchhaltungsseite baut ihre Monatsordner aus buchungen.bezahlt_am
+  // (buchhaltung.js, monateMitDaten: "where bezahlt_am is not null"). Hier
+  // stand bisher nur bezahlt = true, ohne Tag. Folge: KEIN EINZIGER Ordner auf
+  // der Seite, und monatsExport() gab "leer" zurueck. C3_04 sagt aber "hab ich
+  // dem Juli-Ordner zugeordnet, da liegen jetzt 34 Belege" und schickt den
+  // Ordner an die Steuerberaterin — beides haette ins Leere gegriffen.
+  // Gemessen, nicht vermutet: monateMitDaten lieferte eine leere Liste.
+  //
+  // Zufluss-Prinzip: Der Zahltag ist der Tag der Buchung. In der Kulisse ist
+  // alles bezahlt; offene Rechnungen gehoeren in keinen Monatsordner.
   const buchung = (art, betrag, datumSql, kategorie, gegenstelle, firmaId) => c.query(
-    `insert into public.buchungen (art, datum, betrag, kategorie, gegenstelle, firma_id, bezahlt, erfasst_von)
-     values ($1, ${datumSql}, $2, $3, $4, $5, true, $6)`,
+    `insert into public.buchungen (art, datum, betrag, kategorie, gegenstelle, firma_id,
+                                   bezahlt, bezahlt_am, erfasst_von)
+     values ($1, ${datumSql}, $2, $3, $4, $5, true, ${datumSql}, $6)`,
     [art, betrag, kategorie, gegenstelle, firmaId || null, chef.id]);
 
   const amTag = (tag, vormonat) => `date_trunc('month', current_date) - ${vormonat ? 1 : 0}`
@@ -527,17 +593,58 @@ async function laden(c) {
   ]) await buchung("ausgabe", betrag, `current_date - ${Number(tage)}`, kat, wem, null);
 
   // Belege im Juli-Ordner — 33 Stueck, der 34. wird im Dreh fotografiert.
-  // Status 'gebucht': 0021 kannte noch 'offen'/'zugeordnet', 0022 und 0024 haben
-  // die Werte auf neu | gebucht | fehler | verworfen umgestellt.
+  //
+  // DREI DINGE MUESSEN STIMMEN, damit C3_04 nicht luegt:
+  //
+  //   1. Der Tag bleibt im Juli. Vorher stand hier "+ i Tage" ab dem
+  //      Monatsersten; bei 33 Belegen laeuft das ueber das Monatsende hinaus,
+  //      und Beleg 32 und 33 landeten am 1. und 2. August. Die Datenbank
+  //      zaehlte 33 — davon nur 31 im Juli. Der Rest gegen die Laenge des
+  //      Vormonats haelt alle im Juli; dass sich zwei einen Tag teilen, ist
+  //      im Alltag ohnehin der Normalfall.
+  //
+  //   2. Zu jedem Beleg gehoert eine BUCHUNG mit Zahltag. Der Juli-Ordner ist
+  //      keine Belegliste — er zaehlt Buchungen. Ohne Buchung existiert der
+  //      Ordner gar nicht, und der Versand an die Steuerberaterin bricht mit
+  //      "leer" ab.
+  //
+  //   3. Jeder Beleg braucht eine DATEI. monatsExport packt "Belege/..." aus
+  //      belege.daten und schreibt eine Pruefsummenliste dazu. Ohne Datei
+  //      enthaelt das ZIP nur die Uebersicht, und die Mail an die Kanzlei sagt
+  //      woertlich "zu 33 Buchungen liegt keine Belegdatei vor".
+  //
+  // Status 'gebucht': 0021 kannte noch 'offen'/'zugeordnet', 0022 und 0024
+  // haben die Werte auf neu | gebucht | fehler | verworfen umgestellt.
+  const { rows: [vm] } = await c.query(
+    `select extract(day from (date_trunc('month', current_date) - interval '1 day'))::int as tage`);
+  const julitage = vm.tage;   // 31 im Juli
+
+  const BELEG_HAENDLER = ["Tankstelle Aral", "Office Depot", "Ristorante Vitali",
+    "Deutsche Bahn", "Amazon Business", "Baeckerei Huber", "Taxi Muenchen",
+    "Hotel Alpenblick"];
   for (let i = 0; i < K.belegeJuli; i++) {
+    const tag = i % julitage;
+    const betrag = [18.9, 129, 47.5, 12.4, 89, 240, 33.1, 15.8][i % 8];
+    const kategorie = ["Bewirtung", "Software", "Fahrtkosten", "Büromaterial"][i % 4];
+    const wem = BELEG_HAENDLER[i % BELEG_HAENDLER.length];
+    const name = `Beleg-2026-07-${String(i + 1).padStart(3, "0")}.pdf`;
+    const amTag = `date_trunc('month', current_date) - interval '1 month' + ${tag} * interval '1 day'`;
+
+    // Die Buchung zuerst: an ihr haengt der Monatsordner.
+    const { rows: [bu] } = await c.query(
+      `insert into public.buchungen (art, datum, betrag, kategorie, gegenstelle,
+                                     bezahlt, bezahlt_am, erfasst_von)
+       values ('ausgabe', ${amTag}, $1, $2, $3, true, ${amTag}, $4)
+       returning id`, [betrag, kategorie, wem, chef.id]);
+
+    const datei = belegBlatt({ wem, betrag, kategorie, nummer: i + 1 });
     await c.query(
-      `insert into public.belege (dateiname, betrag, datum, status, notiz, von, erstellt)
-       values ($1,$2, date_trunc('month', current_date) - interval '1 month' + $3::int * interval '1 day',
-               'gebucht', $4, $5,
-               date_trunc('month', current_date) - interval '1 month' + $3::int * interval '1 day')`,
-      [`Beleg-2026-07-${String(i + 1).padStart(3, "0")}.pdf`,
-       [18.9, 129, 47.5, 12.4, 89, 240, 33.1, 15.8][i % 8],
-       i, ["Bewirtung", "Software", "Fahrtkosten", "Büromaterial"][i % 4], chef.id]);
+      `insert into public.belege (dateiname, dateityp, daten, groesse, pruefsumme,
+                                  betrag, datum, status, buchung_id, notiz, kategorie,
+                                  gegenstelle, von, erstellt)
+       values ($1,'application/pdf',$2,$3,$4,$5, ${amTag}, 'gebucht', $6, $7, $8, $9, $10, ${amTag})`,
+      [name, datei, datei.length, pruefsumme(datei), betrag, bu.id,
+       kategorie, kategorie, wem, chef.id]);
   }
 
   // Kontostand, damit die Buchhaltungsseite nicht mit einer gelben Warnung
@@ -550,9 +657,9 @@ async function laden(c) {
         set start_saldo = $1, saldo_stand = date_trunc('month', current_date)::date,
             steuersatz = 30.0, geaendert_von = $2,
             steuer_anrede = 'Frau', steuer_name = 'Keller',
-            steuer_mail = 'kanzlei.keller@example.de',
+            steuer_mail = $3,
             steuer_notiz = 'Kanzlei Keller & Partner, Erding · Mandant 4711'
-      where id = 1`, [48500, chef.id]);
+      where id = 1`, [48500, chef.id, K.steuerMail]);
 
   await c.query(
     `insert into public.dokumente (firma_id, name, pfad, art, hochgeladen_von)
