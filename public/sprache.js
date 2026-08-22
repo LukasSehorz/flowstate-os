@@ -464,6 +464,29 @@
         console.warn("Drehmappe fehlt:", url);
         if (!mappeOeffnen()) { knopfZeigen(); return; }
       }
+      // EIGENE INHALTE GEHEN OHNE FENSTER (22.08.2026).
+      //
+      // Am Set lief der Take durch, Telegram und WhatsApp kamen an — und kein
+      // Dokument ging auf. Der Grund: mappe.open() kommt aus dem Ablauf des
+      // Drehbuchs, nicht aus einem Klick. Ohne Nutzergeste laesst Chrome das
+      // nur mit dauerhafter Pop-up-Erlaubnis durch, und die haengt am
+      // Hostnamen. WhatsApp fiel nicht auf, weil es ohnehin schon offen war.
+      //
+      // Statt zu bitten, dass jemand die Erlaubnis setzt: Die Drehmappe legt
+      // den Inhalt jetzt selbst in einen Rahmen. Ein Rahmen ist kein Fenster —
+      // daran ist kein Blocker beteiligt, und es ist eine Sache weniger, an
+      // die vor dem Dreh jemand denken muss.
+      //
+      // Fremde Adressen koennen das nicht: web.whatsapp.com verbietet die
+      // Einbettung (X-Frame-Options). Die gehen weiter als eigener Tab — und
+      // WhatsApp Web steht beim Dreh ohnehin schon angemeldet daneben.
+      if (url.indexOf("http") !== 0) {
+        try {
+          mappe.postMessage({ typ: "zeigen", url }, location.origin);
+          return;
+        } catch (e) { console.error("Drehmappe nicht erreichbar:", e.message); }
+      }
+
       try {
         // Oeffnet IN der Mappe. Ist der Tab dort schon geladen (vorgeladen),
         // wird er nur nach vorn geholt — ohne Wartezeit.
@@ -503,9 +526,15 @@
   // zeigen. Frisches Anhaengsel = neu laden. Seit der Kalender direkt bei
   // Google liest (0,4 s statt 9 s) faellt das im Bild nicht mehr auf.
   function mappeNeuLaden(datei) {
-    if (!mappe || mappe.closed) return;
+    if (!mappeOffen()) return;
     const basis = datei + (datei.includes("?") ? "&" : "?") + "drehbuch=aus&_=" + Date.now();
-    try { mappe.open(basis, tabName(datei)); } catch { /* Fenster weg */ }
+    // Wie beim ersten Zeigen: als Nachricht, nicht als Fenster. Der angehaengte
+    // Zeitstempel ist hier doppelt wichtig — ein Rahmen mit unveraenderter
+    // Adresse laedt gar nicht neu, und der Kalender zeigte dann noch den Stand
+    // von vor dem Eintrag.
+    try {
+      mappe.postMessage({ typ: "zeigen", url: basis }, location.origin);
+    } catch (e) { console.error("Drehmappe nicht erreichbar:", e.message); }
   }
 
   // NUR EIN TAB DARF DAS DREHBUCH FUEHREN.
