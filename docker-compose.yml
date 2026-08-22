@@ -78,6 +78,11 @@ services:
       # Wohin die Rechnung am Ende von Creative 3 geht. Frau Bergmann gibt es
       # nicht — die Mail geht an einen echten eigenen Posteingang.
       - DREH_MAIL_ZIEL=${DREH_MAIL_ZIEL:-}
+      # In welche WhatsApp-Gruppe die Nachricht aus C2_09 geht. Ohne diese
+      # Zeile kam die Variable nie im Container an, und die Tat fiel auf ihren
+      # eingebauten Namen zurueck — der nach dem Umbenennen der Gruppe ins
+      # Leere zeigte.
+      - DREH_WA_ZIEL=${DREH_WA_ZIEL:-}
       # Steuerkanzlei als Rueckfallebene, falls das Feld in der Buchhaltung
       # leer ist. Im Dreh steht es in der Datenbank; hier nur der Notnagel.
       - STEUER_MAIL=${STEUER_MAIL:-}
