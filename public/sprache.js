@@ -173,25 +173,29 @@
     const s = document.createElement("style");
     s.id = "kino-stil";
     s.textContent = `
-      /* Links und oben WEG: Die Flaeche waechst, die Kugel rueckt in die
-         Mitte des Bildes. */
-      body.kino .rail,
+      /* ZWEI STUFEN, weil zwei verschiedene Dinge gebraucht werden.
+
+         Stufe 1 — nur die Seitenleiste weg. Das ist die Vorgabe am Handy: Die
+         Leiste nahm dort ein Fuenftel der Breite, und alles andere wurde
+         zusammengequetscht. Kopfzeile, JARVIS, Zustand, Knopfband, SIGNAL —
+         alles bleibt, es hat nur endlich Platz.
+
+         Stufe 2 — zusaetzlich die ganze Oberflaeche (Shift+K oder ?kino=1).
+         Nur fuer Einstellungen, in denen ausser dem Gehirn nichts im Bild sein
+         soll. */
+      body.ohne-leiste .rail { display: none !important; }
+      /* .inhalt haelt 102 px Abstand fuer die feste Leiste frei. Ohne das
+         Zuruecksetzen bliebe links ein leerer Streifen stehen. */
+      body.ohne-leiste .inhalt { margin-left: 0 !important; }
+
       body.kino .topbar { display: none !important; }
-      /* Kopf und Fuss der Buehne dagegen nur UNSICHTBAR, nicht entfernt.
-         Die Kugel wird zwischen ihnen ausgerichtet — nimmt man ihnen den
-         Platz, rutscht sie ins obere Drittel. Gemessen am 21.08.: mit
-         display:none sass sie bei 32 % statt bei 50 % der Bildhoehe. */
+      /* Kopf und Fuss der Buehne nur UNSICHTBAR, nicht entfernt. Die Kugel
+         richtet sich zwischen ihnen aus; ohne ihren Platz sass sie bei 32 %
+         statt bei 50 % der Bildhoehe — gemessen und im Bild nachgesehen. */
       body.kino .gh-kopf,
       body.kino .gh-fuss { visibility: hidden !important; }
-      /* Der Inhalt ruecht auf, wo die Leiste war — sonst bliebe links ein
-         schwarzer Streifen, den man im Schnitt wegschneiden muesste. */
-      body.kino .inhalt { margin: 0 !important; padding: 0 !important; }
-      body.kino .shell { padding: 0 !important; }
-      body.kino main { padding: 0 !important; }
-      /* Der Rahmen um die Buehne gehoert zur Oberflaeche, nicht ins Bild. */
-      body.kino .gh-rahmen { visibility: hidden !important; }
-      body.kino .gh, body.kino .gh-canvas { inset: 0 !important; }
-
+      body.kino .shell, body.kino main { padding: 0 !important; }
+      body.kino .inhalt { padding: 0 !important; }
       /* ---------------------------------------------------------- Am Handy
          Auf dem Telefon ist die Sprachseite gestaucht: Die Leiste frisst ein
          Fuenftel der Breite, und die Kopfzeile bricht auf drei Reihen um. Der
@@ -202,7 +206,7 @@
          Nur am Handy: Am Rechner wird der Kino-Modus abgefilmt, da hat ein
          Knopf in der Ecke nichts verloren. */
       .dreh-menue { display: none; }
-      body.kino.handy .dreh-menue {
+      body.handy.ohne-leiste .dreh-menue {
         display: flex; align-items: center; justify-content: center;
         position: fixed; left: 14px; top: 14px; z-index: 9999;
         width: 44px; height: 44px; padding: 0;
@@ -215,6 +219,10 @@
         display: block; width: 18px; height: 2px; border-radius: 2px;
         background: currentColor; box-shadow: 0 -6px 0 currentColor, 0 6px 0 currentColor;
       }
+      /* Der Knopf sitzt oben links — genau dort, wo die Kopfzeile ihren Titel
+         beginnt. Also rueckt der Titel an ihm vorbei, statt sich zu
+         verstecken. Nur am Handy: am Rechner gibt es den Knopf nicht. */
+      body.handy.ohne-leiste .topbar-titel { padding-left: 50px; }
       .dreh-schleier { display: none; }
       body.menue-auf .dreh-schleier {
         display: block; position: fixed; inset: 0; z-index: 9997;
@@ -223,33 +231,44 @@
       /* Die Leiste kommt zurueck — und zwar aufgeklappt. Am Rechner faehrt sie
          beim Darueberfahren auf 266 px aus; ein Finger kann nicht schweben,
          also wird derselbe Zustand hier fest gesetzt. */
-      body.kino.menue-auf .rail {
+      body.ohne-leiste.menue-auf .rail {
         display: flex !important;
         position: fixed; left: 0; top: 0; bottom: 0;
         width: 266px; max-width: 82vw; z-index: 9998;
         border-radius: 0; margin: 0;
       }
-      body.kino.menue-auf .rail .rail-wort,
-      body.kino.menue-auf .rail .rail-gruppe { opacity: 1; }
-      body.kino.menue-auf .rail a { padding: 0 12px; }
+      body.ohne-leiste.menue-auf .rail .rail-wort,
+      body.ohne-leiste.menue-auf .rail .rail-gruppe { opacity: 1; }
+      body.ohne-leiste.menue-auf .rail a { padding: 0 12px; }
       /* Der Knopf liegt ueber der Leiste — sonst kaeme man nicht mehr an ihn
          heran. Damit er nicht auf dem Schriftzug sitzt, rueckt der Kopf der
          Leiste an ihm vorbei. */
-      body.kino.menue-auf .rail-marke { padding-left: 52px; }
+      body.ohne-leiste.menue-auf .rail-marke { padding-left: 52px; }
       /* Und der Mappen-Knopf tritt zur Seite, solange das Menue offen ist:
          Er sass sonst auf "Abmelden". */
       body.menue-auf .dreh-mappe-knopf { display: none; }
     `;
     document.head.appendChild(s);
   }
-  function kinoSetzen(an) {
+  // Stufe 1: nur die Seitenleiste. Alles andere bleibt stehen.
+  function leisteSetzen(weg) {
     kinoStil();
-    document.body.classList.toggle("kino", an);
+    document.body.classList.toggle("ohne-leiste", weg);
     // Der Knopf haengt an der Klasse "handy" — so entscheidet eine Stelle
     // darueber, und ein gedrehtes Telefon aendert die Lage von selbst.
     document.body.classList.toggle("handy", istHandy());
-    if (an && istHandy()) menueBauen();
-    if (!an) menueSetzen(false);      // ohne Kino traegt die Seite ihre Leiste selbst
+    if (weg && istHandy()) menueBauen();
+    if (!weg) menueSetzen(false);     // mit Leiste braucht es kein Menue
+  }
+
+  // Stufe 2: zusaetzlich die ganze Oberflaeche. Ohne Leiste sowieso.
+  function kinoSetzen(an) {
+    // Beim Zurueckschalten entscheidet wieder die Bildschirmbreite, ob die
+    // Leiste dableibt: am Handy ja, am Rechner nein. Vorher stand hier
+    // "oder sie ist schon weg" — und dann kam sie am Rechner nach Shift+K nie
+    // wieder. Gemessen: leiste=false, obwohl der Kino-Modus schon aus war.
+    leisteSetzen(an || istHandy());
+    document.body.classList.toggle("kino", an);
     try { sessionStorage.setItem(KINO_SPEICHER, an ? "1" : "0"); } catch { /* privater Modus */ }
     // Die Kugel haengt an der Groesse der Flaeche. Ohne diesen Anstoss bliebe
     // sie in der Ecke, bis jemand das Fenster anfasst.
@@ -300,7 +319,11 @@
     // die Kopfzeile bricht auf drei Reihen um, und vom Gehirn bleibt ein
     // Daumennagel. Wer die Oberflaeche doch sehen will, haengt ?kino=0 an
     // oder drueckt Shift+K.
-    if (an === null && istHandy()) an = "1";
+    // AM HANDY IST DIE SEITENLEISTE VON ALLEIN WEG — aber nur sie. Alles
+    // andere gehoert dort genauso hin wie am Rechner; es hatte nur keinen
+    // Platz. Wer auch die Leiste sehen will, haengt ?kino=0 an.
+    if (an === "0" || an === "aus") leisteSetzen(false);
+    else if (an === null) leisteSetzen(istHandy());
     if (an === "1" || an === "an") kinoSetzen(true);
     document.addEventListener("keydown", (e) => {
       // Nicht waehrend jemand tippt, und nicht mit Zusatztaste — sonst faengt
