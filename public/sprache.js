@@ -191,21 +191,116 @@
       /* Der Rahmen um die Buehne gehoert zur Oberflaeche, nicht ins Bild. */
       body.kino .gh-rahmen { visibility: hidden !important; }
       body.kino .gh, body.kino .gh-canvas { inset: 0 !important; }
+
+      /* ---------------------------------------------------------- Am Handy
+         Auf dem Telefon ist die Sprachseite gestaucht: Die Leiste frisst ein
+         Fuenftel der Breite, und die Kopfzeile bricht auf drei Reihen um. Der
+         Kino-Modus loest das schon — es fehlt nur ein Weg zurueck zur
+         Navigation. Darum ein Knopf mit drei Strichen oben links, der die
+         Leiste als Ueberlagerung hereinholt.
+
+         Nur am Handy: Am Rechner wird der Kino-Modus abgefilmt, da hat ein
+         Knopf in der Ecke nichts verloren. */
+      .dreh-menue { display: none; }
+      body.kino.handy .dreh-menue {
+        display: flex; align-items: center; justify-content: center;
+        position: fixed; left: 14px; top: 14px; z-index: 9999;
+        width: 44px; height: 44px; padding: 0;
+        border: none; border-radius: 13px; cursor: pointer;
+        background: rgba(22, 26, 34, .78); color: #FCFBF9;
+        -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+      }
+      .dreh-menue span {
+        display: block; width: 18px; height: 2px; border-radius: 2px;
+        background: currentColor; box-shadow: 0 -6px 0 currentColor, 0 6px 0 currentColor;
+      }
+      .dreh-schleier { display: none; }
+      body.menue-auf .dreh-schleier {
+        display: block; position: fixed; inset: 0; z-index: 9997;
+        background: rgba(0, 0, 0, .5);
+      }
+      /* Die Leiste kommt zurueck — und zwar aufgeklappt. Am Rechner faehrt sie
+         beim Darueberfahren auf 266 px aus; ein Finger kann nicht schweben,
+         also wird derselbe Zustand hier fest gesetzt. */
+      body.kino.menue-auf .rail {
+        display: flex !important;
+        position: fixed; left: 0; top: 0; bottom: 0;
+        width: 266px; max-width: 82vw; z-index: 9998;
+        border-radius: 0; margin: 0;
+      }
+      body.kino.menue-auf .rail .rail-wort,
+      body.kino.menue-auf .rail .rail-gruppe { opacity: 1; }
+      body.kino.menue-auf .rail a { padding: 0 12px; }
+      /* Der Knopf liegt ueber der Leiste — sonst kaeme man nicht mehr an ihn
+         heran. Damit er nicht auf dem Schriftzug sitzt, rueckt der Kopf der
+         Leiste an ihm vorbei. */
+      body.kino.menue-auf .rail-marke { padding-left: 52px; }
+      /* Und der Mappen-Knopf tritt zur Seite, solange das Menue offen ist:
+         Er sass sonst auf "Abmelden". */
+      body.menue-auf .dreh-mappe-knopf { display: none; }
     `;
     document.head.appendChild(s);
   }
   function kinoSetzen(an) {
     kinoStil();
     document.body.classList.toggle("kino", an);
+    // Der Knopf haengt an der Klasse "handy" — so entscheidet eine Stelle
+    // darueber, und ein gedrehtes Telefon aendert die Lage von selbst.
+    document.body.classList.toggle("handy", istHandy());
+    if (an && istHandy()) menueBauen();
+    if (!an) menueSetzen(false);      // ohne Kino traegt die Seite ihre Leiste selbst
     try { sessionStorage.setItem(KINO_SPEICHER, an ? "1" : "0"); } catch { /* privater Modus */ }
     // Die Kugel haengt an der Groesse der Flaeche. Ohne diesen Anstoss bliebe
     // sie in der Ecke, bis jemand das Fenster anfasst.
     try { window.dispatchEvent(new Event("resize")); } catch {}
     console.log("Kino-Modus:", an ? "an" : "aus");
   }
+  // Ist das ein Telefon? Nach der Breite, nicht nach dem Geraetenamen — die
+  // Kennung luegt, die Breite nicht. 820 px ist dieselbe Grenze, die crm.css
+  // schon fuer die uebrigen Seiten benutzt.
+  const HANDY = window.matchMedia && window.matchMedia("(max-width: 820px)");
+  const istHandy = () => Boolean(HANDY && HANDY.matches);
+
+  // Der Knopf mit den drei Strichen und der Schleier dahinter.
+  function menueBauen() {
+    if (document.querySelector(".dreh-menue")) return;
+    const schleier = document.createElement("div");
+    schleier.className = "dreh-schleier";
+    schleier.addEventListener("click", () => menueSetzen(false));
+
+    const knopf = document.createElement("button");
+    knopf.type = "button";
+    knopf.className = "dreh-menue";
+    knopf.setAttribute("aria-label", "Menü");
+    knopf.appendChild(document.createElement("span"));
+    knopf.addEventListener("click", (e) => {
+      e.stopPropagation();
+      menueSetzen(!document.body.classList.contains("menue-auf"));
+    });
+
+    document.body.appendChild(schleier);
+    document.body.appendChild(knopf);
+    // Ein Griff in die Leiste schliesst sie wieder — sonst bliebe sie beim
+    // Wechsel auf eine andere Seite kurz ueber dem Bild stehen.
+    const leiste = document.querySelector(".rail");
+    if (leiste) leiste.addEventListener("click", (e) => {
+      if (e.target.closest("a")) menueSetzen(false);
+    });
+  }
+  function menueSetzen(auf) {
+    document.body.classList.toggle("menue-auf", auf);
+  }
+
   (function kinoStarten() {
     let an = new URLSearchParams(location.search).get("kino");
     if (an === null) { try { an = sessionStorage.getItem(KINO_SPEICHER); } catch { an = null; } }
+    // AM HANDY IST DER KINO-MODUS DIE VORGABE. Auf dem Telefon ist die
+    // Sprachseite sonst gestaucht: Die Leiste nimmt ein Fuenftel der Breite,
+    // die Kopfzeile bricht auf drei Reihen um, und vom Gehirn bleibt ein
+    // Daumennagel. Wer die Oberflaeche doch sehen will, haengt ?kino=0 an
+    // oder drueckt Shift+K.
+    if (an === null && istHandy()) an = "1";
     if (an === "1" || an === "an") kinoSetzen(true);
     document.addEventListener("keydown", (e) => {
       // Nicht waehrend jemand tippt, und nicht mit Zusatztaste — sonst faengt
@@ -279,6 +374,7 @@
     if (knopf) { knopfBeschriften(); return; }
     knopf = document.createElement("button");
     knopf.type = "button";
+    knopf.className = "dreh-mappe-knopf";
     knopf.textContent = "Drehmappe öffnen";
     knopf.setAttribute("style",
       "position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:9999;"
