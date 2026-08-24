@@ -12,7 +12,7 @@ const B = "http://127.0.0.1:3000";
 
   await p.goto(B + "/login", { waitUntil: "domcontentloaded" });
   await p.evaluate(() => { const f = document.querySelector("form");
-    f.querySelector('[name=email]').value = "jannikvomhofe@flowstate-ai.net";
+    f.querySelector('[name=email]').value = "jannikvomhofe@svhconsult.de";
     f.querySelector('[name=password]').value = "dreh2026"; f.submit(); });
   await p.waitForNavigation({ waitUntil: "domcontentloaded" }).catch(() => {});
   await p.goto(B + "/sprache", { waitUntil: "networkidle2" });

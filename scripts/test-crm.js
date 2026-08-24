@@ -7,11 +7,11 @@ for (const z of fs.readFileSync(path.join(__dirname, "..", ".env"), "utf-8").spl
 const crm = require("../lib/crm.js");
 
 (async () => {
-  const lukas = await crm.anmelden("lukas.sehorz@flowstate-ai.net", "flowstate2026");
+  const lukas = await crm.anmelden("lukas.sehorz@svhconsult.de", "flowstate2026");
   console.log("Login Lukas:", lukas ? `OK (${lukas.rolle}, ${lukas.name})` : "FEHLER");
-  const louis = await crm.anmelden("louis.tournier@flowstate-ai.net", "flowstate2026");
+  const louis = await crm.anmelden("louis.tournier@svhconsult.de", "flowstate2026");
   console.log("Login Louis:", louis ? `OK (${louis.rolle})` : "FEHLER");
-  console.log("Falsches Passwort:", (await crm.anmelden("lukas.sehorz@flowstate-ai.net", "falsch")) ? "❌ FEHLER" : "✅ korrekt abgelehnt");
+  console.log("Falsches Passwort:", (await crm.anmelden("lukas.sehorz@svhconsult.de", "falsch")) ? "❌ FEHLER" : "✅ korrekt abgelehnt");
 
   console.log("Pipeline-Stufen:", (await crm.stufen(lukas)).length);
 

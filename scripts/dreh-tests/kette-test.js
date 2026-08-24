@@ -10,7 +10,7 @@ const warte = (ms) => new Promise((r) => setTimeout(r, ms));
   p.on("pageerror", (e) => fehler.push(e.message));
   await p.goto(B + "/login", { waitUntil: "domcontentloaded" });
   await p.evaluate(() => { const f = document.querySelector("form");
-    f.querySelector('[name=email]').value = "jannikvomhofe@flowstate-ai.net";
+    f.querySelector('[name=email]').value = "jannikvomhofe@svhconsult.de";
     f.querySelector('[name=password]').value = "dreh2026"; f.submit(); });
   await p.waitForNavigation({ waitUntil: "domcontentloaded" }).catch(() => {});
   await p.goto(B + "/sprache", { waitUntil: "networkidle2" });

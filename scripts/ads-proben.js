@@ -96,7 +96,7 @@ const WIEDERHOLEN = Math.max(1, Number(wert("--wiederholen", 1)));
 const ZIEL_URL = wert("--ziel", "");
 const FERN = Boolean(ZIEL_URL);
 
-const MAIL = process.env.ADS_MAIL || "lukas.sehorz@flowstate-ai.net";
+const MAIL = process.env.ADS_MAIL || "lukas.sehorz@svhconsult.de";
 const PASSWORT = process.env.ADS_PASSWORT || "flowstate2026";
 
 // Das Praefix, an dem alles Erzeugte erkennbar ist. Steht als Konstante hier,

@@ -18,11 +18,11 @@ if (fs.existsSync(envPfad)) {
 const START_PASSWORT = process.argv[2] || "flowstate2026";
 
 const NUTZER = [
-  { email: "lukas.sehorz@flowstate-ai.net",  name: "Lukas Sehorz",    rolle: "admin" },
-  { email: "jannikvomhofe@flowstate-ai.net", name: "Jannik vom Hofe", rolle: "admin" },
-  { email: "louis.tournier@flowstate-ai.net", name: "Louis Tournier", rolle: "mitarbeiter" },
-  { email: "ioannis@flowstate-ai.net",       name: "Ioannis",         rolle: "mitarbeiter" },
-  { email: "simon@flowstate-ai.net",         name: "Simon",           rolle: "mitarbeiter" },
+  { email: "lukas.sehorz@svhconsult.de",  name: "Lukas Sehorz",    rolle: "admin" },
+  { email: "jannikvomhofe@svhconsult.de", name: "Jannik vom Hofe", rolle: "admin" },
+  { email: "louis.tournier@svhconsult.de", name: "Louis Tournier", rolle: "mitarbeiter" },
+  { email: "ioannis@svhconsult.de",       name: "Ioannis",         rolle: "mitarbeiter" },
+  { email: "okan@svhconsult.de",          name: "Okan",            rolle: "mitarbeiter" },
 ];
 
 (async () => {

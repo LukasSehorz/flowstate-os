@@ -9,7 +9,7 @@ const crm = require("../lib/crm.js");
 const VAULT = process.env.VAULT_LOKAL || "C:/dev/flowstate-vault";
 
 (async () => {
-  const u = await crm.anmelden("lukas.sehorz@flowstate-ai.net", process.env.CRM_PW || "flowstate2026");
+  const u = await crm.anmelden("lukas.sehorz@svhconsult.de", process.env.CRM_PW || "flowstate2026");
   if (!u) throw new Error("Anmeldung fehlgeschlagen");
 
   if (process.argv.includes("--testdaten-loeschen")) {

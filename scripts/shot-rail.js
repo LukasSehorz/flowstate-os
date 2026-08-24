@@ -26,7 +26,7 @@ const PORT = 3994;
   await page.setViewport({ width: 1500, height: 1050, deviceScaleFactor: 2 });
 
   await page.goto(`http://localhost:${PORT}/login`, { waitUntil: "networkidle0" });
-  await page.type("input[name=email]", "lukas.sehorz@flowstate-ai.net");
+  await page.type("input[name=email]", "lukas.sehorz@svhconsult.de");
   await page.type("input[name=password]", "flowstate2026");
   await Promise.all([page.waitForNavigation({ waitUntil: "networkidle0" }), page.click("button[type=submit]")]);
 

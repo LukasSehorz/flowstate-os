@@ -25,7 +25,7 @@ const PORT = 3997;
   await page.goto(`http://localhost:${PORT}/login`, { waitUntil: "networkidle0" });
   await page.screenshot({ path: path.join(ORDNER, "01-login.png") });
 
-  await page.type("input[name=email]", "lukas.sehorz@flowstate-ai.net");
+  await page.type("input[name=email]", "lukas.sehorz@svhconsult.de");
   await page.type("input[name=password]", "flowstate2026");
   await Promise.all([page.waitForNavigation({ waitUntil: "networkidle0" }), page.click("button[type=submit]")]);
   await new Promise((r) => setTimeout(r, 2500)); // Kacheln laden per fetch nach
