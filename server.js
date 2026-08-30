@@ -121,7 +121,7 @@ app.use(
 // Bereiche selbst.
 const BEREICH_JE_PFAD = {
   "": "zentrale", umsatz: "zentrale",
-  kalender: "kalender", todos: "todos",
+  kalender: "kalender", todos: "todos", whiteboard: "whiteboard",
   crm: "crm", leads: "leads",
   buchhaltung: "buchhaltung", angebote: "angebote",
   marketing: "marketing", content: "content", projekte: "projekte",
@@ -360,6 +360,10 @@ catch (e) { console.error("Kalender-Modul konnte nicht geladen werden:", e.messa
 if (process.env.DATABASE_URL) {
   try { require("./lib/todo-routes.js")(app); console.log("To-Do-Modul geladen"); }
   catch (e) { console.error("To-Do-Modul konnte nicht geladen werden:", e.message); }
+  // Whiteboard direkt dahinter — "nach: zentrale-todos" kann nur greifen,
+  // wenn der To-Do-Eintrag schon in der Rail steht.
+  try { require("./lib/whiteboard-routes.js")(app); console.log("Whiteboard-Modul geladen"); }
+  catch (e) { console.error("Whiteboard-Modul konnte nicht geladen werden:", e.message); }
 }
 
 // WhatsApp-Koppelseite (/whatsapp). Die Bruecke laeuft als eigener Container;

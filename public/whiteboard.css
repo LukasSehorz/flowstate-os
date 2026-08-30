@@ -1,0 +1,806 @@
+/* =====================================================================
+   whiteboard.css — die Whiteboard-Wand (/whiteboard)
+   =====================================================================
+
+   Ein Raum mit fuenf echten Whiteboards nebeneinander: Alurahmen,
+   Stiftablage, Namensschild. Die BOARDFLAECHE bleibt in jedem Theme
+   "whiteboard-weiss" (im Dunkelmodus leicht entblendet), der RAUM
+   drumherum und die Werkzeugleisten folgen dem Theme.
+
+   Warum eigene --wb-Variablen statt der globalen Tokens direkt:
+   Die Seite laeuft unter body.crm-dashboard-design (aktiv beginnt mit
+   "zentrale", siehe schale.js). Diese Klasse definiert die Tokens am
+   BODY — und Body-Variablen gewinnen fuer alle Kinder gegen
+   :root[data-theme="dark"], das nur am HTML-Element haengt. Ein
+   var(--surface) in meiner Werkzeugleiste bliebe im Dunkelmodus also
+   Graphit-hell. Deshalb laufen alle Farben hier durch --wb-*-Variablen,
+   die im Standardfall auf die globalen Tokens zeigen und im Dunkel-
+   bzw. Weiss-Fall mit expliziten Werten ueberschrieben werden.
+
+   Masssystem: Alles in der .wb-buehne ist in WELTEINHEITEN beschrieben
+   (1 Einheit = 1 CSS-px bei Zoom 1). Ein Board misst 2400x1400.
+   JS-gesetzte Variablen skalieren gegen den Zoom:
+     --wb-gegen  Namensschild/Wisch-Knopf: waechst erst, wenn der Zoom
+                 sie unleserlich machen wuerde (Uebersichts-Ansicht).
+     --wb-anti   Block-Werkzeugkasten: exakt 1/Zoom, bleibt also immer
+                 bildschirmgross wie eine schwebende Leiste.
+     --wb-anti2  Zeilen-Tools: 1/Zoom mit Deckel — konstante
+                 Bildschirmgroesse im Editier-Bereich (35-300 %).
+   ===================================================================== */
+
+/* ------------------------------------------------------------ Schrift
+   Caveat liegt selbst gehostet unter /lib/schrift/ (Variable Font
+   400–700). font-display:swap: solange sie laedt, schreibt Segoe Print
+   — Handschrift bleibt Handschrift, nichts springt von Serifenlos um. */
+@font-face{
+  font-family:"Caveat";
+  src:url("/lib/schrift/caveat-latin.woff2") format("woff2");
+  font-weight:400 700;font-style:normal;font-display:swap;
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,
+    U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:"Caveat";
+  src:url("/lib/schrift/caveat-latin-ext.woff2") format("woff2");
+  font-weight:400 700;font-style:normal;font-display:swap;
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,
+    U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+/* ------------------------------------------------- Seite ohne Scrollen
+   Die Wand ist eine Buehne, kein Dokument: Die Wurzel nimmt genau den
+   Platz unter der Topbar ein, gescrollt wird IN der Wand (Pan/Zoom),
+   nie an der Seite. Kein hartes calc mit Topbar-Hoehe: .inhalt ist
+   bereits eine Flex-Spalte (crm.css), also darf main einfach den Rest
+   fuellen — die echte Topbar-Hoehe misst das Layout von selbst. */
+body:has(#wb-wurzel){height:100dvh;overflow:hidden}
+body:has(#wb-wurzel) .shell,
+body:has(#wb-wurzel) .inhalt{height:100%;min-height:0}
+body:has(#wb-wurzel) main{
+  flex:1 1 auto;min-height:0;display:flex;
+  /* Buendig zur Topbar-Pille: links beginnt .inhalt schon bei 102px,
+     rechts/unten derselbe 14px-Atem wie die Topbar oben. */
+  padding:14px 14px 14px 0;
+}
+/* Rueckfalllinie fuer Browser ohne :has() — dann scrollt die Seite zwar,
+   aber die Wand hat trotzdem eine brauchbare Hoehe statt 0. */
+.wb-wurzel{flex:1 1 auto;min-width:0;min-height:0;height:calc(100dvh - 110px)}
+body:has(#wb-wurzel) .wb-wurzel{height:auto}
+
+/* ------------------------------------------------------------- Themes */
+.wb-wurzel{
+  /* Chrome = alles, was NICHT Teil der physischen Wand ist:
+     Kopfzeile, Werkzeugleiste, Toasts, Dialoge. Zeigt im Normalfall
+     auf die globalen Tokens, damit Hell/Graphit/Weiss automatisch
+     stimmen. */
+  --wb-chrom-flaeche:var(--surface);
+  --wb-chrom-flaeche2:var(--surface-2);
+  --wb-chrom-rand:var(--border);
+  --wb-chrom-rand-stark:var(--border-stark);
+  --wb-chrom-text:var(--foreground);
+  --wb-chrom-neben:var(--text-secondary);
+  --wb-chrom-still:var(--text-muted);
+  --wb-primaer:var(--primary);
+  --wb-primaer-hover:var(--primary-hover);
+  --wb-primaer-weich:var(--primary-soft);
+  --wb-gruen:var(--success);
+  --wb-rot:var(--danger);
+  --wb-schatten1:var(--s1);--wb-schatten2:var(--s2);--wb-schatten3:var(--s3);
+
+  /* LITERALE Farben fuer Stellen, an denen eine Flaechen-Variable als
+     color/box-shadow-Farbe gebraucht wird: --surface ist unter Graphit
+     ein VERLAUF, und ein Verlauf ist als Farbe ungueltig — die ganze
+     Deklaration fiele weg (unsichtbarer Toast-Text, fehlender
+     Auswahlring). Deshalb hier echte Farbwerte je Theme. */
+  --wb-chip:#14161A;          /* dunkler Chip (Toast, Tooltip) */
+  --wb-chip-text:#FFFFFF;
+  --wb-ring:#FFFFFF;          /* "Luftspalt" um aktive Farbpunkte */
+
+  /* Der Raum: eine ruhige Wandflaeche hinter den Boards. Unter Graphit
+     scheint bewusst die Buehne des Body durch (transparent), unter dem
+     Blau-Theme liegt eine eigene kuehle Wand darueber. */
+  --wb-raum:transparent;
+  --wb-raum-vignette:radial-gradient(120% 90% at 50% 8%,rgba(255,255,255,.28) 0%,rgba(255,255,255,0) 45%,rgba(15,23,42,.10) 100%);
+
+  /* Die Tafel selbst — in allen Themes hell. */
+  --wb-tafel:linear-gradient(112deg,#FFFFFF 0%,#F8FAFC 48%,#EEF1F5 100%);
+  --wb-tafel-kante:rgba(15,23,42,.16);
+  --wb-glanz:linear-gradient(104deg,rgba(255,255,255,0) 34%,rgba(255,255,255,.5) 46%,rgba(255,255,255,0) 58%);
+  --wb-glanz-deckkraft:.45;
+
+  /* Alurahmen: kuehles, gebuerstetes Metall mit einer Lichtkante oben. */
+  --wb-alu:linear-gradient(180deg,#F2F4F7 0%,#D4D9DF 26%,#B9C0C8 52%,#CBD1D8 78%,#AAB1BA 100%);
+  --wb-alu-rand:#99A1AB;
+  --wb-alu-tief:rgba(15,23,42,.22);
+
+  /* Marker-Tinte: NAMEN aus der Datenbank -> Hex je Theme. Entsaettigte
+     Markerfarben, die auf der hellen Tafel in jedem Theme lesbar sind. */
+  --wb-tinte-schwarz:#2B3036;--wb-tinte-blau:#2563EB;--wb-tinte-rot:#C03B3B;
+  --wb-tinte-gruen:#2E8555;--wb-tinte-orange:#C26E1E;--wb-tinte-lila:#7A4FB6;
+
+  /* Haftnotizen: Papier, kein Plastik — leicht warm, unten minimal dunkler. */
+  --wb-zettel-gelb:linear-gradient(178deg,#FDF3A4 0%,#F7E77E 100%);
+  --wb-zettel-rosa:linear-gradient(178deg,#FBDCE4 0%,#F5C6D3 100%);
+  --wb-zettel-mint:linear-gradient(178deg,#D5F1E0 0%,#BCE6CE 100%);
+  --wb-zettel-blau:linear-gradient(178deg,#D9E8FA 0%,#C3D9F4 100%);
+
+  --wb-board-schatten:0 22px 54px -16px rgba(15,23,42,.35),0 6px 16px -6px rgba(15,23,42,.18);
+  --wb-gegen:1;--wb-anti:1;--wb-anti2:1;
+
+  position:relative;display:flex;
+}
+
+/* Dunkel: abgedunkelter Raum, entblendete (aber weiterhin helle) Tafel.
+   Alle Chrome-Farben explizit, weil die globalen Tokens auf dieser Seite
+   im Dunkelmodus nicht umschalten (siehe Kopfkommentar). */
+:root[data-theme="dark"] .wb-wurzel{
+  --wb-chrom-flaeche:#121C2B;--wb-chrom-flaeche2:#1A2637;
+  --wb-chrom-rand:#223044;--wb-chrom-rand-stark:#2E3F57;
+  --wb-chrom-text:#E8EEF6;--wb-chrom-neben:#A8B8CC;--wb-chrom-still:#7C8DA3;
+  --wb-primaer:#4B8DF8;--wb-primaer-hover:#6BA1FA;--wb-primaer-weich:#16304F;
+  --wb-gruen:#3DBB80;--wb-rot:#EC6A80;
+  --wb-schatten1:0 1px 2px rgba(0,0,0,.4);
+  --wb-schatten2:0 2px 8px rgba(0,0,0,.45);
+  --wb-schatten3:0 14px 40px rgba(0,0,0,.6);
+
+  --wb-raum:linear-gradient(180deg,#0D1520 0%,#0A111B 100%);
+  --wb-raum-vignette:radial-gradient(120% 90% at 50% 6%,rgba(75,141,248,.05) 0%,rgba(0,0,0,0) 40%,rgba(0,0,0,.42) 100%);
+
+  --wb-tafel:linear-gradient(112deg,#EDF0F3 0%,#E6EAEE 48%,#DDE2E7 100%);
+  --wb-tafel-kante:rgba(2,6,14,.5);
+  --wb-glanz-deckkraft:.22;
+
+  --wb-alu:linear-gradient(180deg,#8A929C 0%,#6B737E 30%,#565E68 55%,#6F7681 80%,#4C545E 100%);
+  --wb-alu-rand:#39414B;
+  --wb-alu-tief:rgba(0,0,0,.5);
+
+  /* KEINE dunkle Tinten-Palette: die Tafel bleibt hell, und #4B8DF8
+     faellt auf ihr auf 2,5:1 ab — das Dunkel-Blau gehoert dem Chrom
+     (--wb-primaer), nicht dem Marker. */
+  --wb-chip:#E8EEF6;--wb-chip-text:#0C1420;--wb-ring:#121C2B;
+
+  --wb-zettel-gelb:linear-gradient(178deg,#EFE494 0%,#E4D26E 100%);
+  --wb-zettel-rosa:linear-gradient(178deg,#EDCAD3 0%,#E3B4C2 100%);
+  --wb-zettel-mint:linear-gradient(178deg,#C4E3D0 0%,#A9D6BC 100%);
+  --wb-zettel-blau:linear-gradient(178deg,#C8DAF0 0%,#B0C9E8 100%);
+
+  --wb-board-schatten:0 26px 60px -14px rgba(0,0,0,.7),0 8px 20px -8px rgba(0,0,0,.5);
+}
+
+/* Weiss / Schlicht: flach, ohne Verlaeufe und ohne Glanz. Steht NACH dem
+   Dunkel-Block — wie in crm.css gewinnt Weiss, wenn beides gesetzt ist. */
+:root[data-weiss="1"] .wb-wurzel{
+  --wb-chrom-flaeche:#FFFFFF;--wb-chrom-flaeche2:#F1F3F9;
+  --wb-chrom-rand:#E6E9F0;--wb-chrom-rand-stark:#D3DAE6;
+  --wb-chrom-text:#0F1B2D;--wb-chrom-neben:#4A5568;--wb-chrom-still:#7A8699;
+  --wb-primaer:#2563EB;--wb-primaer-hover:#1B4B93;--wb-primaer-weich:#EFF6FF;
+  --wb-gruen:#157A48;--wb-rot:#C2374F;
+  --wb-schatten1:0 1px 2px rgba(15,27,45,.05);
+  --wb-schatten2:0 2px 8px rgba(15,27,45,.07);
+  --wb-schatten3:0 14px 40px rgba(15,27,45,.16);
+  --wb-raum:#EEF1F5;
+  --wb-raum-vignette:none;
+  --wb-tafel:#FFFFFF;
+  --wb-tafel-kante:rgba(15,27,45,.14);
+  --wb-glanz-deckkraft:0;
+  --wb-alu:linear-gradient(180deg,#E8EBEF 0%,#CBD1D8 100%);
+  --wb-alu-rand:#AEB6BF;
+  --wb-tinte-blau:#2563EB;
+  --wb-chip:#0F1B2D;--wb-chip-text:#FFFFFF;--wb-ring:#FFFFFF;
+  --wb-zettel-gelb:#FBF0A0;--wb-zettel-rosa:#F9D9E2;--wb-zettel-mint:#D2EEDE;--wb-zettel-blau:#D8E7F9;
+  --wb-board-schatten:0 14px 34px -14px rgba(15,27,45,.25),0 4px 10px -4px rgba(15,27,45,.12);
+}
+
+/* ------------------------------------------------------- Grundgeruest */
+.wb-raum{
+  position:relative;flex:1 1 auto;min-width:0;overflow:hidden;
+  border-radius:22px;border:1px solid var(--wb-chrom-rand);
+  background:var(--wb-raum);
+  box-shadow:var(--wb-schatten1);
+  /* Kein Textmarkieren beim Ziehen ueber die Wand — markiert wird nur
+     in den Zeilen selbst (dort ist user-select wieder an). */
+  user-select:none;-webkit-user-select:none;
+}
+.wb-raum::before{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:var(--wb-raum-vignette);
+}
+.wb-flaeche{
+  position:absolute;inset:0;overflow:hidden;
+  /* Der Browser bekommt KEINE Geste: Pinch und Wisch gehoeren der Wand. */
+  touch-action:none;
+  cursor:default;
+}
+.wb-flaeche.wb-greifbar{cursor:grab}
+.wb-flaeche.wb-greift{cursor:grabbing}
+/* Die Buehne traegt die Welt. transform kommt pro Frame aus JS
+   (translate VOR scale — die Reihenfolge ist Teil des Transform-Kerns).
+   BEWUSST kein will-change: das rastert die Textebene dauerhaft in der
+   GPU und macht jede Notiz permanent unscharf. */
+.wb-buehne{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;z-index:1}
+.wb-tinte{position:absolute;inset:0;z-index:2;pointer-events:none;display:block}
+.wb-flaeche[data-werkzeug="stift"] .wb-tinte,
+.wb-flaeche[data-werkzeug="schwamm"] .wb-tinte{pointer-events:auto}
+
+/* ----------------------------------------------------------- Das Board */
+.wb-board{position:absolute;top:0}
+/* Rahmen: sitzt hinter allem, 26 Welteinheiten breit, mit Falz nach
+   innen — die Tafel liegt IM Rahmen, nicht darauf. */
+.wb-rahmen{
+  position:absolute;inset:-26px;border-radius:18px;
+  background:var(--wb-alu);
+  border:1px solid var(--wb-alu-rand);
+  box-shadow:var(--wb-board-schatten),inset 0 2px 0 rgba(255,255,255,.55),inset 0 -2px 3px var(--wb-alu-tief);
+}
+:root[data-theme="dark"] .wb-rahmen{box-shadow:var(--wb-board-schatten),inset 0 1px 0 rgba(255,255,255,.18),inset 0 -2px 3px var(--wb-alu-tief)}
+.wb-tafelflaeche{
+  position:absolute;inset:0;border-radius:6px;
+  background:var(--wb-tafel);
+  /* Falzschatten: die Kante, an der die Tafel im Rahmen verschwindet. */
+  box-shadow:inset 0 2px 8px var(--wb-tafel-kante),inset 0 -1px 2px rgba(255,255,255,.6);
+}
+.wb-glanz{
+  position:absolute;inset:0;border-radius:6px;pointer-events:none;
+  background:var(--wb-glanz);opacity:var(--wb-glanz-deckkraft);
+}
+/* Textbloecke/Notizen leben hier. overflow bleibt sichtbar, damit
+   Abhak-Kreise links neben einem Block nicht abgeschnitten werden —
+   die Bloecke selbst werden beim Verschieben ins Board geklemmt. */
+.wb-inhaltsebene{position:absolute;inset:0}
+
+/* Leere Tafel: eine handgeschriebene Einladung, kein Formular-Leerlauf.
+   Deckkraft .66 statt .52: hebt den Text auf ~3:1, bleibt aber Bleistift. */
+.wb-leerhinweis{
+  position:absolute;left:50%;top:44%;transform:translate(-50%,-50%) rotate(-1.5deg);
+  font:600 40px/1.3 "Caveat","Segoe Print","Comic Sans MS",cursive;
+  color:rgba(74,85,104,.66);text-align:center;pointer-events:none;white-space:nowrap;
+}
+.wb-leerhinweis svg{display:block;margin:16px auto 0;width:150px;height:150px;color:rgba(74,85,104,.5);transform:translateX(40px) rotate(6deg)}
+
+/* ------------------------------------------------------- Namensschild
+   Ein Schild am oberen Rahmen. --wb-gegen laesst es in der Uebersicht
+   mitwachsen, damit man von "weiter weg" noch lesen kann, wer dran ist. */
+.wb-schild{
+  position:absolute;left:10px;top:-64px;z-index:3;
+  transform:scale(var(--wb-gegen));transform-origin:0 100%;
+  display:flex;align-items:center;gap:14px;
+  padding:12px 20px;border-radius:12px;
+  background:var(--wb-chrom-flaeche);
+  border:1px solid var(--wb-chrom-rand);
+  box-shadow:var(--wb-schatten2);
+  color:var(--wb-chrom-text);white-space:nowrap;
+  pointer-events:none;
+}
+/* Name oben, Rolle/Fortschritt/Aktivitaet darunter — zwei Zeilen, sonst
+   waechst das Schild in der Breite ueber das halbe Board. */
+.wb-schild>span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.wb-schild-punkt{
+  width:12px;height:12px;border-radius:50%;flex-shrink:0;
+  background:var(--wb-chrom-rand-stark);
+}
+.wb-schild-punkt.wb-da{background:var(--wb-gruen);box-shadow:0 0 0 4px color-mix(in srgb,var(--wb-gruen) 22%,transparent)}
+.wb-schild-name{font-size:21px;font-weight:650;letter-spacing:-.01em;line-height:1.2}
+.wb-schild-unter{font-size:14.5px;color:var(--wb-chrom-neben);line-height:1.35}
+.wb-schild-unter b{color:var(--wb-gruen);font-weight:650}
+
+/* Tafel-wischen-Knopf: nur am eigenen Board, oben rechts am Rahmen.
+   --wb-gegen2 (JS) kompensiert staerker als das Schild: der Knopf ist
+   ein ZIEL und braucht in der Tafel-Ansicht >=40 Bildschirm-px. */
+.wb-wischenknopf{
+  position:absolute;right:10px;top:-64px;z-index:3;
+  transform:scale(var(--wb-gegen2,var(--wb-gegen)));transform-origin:100% 100%;
+  display:inline-flex;align-items:center;gap:8px;
+  padding:12px 20px;border-radius:11px;cursor:pointer;
+  background:var(--wb-chrom-flaeche);border:1px solid var(--wb-chrom-rand);
+  color:var(--wb-chrom-neben);font:550 16px/1 inherit;
+  box-shadow:var(--wb-schatten1);
+  transition:color var(--tempo),border-color var(--tempo),background var(--tempo);
+}
+/* Unsichtbare Trefferzone rundherum — oben wie unten 12 px, damit die
+   Hitbox in der Tafel-Ansicht (Knopf optisch ~33 px hoch) auf >= 44
+   Bildschirm-px kommt. Unten liegt sie dabei nur ueber dem Alurahmen:
+   die Knopf-Unterkante endet bei -20 Welteinheiten, der Rahmen reicht
+   bis -26, die Tafelflaeche beginnt erst bei 0. */
+.wb-wischenknopf::after{content:"";position:absolute;left:-10px;right:-10px;top:-12px;bottom:-12px}
+.wb-wischenknopf:hover{color:var(--wb-rot);border-color:var(--wb-chrom-rand-stark);background:var(--wb-chrom-flaeche)}
+.wb-wischenknopf svg{width:18px;height:18px}
+
+/* ------------------------------------------------------- Stiftablage
+   Das Herzstueck: Die Ablage unter dem Board traegt die sechs Marker
+   und den Schwamm — und IST der Farb- bzw. Werkzeugwaehler. Am fremden
+   Board liegt sie nur da (pointer-events aus). */
+.wb-ablage{
+  position:absolute;left:50%;bottom:-78px;transform:translateX(-50%);
+  height:64px;padding:0 34px;border-radius:10px;
+  display:flex;align-items:flex-end;gap:26px;
+  background:var(--wb-alu);
+  border:1px solid var(--wb-alu-rand);
+  box-shadow:0 14px 30px -10px rgba(15,23,42,.4),inset 0 2px 0 rgba(255,255,255,.5),inset 0 -3px 5px var(--wb-alu-tief);
+}
+/* Die Lippe vorn, damit die Stifte nicht "herunterfallen". */
+.wb-ablage::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:12px;border-radius:0 0 10px 10px;
+  background:linear-gradient(180deg,rgba(15,23,42,.12),rgba(15,23,42,.26));
+  pointer-events:none;
+}
+.wb-board:not(.wb-eigen) .wb-ablage{pointer-events:none}
+.wb-marker{
+  position:relative;width:118px;height:26px;margin-bottom:12px;cursor:pointer;
+  border-radius:13px;border:0;padding:0;
+  background:linear-gradient(180deg,#FBFCFD 0%,#E4E8EC 55%,#C9CFD6 100%);
+  box-shadow:0 3px 6px -2px rgba(15,23,42,.45),inset 0 1px 0 rgba(255,255,255,.8);
+  transition:transform var(--tempo),box-shadow var(--tempo);
+}
+/* Kappe links + Farbring rechts — genug, um die Farbe sofort zu lesen. */
+.wb-marker::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:34px;
+  border-radius:13px 4px 4px 13px;background:var(--mf,#2B3036);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -2px 3px rgba(0,0,0,.25);
+}
+.wb-marker::after{
+  content:"";position:absolute;right:14px;top:5px;bottom:5px;width:12px;border-radius:3px;
+  background:var(--mf,#2B3036);opacity:.85;
+}
+.wb-marker:hover{transform:translateY(-7px) rotate(-1deg)}
+.wb-marker.wb-aktiv{
+  transform:translateY(-15px) rotate(-2.5deg);
+  box-shadow:0 12px 18px -6px rgba(15,23,42,.5),inset 0 1px 0 rgba(255,255,255,.8);
+}
+.wb-schwammknopf{
+  position:relative;width:104px;height:44px;margin-bottom:10px;margin-left:12px;cursor:pointer;
+  border:0;padding:0;border-radius:8px;
+  background:linear-gradient(180deg,#5D82C4 0%,#41609C 46%,#F4F6F8 46%,#D8DDE2 100%);
+  box-shadow:0 4px 8px -2px rgba(15,23,42,.5),inset 0 1px 0 rgba(255,255,255,.4);
+  transition:transform var(--tempo),box-shadow var(--tempo);
+}
+/* Gebrauchsspuren auf dem Filz — ein Schwamm, der aussieht wie neu,
+   hat noch nie etwas weggewischt. */
+.wb-schwammknopf::after{
+  content:"";position:absolute;left:10%;right:12%;bottom:8px;height:10px;border-radius:5px;
+  background:repeating-linear-gradient(92deg,rgba(43,48,54,.14) 0 9px,transparent 9px 22px);
+}
+.wb-schwammknopf:hover{transform:translateY(-7px) rotate(1deg)}
+.wb-schwammknopf.wb-aktiv{transform:translateY(-15px) rotate(2deg);box-shadow:0 12px 20px -6px rgba(15,23,42,.55)}
+
+/* --------------------------------------------------- Text & Haftnotiz */
+.wb-el{position:absolute;line-height:1.32}
+.wb-el-text,.wb-el-notiz{
+  font-family:"Caveat","Segoe Print","Comic Sans MS",cursive;font-weight:500;
+  color:var(--ef,#2B3036);
+}
+.wb-el-notiz{
+  background:var(--zf,var(--wb-zettel-gelb));
+  border-radius:2px;padding:26px 26px 34px;min-height:150px;
+  transform:rotate(var(--drehung,0deg));
+  box-shadow:0 12px 22px -8px rgba(15,23,42,.4),0 2px 5px rgba(15,23,42,.18);
+  color:#2B3036; /* auf Papier schreibt der Stift, aber der Grundton bleibt lesbar dunkel */
+}
+.wb-el-notiz{color:var(--ef,#2B3036)}
+/* Der abgeloeste Klebestreifen oben — ein Zettel haengt, er schwebt nicht. */
+.wb-el-notiz::before{
+  content:"";position:absolute;left:50%;top:-9px;width:92px;height:22px;transform:translateX(-50%) rotate(-1deg);
+  background:rgba(255,255,255,.42);border:1px solid rgba(15,23,42,.06);border-radius:2px;
+  box-shadow:0 1px 2px rgba(15,23,42,.08);
+}
+:root[data-weiss="1"] .wb-el-notiz{box-shadow:0 8px 18px -8px rgba(15,27,45,.3)}
+
+/* Eigene Elemente zeigen beim Hover an, dass man sie anfassen kann.
+   Ein fokussierter Block zeigt es auch OHNE Maus darueber (Tastatur,
+   Klick in eine Zeile) — die staerkere gewaehlt-Regel folgt danach. */
+.wb-board.wb-eigen .wb-el:hover,
+.wb-board.wb-eigen .wb-el.wb-fokus{outline:1.5px dashed color-mix(in srgb,var(--wb-primaer) 45%,transparent);outline-offset:6px;border-radius:4px}
+.wb-el.wb-gewaehlt,.wb-board.wb-eigen .wb-el.wb-gewaehlt:hover,
+.wb-board.wb-eigen .wb-el.wb-gewaehlt.wb-fokus{outline:2px solid var(--wb-primaer);outline-offset:6px;border-radius:4px}
+.wb-el.wb-zieht{outline:2px solid var(--wb-primaer);outline-offset:6px;cursor:grabbing}
+
+/* Der Griff: erscheint ueber dem Block, sobald man ihn anfassen kann. */
+.wb-griff{
+  position:absolute;left:50%;top:-30px;transform:translateX(-50%);
+  width:56px;height:20px;border-radius:10px;cursor:grab;
+  display:none;align-items:center;justify-content:center;gap:4px;
+  background:var(--wb-chrom-flaeche);border:1px solid var(--wb-chrom-rand);
+  box-shadow:var(--wb-schatten1);color:var(--wb-chrom-still);
+}
+.wb-griff::before{content:"";width:26px;height:2px;border-radius:1px;
+  background:currentColor;box-shadow:0 5px 0 currentColor,0 -5px 0 currentColor}
+.wb-board.wb-eigen .wb-el:hover .wb-griff,
+.wb-el.wb-gewaehlt .wb-griff,.wb-el.wb-fokus .wb-griff{display:flex}
+.wb-griff:active{cursor:grabbing}
+
+/* Zeilen. Jede Zeile ist ein Flex-Wrapper, der editierbare Span steckt
+   darin — Marker und Werkzeuge stehen AUSSERHALB des Editierbaren. */
+.wb-zeilen{counter-reset:wbz}
+.wb-zeile{position:relative;display:flex;align-items:baseline;gap:.34em;counter-increment:wbz}
+.wb-zeile-text{
+  flex:1 1 auto;min-width:0;outline:none;white-space:pre-wrap;word-break:break-word;
+  user-select:text;-webkit-user-select:text;caret-color:var(--wb-primaer);
+  border-radius:3px;min-height:1.32em;
+  transition:color var(--tempo),opacity var(--tempo);
+}
+.wb-zeile-text::selection{background:color-mix(in srgb,var(--wb-primaer) 26%,transparent)}
+/* Listenmarker per Counter — im selben Duktus wie die Handschrift. */
+.wb-zeilen[data-liste="zahl"] .wb-zeile::before{content:counter(wbz) ".";min-width:1.15em;text-align:right;opacity:.75}
+.wb-zeilen[data-liste="buchstabe"] .wb-zeile::before{content:counter(wbz,lower-alpha) ")";min-width:1.15em;text-align:right;opacity:.75}
+.wb-zeilen[data-liste="punkt"] .wb-zeile::before{content:"•";min-width:.8em;text-align:center;opacity:.75}
+
+/* Abhaken: bei Checklisten fest im Fluss, sonst als Hover-Kreis links
+   AUSSERHALB des Blocks (wie eine Randnotiz). */
+.wb-abhaken{
+  flex-shrink:0;width:1.05em;height:1.05em;padding:0;border:0;cursor:pointer;
+  background:none;color:inherit;position:relative;top:.12em;
+  border-radius:4px;
+  /* crm.css setzt global button{font:600 13.5px…} — das wuerde die
+     em-Basis des Kaestchens auf 13,5px festnageln, egal wie gross die
+     Handschrift daneben ist. Das Kaestchen skaliert mit der Zeile. */
+  font-size:inherit;line-height:1;
+}
+/* Unsichtbare, grosszuegigere Trefferflaeche: Ein Kaestchen ist zum
+   TREFFEN da — vor allem herausgezoomt und am Telefon. */
+.wb-abhaken::after{content:"";position:absolute;inset:-0.35em}
+.wb-abhaken svg{width:100%;height:100%;display:block}
+/* Falls das Kaestchen doch je Tastaturfokus bekommt: ein RING mit
+   Abstand, klar getrennt vom Fuellzustand (haette sonst wie ein dritter
+   Zustand ausgesehen). Klicks fokussieren es gar nicht mehr erst. */
+.wb-abhaken:focus-visible{outline:2px solid var(--wb-primaer);outline-offset:3px;border-radius:6px}
+.wb-abhaken .wb-kasten-rand{stroke:currentColor;opacity:.55;transition:opacity var(--tempo)}
+.wb-abhaken .wb-haken{stroke:var(--wb-tinte-gruen);stroke-width:2.6}
+.wb-abhaken:hover .wb-kasten-rand{opacity:1}
+.wb-zeilen:not([data-liste="check"]) .wb-abhaken{
+  position:absolute;left:-1.45em;top:.1em;width:1em;height:1em;opacity:0;
+  transition:opacity var(--tempo);
+}
+.wb-zeilen:not([data-liste="check"]) .wb-zeile:hover .wb-abhaken,
+.wb-zeilen:not([data-liste="check"]) .wb-zeile.wb-erledigt .wb-abhaken{opacity:1}
+/* Fremde Boards: nichts ist anklickbar, Zeilenwerkzeuge existieren nicht. */
+.wb-board:not(.wb-eigen) .wb-abhaken{pointer-events:none}
+.wb-board:not(.wb-eigen) .wb-zeilen:not([data-liste="check"]) .wb-abhaken{display:none}
+.wb-board:not(.wb-eigen) .wb-zeile-text{user-select:none;-webkit-user-select:none}
+
+.wb-zeile.wb-erledigt .wb-zeile-text{text-decoration:line-through;text-decoration-thickness:2px;
+  text-decoration-color:color-mix(in srgb,var(--wb-tinte-gruen) 65%,transparent);opacity:.5}
+.wb-zeile.wb-gestrichen .wb-zeile-text{text-decoration:line-through;text-decoration-thickness:2px;opacity:.6}
+
+/* Zeilenwerkzeuge rechts neben der Zeile: durchstreichen, loeschen.
+   --wb-anti2 (JS) skaliert sie gegen den Zoom: auf dem Schirm bleiben
+   sie so gross wie bei 100 % (bei 300 % waren es ~90-px-Riesen).
+   Ursprung links/mittig: sie schrumpfen zur Zeile hin und wachsen von
+   ihr weg — nie ueber den Text. */
+.wb-zeile-tools{
+  position:absolute;right:-2.5em;top:0;display:none;gap:2px;align-items:center;
+  transform:scale(var(--wb-anti2,1));transform-origin:0 50%;
+}
+.wb-zeile:hover .wb-zeile-tools{display:inline-flex}
+.wb-zeile-tools{font-size:inherit}
+.wb-zeile-tools button{
+  width:1.35em;height:1.35em;padding:0;border:0;border-radius:5px;cursor:pointer;
+  display:grid;place-items:center;background:var(--wb-chrom-flaeche);
+  color:var(--wb-chrom-still);border:1px solid var(--wb-chrom-rand);
+  box-shadow:var(--wb-schatten1);font:inherit;font-size:inherit;
+}
+.wb-zeile-tools button:hover{color:var(--wb-chrom-text)}
+.wb-zeile-tools button.wb-zeile-weg:hover{color:var(--wb-rot)}
+.wb-zeile-tools svg{width:.8em;height:.8em}
+.wb-board:not(.wb-eigen) .wb-zeile-tools{display:none!important}
+
+/* -------------------------------------------- Block-Werkzeugkasten
+   Erscheint ueber dem fokussierten Block. --wb-anti = 1/Zoom: der
+   Kasten bleibt bildschirmgross, egal wie nah man an der Tafel steht. */
+.wb-kasten{
+  position:absolute;left:0;bottom:100%;margin-bottom:40px;z-index:5;
+  transform:scale(var(--wb-anti));transform-origin:0 100%;
+  display:none;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;
+  background:var(--wb-chrom-flaeche);border:1px solid var(--wb-chrom-rand);
+  box-shadow:var(--wb-schatten2);
+  font-family:'Inter','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;
+  font-size:13px;color:var(--wb-chrom-neben);white-space:nowrap;
+  cursor:default;line-height:1.2;
+}
+.wb-el.wb-fokus .wb-kasten{display:flex}
+/* Unten geoeffnet, wenn oben kein Platz ist — kastenAusrichten (JS)
+   entscheidet beim Fokussieren; sonst ueberlappte der Kasten das
+   Namensschild und rutschte bei 300 % hinter die Kopfzeile. */
+.wb-kasten.wb-unten{bottom:auto;top:100%;margin-bottom:0;margin-top:40px;transform-origin:0 0}
+.wb-kasten-gruppe{display:flex;align-items:center;gap:3px}
+.wb-kasten-trenner{width:1px;height:20px;background:var(--wb-chrom-rand)}
+.wb-kasten button{
+  min-width:28px;height:28px;padding:0 6px;border:0;border-radius:7px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;
+  background:none;color:var(--wb-chrom-neben);font:600 12.5px/1 inherit;
+  transition:background var(--tempo),color var(--tempo);
+}
+.wb-kasten button:hover{background:var(--wb-chrom-flaeche2);color:var(--wb-chrom-text)}
+.wb-kasten button.wb-aktiv{background:var(--wb-primaer-weich);color:var(--wb-primaer)}
+.wb-kasten button svg{width:15px;height:15px}
+/* Fuellung EXPLIZIT wiederholen: die button-Regeln oben (Basis, :hover,
+   .wb-aktiv) gewinnen sonst gegen die schwaechere .wb-farbe/.wb-zettel-
+   wahl-Regel — die Farbknoepfe waeren unsichtbare bzw. beim aktiven
+   Knopf blau uebertuenchte Kreise. Aktiv/Hover zeigen Ring und Scale. */
+.wb-kasten .wb-farbe{min-width:22px;width:22px;height:22px;border-radius:50%}
+.wb-kasten button.wb-farbe,.wb-kasten button.wb-farbe:hover,.wb-kasten button.wb-farbe.wb-aktiv{background:var(--f)}
+.wb-kasten button.wb-zettelwahl,.wb-kasten button.wb-zettelwahl:hover,.wb-kasten button.wb-zettelwahl.wb-aktiv{background:var(--z)}
+.wb-kasten button.wb-kasten-weg:hover{background:color-mix(in srgb,var(--wb-rot) 12%,transparent);color:var(--wb-rot)}
+
+/* ------------------------------------------------------ Farbpunkte
+   Gemeinsame Optik fuer Kasten und Werkzeugleiste. */
+.wb-farbe{
+  position:relative;width:24px;height:24px;border-radius:50%;border:0;padding:0;cursor:pointer;
+  background:var(--f);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.28),0 1px 2px rgba(15,23,42,.25);
+  transition:transform var(--tempo),box-shadow var(--tempo);
+}
+.wb-farbe:hover{transform:scale(1.14)}
+.wb-farbe.wb-aktiv{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.28),0 0 0 2px var(--wb-ring),0 0 0 4px var(--wb-primaer)}
+/* Farb- und Dickengruppen liegen in einer Reihe — .wb-dicke ist ein
+   Grid-Knopf (block-level) und wuerde sonst stapeln. */
+.wb-kontext-farben,.wb-kontext-dicken,.wb-kontext-notiz{display:flex;align-items:center;gap:6px}
+
+/* --------------------------------------------------------- Kopfzeile */
+.wb-kopf{
+  position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:10;
+  display:flex;align-items:center;gap:10px;max-width:calc(100% - 24px);
+}
+.wb-segmente{
+  display:flex;gap:2px;padding:4px;border-radius:13px;overflow-x:auto;scrollbar-width:none;
+  background:var(--wb-chrom-flaeche);border:1px solid var(--wb-chrom-rand);box-shadow:var(--wb-schatten2);
+}
+.wb-segmente::-webkit-scrollbar{display:none}
+.wb-seg{
+  border:0;padding:7px 14px;border-radius:9px;cursor:pointer;white-space:nowrap;
+  background:none;color:var(--wb-chrom-neben);font:550 13px/1.2 inherit;
+  transition:background var(--tempo),color var(--tempo);
+}
+.wb-seg:hover{background:var(--wb-chrom-flaeche2);color:var(--wb-chrom-text)}
+.wb-seg.wb-aktiv{background:var(--wb-primaer-weich);color:var(--wb-primaer);font-weight:650}
+.wb-zoomgruppe{
+  display:flex;align-items:center;gap:2px;padding:4px;border-radius:13px;
+  background:var(--wb-chrom-flaeche);border:1px solid var(--wb-chrom-rand);box-shadow:var(--wb-schatten2);
+}
+.wb-zoomgruppe button{
+  min-width:32px;height:30px;padding:0 8px;border:0;border-radius:9px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:none;color:var(--wb-chrom-neben);font:600 12.5px/1 inherit;
+  font-variant-numeric:tabular-nums;
+  transition:background var(--tempo),color var(--tempo);
+}
+.wb-zoomgruppe button:hover{background:var(--wb-chrom-flaeche2);color:var(--wb-chrom-text)}
+.wb-zoomgruppe button svg{width:16px;height:16px}
+.wb-zoom-stand{min-width:52px}
+
+/* ---------------------------------------------------- Werkzeugleiste */
+.wb-leiste{
+  position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;
+  display:flex;align-items:center;gap:8px;padding:7px;border-radius:16px;
+  background:var(--wb-chrom-flaeche);border:1px solid var(--wb-chrom-rand);
+  box-shadow:var(--wb-schatten3);
+  max-width:calc(100% - 20px);
+}
+.wb-knopf{
+  position:relative;width:42px;height:42px;border:0;border-radius:11px;cursor:pointer;
+  display:grid;place-items:center;background:none;color:var(--wb-chrom-neben);
+  transition:background var(--tempo),color var(--tempo);
+}
+.wb-knopf:hover{background:var(--wb-chrom-flaeche2);color:var(--wb-chrom-text)}
+/* Der Ring macht den aktiven Zustand auch dort eindeutig, wo die weiche
+   Primaerflaeche fast in der Leiste verschwindet (Graphit). */
+.wb-knopf.wb-aktiv{background:var(--wb-primaer-weich);color:var(--wb-primaer);
+  box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--wb-primaer) 45%,transparent)}
+.wb-knopf:disabled{opacity:.35;cursor:default;background:none;color:var(--wb-chrom-neben)}
+.wb-knopf svg{width:20px;height:20px}
+.wb-leiste-trenner{width:1px;height:26px;background:var(--wb-chrom-rand);flex-shrink:0}
+/* Kontextbereich: Farben+Dicken beim Stift, Zettel bei der Notiz.
+   max-width-Animation vermeiden — der Bereich klappt schlicht um. */
+.wb-kontext{display:flex;align-items:center;gap:8px}
+.wb-kontext[hidden]{display:none}
+.wb-dicke{
+  width:30px;height:30px;border:0;border-radius:8px;cursor:pointer;padding:0;
+  display:grid;place-items:center;background:none;color:var(--wb-chrom-neben);
+  transition:background var(--tempo),color var(--tempo);
+}
+.wb-dicke:hover{background:var(--wb-chrom-flaeche2);color:var(--wb-chrom-text)}
+.wb-dicke.wb-aktiv{background:var(--wb-primaer-weich);color:var(--wb-primaer)}
+.wb-dicke i{display:block;border-radius:99px;background:currentColor}
+.wb-zettelwahl{
+  width:26px;height:26px;border:1px solid rgba(15,23,42,.12);border-radius:5px;cursor:pointer;padding:0;
+  background:var(--z);transition:transform var(--tempo),box-shadow var(--tempo);
+}
+.wb-zettelwahl:hover{transform:scale(1.12) rotate(-2deg)}
+.wb-zettelwahl.wb-aktiv{box-shadow:0 0 0 2px var(--wb-ring),0 0 0 4px var(--wb-primaer)}
+
+/* Tooltips: kleine Schilder ueber den Knoepfen, mit Tastenkuerzel. */
+[data-tip]{position:relative}
+[data-tip]::after{
+  content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 9px);transform:translateX(-50%) translateY(3px);
+  padding:5px 9px;border-radius:7px;white-space:nowrap;pointer-events:none;
+  background:var(--wb-chip);color:var(--wb-chip-text);
+  font:550 11.5px/1.2 'Inter','Segoe UI',system-ui,sans-serif;
+  opacity:0;transition:opacity var(--tempo),transform var(--tempo);z-index:20;
+}
+[data-tip]:hover::after{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Hilfe-Popover mit allen Kuerzeln. right setzt hilfeUmschalten (JS)
+   buendig zum ?-Knopf; die Breite + nowrap verhindern die krummen
+   Umbrueche ("Shift+ / Rad", "Strg Z / Y" ueber zwei Zeilen). */
+.wb-hilfe{
+  position:absolute;bottom:76px;right:16px;z-index:12;width:368px;max-width:calc(100% - 20px);
+  padding:16px 18px;border-radius:14px;
+  background:var(--wb-chrom-flaeche);border:1px solid var(--wb-chrom-rand);box-shadow:var(--wb-schatten3);
+  color:var(--wb-chrom-text);font-size:12.5px;
+}
+.wb-hilfe h3{font-size:13px;margin:0 0 10px;color:var(--wb-chrom-text)}
+.wb-hilfe dl{display:grid;grid-template-columns:auto 1fr;gap:7px 12px;margin:0;align-items:baseline}
+.wb-hilfe dt{color:var(--wb-chrom-neben)}
+.wb-hilfe dd{margin:0;text-align:right;color:var(--wb-chrom-still);white-space:nowrap}
+.wb-hilfe kbd{
+  display:inline-block;padding:2px 6px;border-radius:5px;margin-left:3px;
+  background:var(--wb-chrom-flaeche2);border:1px solid var(--wb-chrom-rand);
+  font:600 11px/1.2 inherit;color:var(--wb-chrom-neben);
+}
+
+/* --------------------------------------------------- Marquee/Schwamm */
+.wb-marquee{
+  position:absolute;z-index:6;pointer-events:none;border-radius:3px;
+  border:1.5px solid var(--wb-primaer);
+  background:color-mix(in srgb,var(--wb-primaer) 10%,transparent);
+}
+.wb-schwammkreis{
+  position:absolute;z-index:6;pointer-events:none;border-radius:50%;
+  border:2px solid color-mix(in srgb,var(--wb-rot) 70%,transparent);
+  background:color-mix(in srgb,var(--wb-rot) 8%,transparent);
+  transform:translate(-50%,-50%);
+}
+
+/* --------------------------------------------------------- Toasts */
+.wb-toasts{
+  position:absolute;left:50%;bottom:82px;transform:translateX(-50%);z-index:30;
+  display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;
+  max-width:calc(100% - 24px);
+}
+.wb-toast{
+  display:flex;align-items:center;gap:12px;padding:11px 16px;border-radius:12px;
+  background:var(--wb-chip);color:var(--wb-chip-text);
+  font:500 13px/1.35 'Inter','Segoe UI',system-ui,sans-serif;
+  box-shadow:var(--wb-schatten3);pointer-events:auto;
+  opacity:0;transform:translateY(10px);
+  transition:opacity var(--tempo),transform var(--tempo);
+  max-width:100%;
+}
+.wb-toast.wb-sichtbar{opacity:1;transform:translateY(0)}
+.wb-toast button{
+  border:0;padding:6px 12px;border-radius:8px;cursor:pointer;flex-shrink:0;
+  background:color-mix(in srgb,var(--wb-chip-text) 14%,transparent);
+  color:inherit;font:650 12.5px/1 inherit;
+}
+.wb-toast button:hover{background:var(--wb-primaer);color:#fff}
+
+/* --------------------------------------------------------- Dialoge */
+.wb-dialog{background:var(--wb-chrom-flaeche);color:var(--wb-chrom-text)}
+.wb-dialog h2{font-size:17px}
+.wb-dialog .sub{color:var(--wb-chrom-neben)}
+.wb-dialog .dialog-fuss{border-top-color:var(--wb-chrom-rand)}
+.wb-dialog button.sekundaer{background:var(--wb-chrom-flaeche);color:var(--wb-chrom-text);border:1px solid var(--wb-chrom-rand-stark)}
+.wb-dialog button.sekundaer:hover{background:var(--wb-chrom-flaeche2)}
+.wb-dialog button.gefahr{background:var(--wb-rot);color:#fff;border:0}
+/* Ein ruhiger, absichtsvoller Fokusring statt des doppelten UA-Ovals —
+   der Dialog fokussiert beim Oeffnen seinen ersten Knopf. */
+.wb-wurzel button:focus{outline:none}
+.wb-wurzel button:focus-visible,.wb-dialog button:focus-visible{
+  outline:2px solid var(--wb-primaer);outline-offset:2px}
+.wb-dialog button:focus{outline:none}
+
+/* Sitzung abgelaufen: Overlay ueber der ganzen Wand. */
+.wb-anmelden{
+  position:absolute;inset:0;z-index:40;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--wb-chrom-text) 40%,transparent);
+  backdrop-filter:blur(3px);
+}
+.wb-anmelden-karte{
+  background:var(--wb-chrom-flaeche);border:1px solid var(--wb-chrom-rand);border-radius:var(--r-lg);
+  box-shadow:var(--wb-schatten3);padding:30px 34px;text-align:center;max-width:360px;
+  color:var(--wb-chrom-text);
+}
+.wb-anmelden-karte h2{font-size:17px;margin:0 0 6px}
+.wb-anmelden-karte p{font-size:13.5px;color:var(--wb-chrom-neben);margin:0 0 18px}
+.wb-anmelden-karte a{
+  display:inline-flex;padding:9px 18px;border-radius:var(--r-sm);
+  background:var(--wb-primaer);color:#fff;font:600 13.5px/1.2 inherit;text-decoration:none;
+}
+.wb-anmelden-karte a:hover{background:var(--wb-primaer-hover);text-decoration:none}
+
+/* --------------------------------------------- Mobiles Bearbeitungsblatt */
+.wb-mobil{
+  position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;
+  background:var(--wb-chrom-flaeche);color:var(--wb-chrom-text);
+}
+.wb-mobil-kopf{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  /* Links Luft fuer den schwebenden Menue-Knopf der Schale (fixed,
+     ueber dem Blatt) — sonst verdeckt er den Titel. */
+  padding:12px 14px 12px 64px;border-bottom:1px solid var(--wb-chrom-rand);flex-shrink:0;
+}
+.wb-mobil-kopf b{font-size:15px}
+.wb-mobil-fertig{
+  border:0;border-radius:10px;padding:10px 18px;cursor:pointer;
+  background:var(--wb-primaer);color:#fff;font:650 14px/1 inherit;
+}
+.wb-mobil-werkzeuge{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:10px 14px;border-bottom:1px solid var(--wb-chrom-rand);flex-shrink:0;
+}
+/* Der Kasten im Blatt bricht UM statt rechts hinauszulaufen — sonst
+   waeren Groesse, Zettelfarben und Loeschen auf 390 px unerreichbar. */
+.wb-mobil-werkzeuge .wb-mobil-kasten{flex-wrap:wrap;white-space:normal;row-gap:8px}
+.wb-mobil-werkzeuge .wb-kasten-gruppe button{min-width:44px;height:44px;border-radius:10px}
+.wb-mobil-zeilen{
+  flex:1 1 auto;min-height:0;overflow-y:auto;padding:18px 16px 40px;
+  font-family:"Caveat","Segoe Print","Comic Sans MS",cursive;font-weight:500;
+}
+.wb-mobil-zeilen .wb-zeile{padding:4px 0;min-height:44px;align-items:center}
+.wb-mobil-zeilen .wb-zeile-tools{position:static;display:inline-flex;margin-left:auto}
+.wb-mobil-zeilen .wb-zeilen:not([data-liste="check"]) .wb-abhaken{position:static;opacity:1;left:auto}
+.wb-mobil-zeilen .wb-abhaken{width:30px;height:30px;top:0}
+.wb-mobil-zeilen .wb-zeile-tools button{width:38px;height:38px;font-size:16px}
+
+/* --------------------------------------------------------- Konfetti */
+.wb-konfetti{position:absolute;z-index:8;pointer-events:none;width:0;height:0}
+.wb-konfetti i{position:absolute;width:7px;height:11px;border-radius:2px;left:0;top:0}
+
+/* [hidden] gewinnt IMMER — sonst schlaegt jede display-Regel oben das
+   Attribut, und "versteckt" hiesse nur "gemeint". */
+.wb-wurzel [hidden],.wb-mobil[hidden]{display:none!important}
+
+/* ------------------------------------------------------------ Mobil */
+@media (max-width:860px){
+  /* Auf dem Telefon tippt man nicht in die gezoomte Wand: der Tap auf
+     einen Block oeffnet das Vollbild-Blatt (whiteboard.js). Die Spans
+     der Buehne duerfen deshalb keinen Fokus fangen. */
+  .wb-buehne .wb-zeile-text{pointer-events:none}
+  body:has(#wb-wurzel) main{padding:10px 10px 10px 0}
+  .wb-raum{border-radius:16px}
+  .wb-kopf{top:10px;gap:6px}
+  .wb-seg{padding:8px 11px;font-size:12.5px}
+  /* Zoomen macht die Hand (kneifen) — aber "Alles zeigen" bleibt: ohne
+     den Knopf faende man aus einer verirrten Ansicht kaum zurueck.
+     Mit .wb-zoomgruppe davor, sonst gewinnt ".wb-zoomgruppe button". */
+  .wb-zoomgruppe{padding:3px}
+  .wb-zoomgruppe .wb-zoom-rein,.wb-zoomgruppe .wb-zoom-raus,.wb-zoomgruppe .wb-zoom-stand{display:none}
+  /* Unten rechts sitzt Alexandras Sprachkugel (sprache.js, fixed) — die
+     Leiste weicht ihr aus: linksbuendig statt zentriert. */
+  .wb-leiste{bottom:10px;left:10px;right:auto;transform:none;
+    max-width:calc(100% - 104px);gap:5px;padding:6px;border-radius:14px;
+    overflow-x:auto;scrollbar-width:none}
+  .wb-leiste::-webkit-scrollbar{display:none}
+  .wb-knopf{width:44px;height:44px;flex-shrink:0}
+  .wb-kontext .wb-farbe{width:26px;height:26px}
+  .wb-hilfe{right:10px;left:10px;width:auto;bottom:72px}
+  .wb-toasts{bottom:76px}
+  [data-tip]::after{display:none} /* Tooltips sind Maus-Wissen. */
+}
+
+/* ------------------------------------------- Schalen-Gurt (nur Whiteboard)
+   Die Topbar der Schale ist auf schmalen Geraeten breiter als der
+   Viewport (.topbar-rechts allein 406 px bei 390) — der mobile
+   Layout-Viewport waechst dann auf ihre Breite und die GANZE Seite
+   steht herausgezoomt da. crm.css bleibt unberuehrt: geschient wird
+   ueber body:has(#wb-wurzel) nur die Whiteboard-Seite — Datum- und
+   Weiss-Chip einklappen, Terminhinweis stauchen, Ueberlauf kappen. */
+@media (max-width:600px){
+  body:has(#wb-wurzel){max-width:100vw;overflow-x:clip}
+  body:has(#wb-wurzel) .topbar{gap:8px;min-width:0}
+  /* Datum, Weiss-Schalter und der Namens-Text fallen weg (der Avatar
+     traegt die Identitaet); notfalls bricht die Gruppe um statt ueberzulaufen. */
+  body:has(#wb-wurzel) .topbar-rechts{gap:8px;min-width:0;flex-wrap:wrap;justify-content:flex-end}
+  body:has(#wb-wurzel) .topbar-rechts .datum-chip,
+  body:has(#wb-wurzel) .topbar-rechts .weiss-schalter,
+  body:has(#wb-wurzel) .topbar-rechts .nutzer-block{display:none}
+  body:has(#wb-wurzel) .topbar-rechts .termin-hinweis{min-width:0;overflow:hidden}
+  body:has(#wb-wurzel) .topbar-rechts .termin-hinweis span{
+    max-width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+
+/* --------------------------------------------- Bewegung reduzieren
+   Die Schmuck-Animationen (GSAP-Haken, Konfetti, Wisch-Bahn, Fit-Tweens)
+   schaltet whiteboard.js selbst ab. Hier verschwinden zusaetzlich alle
+   CSS-Uebergaenge, die nur Zierde sind. */
+@media (prefers-reduced-motion:reduce){
+  .wb-marker,.wb-schwammknopf,.wb-farbe,.wb-zettelwahl,.wb-toast,
+  [data-tip]::after,.wb-knopf,.wb-seg,.wb-dicke,.wb-zeile-text{transition:none}
+}
