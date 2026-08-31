@@ -95,6 +95,11 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   --wb-chip:#14161A;          /* dunkler Chip (Toast, Tooltip) */
   --wb-chip-text:#FFFFFF;
   --wb-ring:#FFFFFF;          /* "Luftspalt" um aktive Farbpunkte */
+  --wb-flaeche-fest:#FFFFFF;  /* --wb-chrom-flaeche als echte FARBE (fuer color-mix) */
+  /* Wie viel Marker-Tinte in der Schrift eines Kategorie-Schilds steckt;
+     der Rest ist die Textfarbe des Themes. Auf hellem Grund darf die Tinte
+     fast allein stehen — sie ist dort dunkel genug. Siehe .wb-kat. */
+  --wb-kat-anteil:78%;
 
   /* Der Raum: eine ruhige Wandflaeche hinter den Boards. Unter Graphit
      scheint bewusst die Buehne des Body durch (transparent), unter dem
@@ -157,7 +162,12 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   /* KEINE dunkle Tinten-Palette: die Tafel bleibt hell, und #4B8DF8
      faellt auf ihr auf 2,5:1 ab — das Dunkel-Blau gehoert dem Chrom
      (--wb-primaer), nicht dem Marker. */
-  --wb-chip:#E8EEF6;--wb-chip-text:#0C1420;--wb-ring:#121C2B;
+  --wb-chip:#E8EEF6;--wb-chip-text:#0C1420;--wb-ring:#121C2B;--wb-flaeche-fest:#121C2B;
+  /* Auf dunklem Grund reicht die Tinte allein nicht: Rot (#C03B3B) und
+     Lila (#7A4FB6) sind fuer die HELLE Tafel gemischt und kommen auf
+     #121C2B nur auf gut 4:1 (gemessen). Also mehr helle Textfarbe
+     dazu — die Farbe bleibt erkennbar, die Schrift wird lesbar (5,5:1). */
+  --wb-kat-anteil:58%;
 
   --wb-zettel-gelb:linear-gradient(178deg,#EFE494 0%,#E4D26E 100%);
   --wb-zettel-rosa:linear-gradient(178deg,#EDCAD3 0%,#E3B4C2 100%);
@@ -186,7 +196,7 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   --wb-alu:linear-gradient(180deg,#E8EBEF 0%,#CBD1D8 100%);
   --wb-alu-rand:#AEB6BF;
   --wb-tinte-blau:#2563EB;
-  --wb-chip:#0F1B2D;--wb-chip-text:#FFFFFF;--wb-ring:#FFFFFF;
+  --wb-chip:#0F1B2D;--wb-chip-text:#FFFFFF;--wb-ring:#FFFFFF;--wb-flaeche-fest:#FFFFFF;
   --wb-zettel-gelb:#FBF0A0;--wb-zettel-rosa:#F9D9E2;--wb-zettel-mint:#D2EEDE;--wb-zettel-blau:#D8E7F9;
   --wb-board-schatten:0 14px 34px -14px rgba(15,27,45,.25),0 4px 10px -4px rgba(15,27,45,.12);
 }
@@ -308,16 +318,25 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 .wb-schild-unter{font-size:14.5px;color:var(--wb-chrom-neben);line-height:1.35}
 .wb-schild-unter b{color:var(--wb-gruen);font-weight:650}
 
-/* Tafel-wischen-Knopf: nur am eigenen Board, oben rechts am Rahmen.
-   --wb-gegen2 (JS) kompensiert staerker als das Schild: der Knopf ist
-   ein ZIEL und braucht in der Tafel-Ansicht >=40 Bildschirm-px. */
-.wb-wischenknopf{
+/* Die zwei Tafel-Knoepfe oben rechts am Rahmen: "Nach Priorität ordnen"
+   und "Tafel wischen". Sie stehen in EINER Reihe, und die Reihe traegt
+   die Gegen-Skalierung — frueher hing sie am Wisch-Knopf allein. Zwei
+   absolut gesetzte Knoepfe mit je eigenem transform-origin schoeben sich
+   bei jedem Zoomschritt uebereinander: ein transform aendert die Lage,
+   nicht den Platzbedarf.
+   --wb-gegen2 (JS) kompensiert staerker als das Namensschild: das sind
+   ZIELE und brauchen in der Tafel-Ansicht >=40 Bildschirm-px. */
+.wb-tafelknoepfe{
   position:absolute;right:10px;top:-64px;z-index:3;
+  display:flex;align-items:flex-end;gap:10px;
   transform:scale(var(--wb-gegen2,var(--wb-gegen)));transform-origin:100% 100%;
+}
+.wb-wischenknopf,.wb-ordnenknopf{
+  position:relative;
   display:inline-flex;align-items:center;gap:8px;
   padding:12px 20px;border-radius:11px;cursor:pointer;
   background:var(--wb-chrom-flaeche);border:1px solid var(--wb-chrom-rand);
-  color:var(--wb-chrom-neben);font:550 16px/1 inherit;
+  color:var(--wb-chrom-neben);font:550 16px/1 inherit;white-space:nowrap;
   box-shadow:var(--wb-schatten1);
   transition:color var(--tempo),border-color var(--tempo),background var(--tempo);
 }
@@ -326,9 +345,15 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
    Bildschirm-px kommt. Unten liegt sie dabei nur ueber dem Alurahmen:
    die Knopf-Unterkante endet bei -20 Welteinheiten, der Rahmen reicht
    bis -26, die Tafelflaeche beginnt erst bei 0. */
-.wb-wischenknopf::after{content:"";position:absolute;left:-10px;right:-10px;top:-12px;bottom:-12px}
+.wb-wischenknopf::after,.wb-ordnenknopf::after{
+  content:"";position:absolute;left:-5px;right:-5px;top:-12px;bottom:-12px}
 .wb-wischenknopf:hover{color:var(--wb-rot);border-color:var(--wb-chrom-rand-stark);background:var(--wb-chrom-flaeche)}
-.wb-wischenknopf svg{width:18px;height:18px}
+.wb-ordnenknopf:hover{color:var(--wb-primaer);border-color:color-mix(in srgb,var(--wb-primaer) 45%,var(--wb-chrom-rand))}
+.wb-wischenknopf svg,.wb-ordnenknopf svg{width:18px;height:18px;flex-shrink:0}
+/* In der Wand-Uebersicht ordnet niemand: dort schaut man auf die Wand und
+   faehrt erst an eine Tafel heran. Der Knopf waere bei der starken
+   Gegen-Skalierung ausserdem so breit, dass er ins Namensschild liefe. */
+.wb-flaeche[data-ansicht="alle"] .wb-ordnenknopf{display:none}
 
 /* ------------------------------------------------------- Stiftablage
    Das Herzstueck: Die Ablage unter dem Board traegt die sechs Marker
@@ -506,8 +531,58 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   font:600 12.5px/1.3 'Inter','Segoe UI',system-ui,sans-serif;
   color:var(--wb-chrom-still);white-space:nowrap;
 }
-.wb-el.wb-fuermich>.wb-fahne,
+.wb-el.wb-fuermich .wb-fahne,
 .wb-fahne.wb-fuermich{color:var(--wb-primaer);border-color:color-mix(in srgb,var(--wb-primaer) 40%,var(--wb-chrom-rand))}
+
+/* Die Marken-Reihe oben links am Block: Kategorie-Schild, dahinter die
+   Herkunftsfahne. Beide haengen an derselben Ecke und koennen gleichzeitig
+   auftreten — nebeneinander in einer Reihe ist die einzige Anordnung, in
+   der sie sich nicht gegenseitig verdecken. Die REIHE traegt jetzt die
+   Gegen-Skalierung (frueher die Fahne selbst): so wachsen beide zusammen
+   und ihr Abstand bleibt bei jedem Zoom derselbe.
+   align-items:flex-end, damit die Unterkanten auf einer Linie stehen —
+   das Schild ist eine Spur hoeher als die Fahne. */
+.wb-marken{
+  position:absolute;left:0;top:0;z-index:4;pointer-events:none;
+  display:flex;align-items:flex-end;gap:5px;
+  transform:scale(var(--wb-anti2,1)) translateY(-100%);
+  transform-origin:0 0;margin-top:-6px;
+}
+.wb-marken .wb-fahne{position:static;transform:none;margin-top:0}
+
+/* Das Kategorie-Schild. Gleiche Familie wie die Fahne — kleine Kapsel,
+   dieselbe Schrift, dieselbe abgeknickte untere linke Ecke — nur eben in
+   der Farbe ihrer Kategorie: rot Kunden, orange Vertrieb, lila Internes,
+   gruen Content. Die Farbe kommt als --kf aus whiteboard.js und ist eine
+   der vier MARKER-Tinten; die Wand traegt weiterhin nur eine Palette.
+
+   Warum die Farbe nicht direkt als Textfarbe: die Tinten sind fuer die
+   helle Tafel gemischt (#C26E1E Orange kommt auf Weiss nur auf 3,8:1) und
+   das Chrom wechselt mit dem Theme. Der Text laeuft darum zu 78 % in die
+   Tinte und zu 22 % in die Textfarbe des Themes — im Hellen dunkelt das
+   ab, im Dunklen hellt es auf, und beide Male steht der Text ueber 4,5:1
+   (gemessen 4,7 bis 6,3). Fuellung und Rand tragen dieselbe Tinte in
+   schwacher Dosis, damit das Schild als farbig gelesen wird, nicht als
+   bunter Text auf Grau.
+
+   Die Fuellung mischt gegen --wb-flaeche-fest, NICHT gegen
+   --wb-chrom-flaeche: unter Graphit ist --surface ein Verlauf, und ein
+   Verlauf ist als Farbe ungueltig — color-mix haette die ganze
+   Deklaration fallen lassen und das Schild waere durchsichtig gewesen
+   (genau die Falle, vor der der Kopf dieses Blatts warnt; hier einmal
+   hineingetappt und gemessen). */
+.wb-kat{
+  padding:2px 8px;border-radius:6px 6px 6px 2px;
+  background:color-mix(in srgb,var(--kf,#2B3036) 12%,var(--wb-flaeche-fest,#FFFFFF));
+  border:1px solid color-mix(in srgb,var(--kf,#2B3036) 42%,var(--wb-chrom-rand));
+  font:650 12.5px/1.3 'Inter','Segoe UI',system-ui,sans-serif;
+  letter-spacing:.01em;white-space:nowrap;
+  color:color-mix(in srgb,var(--kf,#2B3036) var(--wb-kat-anteil,78%),var(--wb-chrom-text));
+}
+/* Steht der Block direkt unter seiner eigenen Ueberschrift, faellt sein
+   Schild weg (kennzeichenPruefen in whiteboard.js): die Ueberschrift sagt
+   es schon, und beim engen 16er-Abstand laege das Schild in ihrem Text. */
+.wb-el.wb-kat-still .wb-kat{display:none}
 
 /* Derselbe Hinweis fuer eine handgeschriebene Aufgabe: ein Strich hat
    keinen DOM-Knoten, an den sich ein Ring haengen koennte (Tinte lebt auf
@@ -694,9 +769,20 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 /* -------------------------------------------- Block-Werkzeugkasten
    Erscheint ueber dem fokussierten Block. --wb-anti = 1/Zoom: der
    Kasten bleibt bildschirmgross, egal wie nah man an der Tafel steht. */
+/* Mit der Kategorie-Wahl ist der Kasten eine Handbreit laenger geworden —
+   in einer Reihe waeren es ueber 890 px. Er steht darum in ZWEI Reihen:
+   oben die Form (Listenform, Farbe, Groesse), unten die Bedeutung
+   (Einordnung, Zettel, Loeschen). Der Umbruch ist erzwungen
+   (.wb-kasten-umbruch), nicht dem Zufall der Blockbreite ueberlassen: ein
+   Werkzeugkasten, der je nach Block eine andere Form haette, waere jedes
+   Mal neu zu lesen.
+   Feste Breite aus demselben Grund. Der Kasten ist gegen den Zoom skaliert
+   (--wb-anti), seine px SIND Bildschirm-px — auf schmalen Fenstern deckelt
+   die 100vw-Haelfte; kastenAusrichten klemmt danach nur noch die Kante. */
 .wb-kasten{
   position:absolute;left:0;bottom:100%;margin-bottom:40px;z-index:5;
   transform:scale(var(--wb-anti));transform-origin:0 100%;
+  width:min(560px,calc(100vw - 40px));flex-wrap:wrap;row-gap:8px;
   display:none;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;
   background:var(--wb-chrom-flaeche);border:1px solid var(--wb-chrom-rand);
   box-shadow:var(--wb-schatten2);
@@ -711,6 +797,10 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 .wb-kasten.wb-unten{bottom:auto;top:100%;margin-bottom:0;margin-top:40px;transform-origin:0 0}
 .wb-kasten-gruppe{display:flex;align-items:center;gap:3px}
 .wb-kasten-trenner{width:1px;height:20px;background:var(--wb-chrom-rand)}
+/* Erzwungener Zeilenumbruch statt eines Trenners: hier endet die Form und
+   beginnt die Bedeutung. Ein Strich am Zeilenende waere ein Strich im
+   Nichts (dieselbe Regel wie in der mobilen Werkzeugleiste). */
+.wb-kasten-umbruch{flex:0 0 100%;height:0;margin:0}
 .wb-kasten button{
   min-width:28px;height:28px;padding:0 6px;border:0;border-radius:7px;cursor:pointer;
   display:inline-flex;align-items:center;justify-content:center;gap:4px;
@@ -728,6 +818,43 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 .wb-kasten button.wb-farbe,.wb-kasten button.wb-farbe:hover,.wb-kasten button.wb-farbe.wb-aktiv{background:var(--f)}
 .wb-kasten button.wb-zettelwahl,.wb-kasten button.wb-zettelwahl:hover,.wb-kasten button.wb-zettelwahl.wb-aktiv{background:var(--z)}
 .wb-kasten button.wb-kasten-weg:hover{background:color-mix(in srgb,var(--wb-rot) 12%,transparent);color:var(--wb-rot)}
+
+/* ------------------------------------------------- Kategorie-Wahl
+   Fuenf Schalter: "Ohne" und die vier Kategorien in ihrer Farbe. Ruhend
+   traegt jeder nur einen Farbpunkt und neutrale Schrift — fuenf bunte
+   Woerter nebeneinander waeren ein Regenbogen, in dem man den aktiven
+   nicht mehr faende. Gewaehlt wird der Knopf ganz zu seiner Farbe: getoente
+   Fuellung, farbiger Ring, Text in der Tinte (dieselbe 78/22-Mischung wie
+   das Schild am Block, damit er in jedem Theme ueber 4,5:1 bleibt).
+   Der Punkt haengt auf ::before, weil ::after schon dem Tooltip gehoert
+   ([data-tip]::after — dieselbe Falle wie beim Anfasser). */
+.wb-kasten button.wb-katwahl{padding:0 9px;gap:6px}
+.wb-kasten button.wb-katwahl::before{
+  content:"";width:7px;height:7px;border-radius:50%;flex-shrink:0;
+  background:var(--kf,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--kf,var(--wb-chrom-rand-stark)) 55%,transparent);
+}
+/* "Ohne" hat keine Farbe — ein hohler Ring statt eines Punktes sagt
+   genau das, ohne eine fuenfte Farbe zu erfinden. */
+.wb-kasten button.wb-katwahl[data-kategorie=""]::before{
+  background:transparent;box-shadow:inset 0 0 0 1.5px var(--wb-chrom-rand-stark);
+}
+/* Hover mischt gegen "transparent", nicht gegen --wb-chrom-flaeche2: das
+   ist unter Graphit ein Verlauf und haette die Deklaration ungueltig
+   gemacht (siehe .wb-kat). */
+.wb-kasten button.wb-katwahl:hover{
+  background:color-mix(in srgb,var(--kf,#8895A6) 14%,transparent);
+  color:var(--wb-chrom-text);
+}
+.wb-kasten button.wb-katwahl.wb-aktiv{
+  background:color-mix(in srgb,var(--kf,var(--wb-primaer)) 15%,transparent);
+  color:color-mix(in srgb,var(--kf,var(--wb-primaer)) var(--wb-kat-anteil,78%),var(--wb-chrom-text));
+  box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--kf,var(--wb-primaer)) 48%,transparent);
+}
+.wb-kasten button.wb-katwahl[data-kategorie=""].wb-aktiv{
+  background:var(--wb-chrom-flaeche2);color:var(--wb-chrom-text);
+  box-shadow:inset 0 0 0 1.5px var(--wb-chrom-rand-stark);
+}
 
 /* ------------------------------------------------------ Farbpunkte
    Gemeinsame Optik fuer Kasten und Werkzeugleiste. */
@@ -952,6 +1079,30 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   display:inline-block;padding:2px 6px;border-radius:5px;margin-left:3px;
   background:var(--wb-chrom-flaeche2);border:1px solid var(--wb-chrom-rand);
   font:600 11px/1.2 inherit;color:var(--wb-chrom-neben);
+}
+/* Die Rangfolge. Sie steht hier, weil sie sonst nirgends als Ganzes zu
+   sehen ist: der Werkzeugkasten laesst EINE Kategorie waehlen, das Schild
+   am Block zeigt EINE — welche vorgeht, sagt erst diese Liste. Die vier
+   Punkte sind zugleich der Farbschluessel fuer die Schilder an der Wand. */
+.wb-hilfe-rang-titel{font-size:13px;margin:16px 0 6px;color:var(--wb-chrom-text);
+  padding-top:14px;border-top:1px solid var(--wb-chrom-rand)}
+.wb-hilfe-rang{margin:0 0 9px;color:var(--wb-chrom-neben);line-height:1.5}
+.wb-rangliste{
+  list-style:none;margin:0;padding:0;
+  display:grid;grid-template-columns:repeat(2,1fr);gap:6px 12px;
+  counter-reset:wbr;
+}
+.wb-rangliste li{
+  display:flex;align-items:center;gap:7px;counter-increment:wbr;
+  color:var(--wb-chrom-still);white-space:nowrap;
+}
+.wb-rangliste li::before{
+  content:counter(wbr);
+  display:grid;place-items:center;flex-shrink:0;
+  width:17px;height:17px;border-radius:50%;
+  background:color-mix(in srgb,var(--kf) 18%,transparent);
+  color:color-mix(in srgb,var(--kf) var(--wb-kat-anteil,78%),var(--wb-chrom-text));
+  font:700 10.5px/1 inherit;
 }
 
 /* --------------------------------------------------- Marquee/Schwamm */
@@ -1184,6 +1335,28 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   .wb-kontext-groessen{gap:5px}
   .wb-neugroesse{min-width:40px;height:40px;flex-shrink:0}
   .wb-neugroesse::before{inset:-2px}
+  /* Am Telefon wird die Tafel stark herausgezoomt (die Breite bindet, ~13 %),
+     und die Knoepfe am Rahmen kompensieren mit dem Hoechstmass 4,2. Zwei
+     beschriftete Knoepfe waeren dort so breit, dass sie ins Namensschild
+     liefen — der Ordnen-Knopf gibt darum sein Wort ab und bleibt Symbol.
+     4,2 x 13 % ist aber nur 0,55: die Optik ist damit weit unter 40
+     Bildschirm-px. Die unsichtbare Zone gleicht das aus (74x84 CSS-px
+     ergeben 40x46 auf dem Schirm) — nach OBEN, wo nur die leere Wand
+     liegt, nicht nach unten in die Tafelflaeche hinein. Der Abstand
+     zwischen den Knoepfen waechst auf genau das doppelte Mass der
+     seitlichen Zugabe, damit die beiden Zonen sich hoechstens beruehren. */
+  .wb-ordnenknopf{padding:12px 14px}
+  .wb-ordnenknopf span{display:none}
+  .wb-tafelknoepfe{gap:28px}
+  .wb-wischenknopf::after,.wb-ordnenknopf::after{left:-14px;right:-14px;top:-38px;bottom:-4px}
+  /* Im Vollbild-Blatt hat der Kasten die Breite des Blatts; die feste
+     560er-Breite gilt dort nicht. Und die Gruppen brechen dort um: fuenf
+     Kategorie-Schalter nebeneinander sind bei 390 px eine Handbreit zu
+     lang, und was rechts hinausragt, findet niemand. */
+  .wb-mobil-werkzeuge .wb-mobil-kasten{width:auto;max-width:100%}
+  .wb-mobil-werkzeuge .wb-kasten-gruppe{flex-wrap:wrap;row-gap:6px}
+  .wb-mobil-werkzeuge .wb-katwahl{min-width:0;padding:0 12px}
+  .wb-rangliste{grid-template-columns:1fr}
   /* Der Anfasser wird zum Daumenziel; der Zettel bleibt am Telefon
      ueber das Vollbild-Blatt bearbeitbar, die GROESSE aber hier. */
   .wb-groesse-griff{width:34px;height:34px;right:-6px;bottom:-6px}
