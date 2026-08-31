@@ -388,6 +388,12 @@
           <dt>Auswahl löschen</dt><dd><kbd>Entf</kbd></dd>
           <dt>Zoom · 100 % · alles zeigen</dt><dd><kbd>+</kbd><kbd>−</kbd> · <kbd>1</kbd> · <kbd>0</kbd></dd>
           <dt>Text bearbeiten</dt><dd>Doppelklick</dd>
+          ${/* Die drei schnellen Wege zur Antwort stehen hier zusammen —
+                den Knopf am Blockrand findet man von selbst, diese drei
+                nicht. */""}
+          <dt>Auf die Zeile antworten</dt><dd><kbd>Alt</kbd>+<kbd>A</kbd></dd>
+          <dt>Wort markieren → antworten</dt><dd>Doppelklick im Text</dd>
+          <dt>Antwort bearbeiten</dt><dd>Doppelklick auf die Antwort</dd>
         </dl>
         ${/* Die Rangfolge steht hier, weil sie nirgends sonst als Ganzes zu
               sehen ist: im Werkzeugkasten waehlt man EINE Kategorie, das
@@ -811,6 +817,11 @@
     // wieder mit — riesige Knoepfe an einer briefmarkenkleinen Tafel
     // waeren schlimmer als kleine.
     buehne.style.setProperty("--wb-anti2", klemm(1 / ansicht.s, 1 / ZOOM_MAX, 1 / ZOOM_TEXT_MIN).toFixed(4));
+    // Der Fokus-Chip haengt am letzten Zeichen einer Zeile; seine Lage ist in
+    // Layout-px gerechnet und muss beim Zoomen nachgemessen werden. Kostet nur
+    // etwas, solange ueberhaupt ein Chip steht — und dieser Zweig laeuft nur,
+    // wenn sich die Buehne wirklich bewegt hat.
+    chipNachziehen();
   }
 
   function tick() {
@@ -1640,6 +1651,13 @@
 
     leerMarkieren(el, knoten);
     scrollMarkieren(el, zeilenEl);
+    // Haengt der Fokus-Chip an einer Zeile DIESES Blocks, muss er mit: aus
+    // "Antworten" wird "Antwort", sobald eine steht, und das Zeilenende ist
+    // nach einem Rendern woanders. Ohne das blieb der Chip nach dem Setzen
+    // einer Antwort auf der alten Beschriftung stehen — focusin feuert nicht
+    // noch einmal, wenn die Zeile den Fokus ohnehin schon hat (gemessen am
+    // 31.08.: Zeile trug die Antwort, der Chip sagte weiter "Antworten").
+    chipAuffrischen(knoten);
     if (darf) kastenAuffrischen(el);
     schilderAuffrischen();
   }
@@ -1968,12 +1986,15 @@
   function blockInteraktionAnbinden(knoten) {
     // ---- Fokus rein/raus: inArbeit schuetzt vor dem Poll; leerer Block
     // verschwindet beim Verlassen (eine leere Notiz ist Muell am Board).
-    knoten.addEventListener("focusin", () => {
+    knoten.addEventListener("focusin", (ev) => {
       const el = elVonKnoten(knoten);
       if (!el) return;
       inArbeit.add(el.id);
       knoten.classList.add("wb-fokus");
       kastenAusrichten(knoten);
+      // Der Chip zieht mit dem Cursor um: er gehoert immer zu der Zeile,
+      // in der gerade geschrieben wird.
+      chipAnZeile(ev.target.closest && ev.target.closest(".wb-zeile"));
     });
     knoten.addEventListener("focusout", (ev) => {
       if (ev.relatedTarget && knoten.contains(ev.relatedTarget)) return;
@@ -1986,6 +2007,7 @@
       if (rendernLaeuft) return;
       const el = elVonKnoten(knoten);
       knoten.classList.remove("wb-fokus");
+      chipWeg();
       if (!el) return;
       blockSerialisieren(el);
       const leer = el.inhalt.zeilen.every((z) => !z.t.trim());
@@ -2019,7 +2041,11 @@
       // setzen — der Format-Kasten ploppte ungefragt auf, und die
       // inArbeit-Sperre bliebe haengen (der Poll traegt Fremdstaende
       // dann nicht mehr nach, bis irgendwo ins Leere geklickt wird).
-      if (ev.target.closest(".wb-abhaken,.wb-zeile-tools")) { ev.preventDefault(); return; }
+      // Dieselbe Regel gilt fuer den Fokus-Chip und fuer die Antwort selbst:
+      // beide sind zum ANTIPPEN da, nicht zum Ziehen des Blocks — und beide
+      // duerfen der Zeile nicht den Fokus nehmen (der Doppelklick auf die
+      // Antwort soll den Dialog oeffnen, nicht den Block umsortieren).
+      if (ev.target.closest(".wb-abhaken,.wb-zeile-tools,.wb-zeile-chip,.wb-antwort")) { ev.preventDefault(); return; }
       // Diese Kinder regeln sich selbst — Kasten, Griff, Anfasser, Link.
       if (ev.target.closest(".wb-kasten,.wb-griff,.wb-groesse-griff,.wb-zeile-link")) return;
       if (ev.button !== 0 && ev.pointerType === "mouse") return;
@@ -2137,6 +2163,18 @@
       const zeile = span.closest(".wb-zeile");
       const idx = zeilenIndex(zeile);
 
+      // Alt+A: auf DIESE Zeile antworten, ohne die Hand von der Tastatur zu
+      // nehmen. ev.code statt ev.key, weil Alt+A auf manchen Belegungen ein
+      // Sonderzeichen als key liefert (die physische Taste ist gemeint).
+      // Serialisieren vorher, sonst antwortet man auf einen Zeilentext, den
+      // das Modell so noch gar nicht kennt — dieselbe Vorsicht wie im Blatt.
+      if (ev.altKey && !ev.ctrlKey && !ev.metaKey && ev.code === "KeyA") {
+        ev.preventDefault();
+        blockSerialisieren(el);
+        antwortDialogOeffnen(el, idx);
+        return;
+      }
+
       if (ev.key === "Enter") {
         ev.preventDefault();
         if (ev.isComposing) return;
@@ -2211,6 +2249,8 @@
       leerMarkieren(el, knoten);
       scrollMarkieren(el);
       blockGeaendert(el, false);
+      // Der Chip haengt am ENDE des Textes — der wandert bei jedem Zeichen.
+      chipNachziehen();
     });
     knoten.addEventListener("compositionend", () => {
       const el = elVonKnoten(knoten);
@@ -2270,8 +2310,12 @@
       // Block-Klick gewertet wird.
       if (ev.target.closest(".wb-zeile-link")) { ev.stopPropagation(); return; }
 
-      if (ev.target.closest(".wb-zeile-antwort")) {
+      // Der Knopf in den Zeilenwerkzeugen UND der Fokus-Chip am Wortende
+      // fuehren zum selben Dialog — der Chip ist nur der viel kuerzere Weg
+      // dorthin (die Werkzeuge haengen an der rechten Blockkante).
+      if (ev.target.closest(".wb-zeile-antwort,.wb-zeile-chip")) {
         ev.preventDefault();
+        blockSerialisieren(el);
         antwortDialogOeffnen(el, idx);
         return;
       }
@@ -2323,6 +2367,17 @@
     // ---- Doppelklick auf einen Block bei kleiner Ansicht: erst heran-
     // zoomen, dann tippen — unter 35 % ist ein Caret nur noch Deko.
     knoten.addEventListener("dblclick", (ev) => {
+      // Doppelklick auf eine vorhandene ANTWORT bearbeitet sie. Der
+      // Doppelklick auf den AUFGABENTEXT bleibt unangetastet — das ist die
+      // Wortauswahl des Browsers und zugleich der Ausloeser der Markier-Blase.
+      if (ev.target.closest(".wb-antwort")) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const el = elVonKnoten(knoten);
+        const zeile = ev.target.closest(".wb-zeile");
+        if (el && zeile) { blockSerialisieren(el); antwortDialogOeffnen(el, zeilenIndex(zeile)); }
+        return;
+      }
       if (ansicht.s >= ZOOM_TEXT_MIN) return;
       ev.preventDefault();
       const el = elVonKnoten(knoten);
@@ -5000,6 +5055,8 @@
     if (!zeile) return;
     antwortZiel = { id: el.id, idx };
     inArbeit.add(el.id);
+    // Der Dialog uebernimmt jetzt — die Blase hat ihre Arbeit getan.
+    blaseVerstecken();
     // Der Zeilentext steht oben als Kontext: im Dialog sieht man die Tafel
     // nicht mehr, und "worauf antworte ich hier" darf man nicht raten muessen.
     $(".wb-antwort-zeile").textContent = zeile.t.trim() || "Leere Zeile";
@@ -5059,6 +5116,356 @@
     toast(text ? "Antwort steht — die Zeile ist ruhig gestellt."
                : "Antwort gelöscht — die Aufgabe steht wieder offen.");
   }
+
+  // =================================================================
+  // Antworten BEIM WORT: Markier-Blase und Fokus-Chip
+  // =================================================================
+  //
+  // Der Knopf in den Zeilenwerkzeugen haengt an der rechten BLOCKKANTE. Bei
+  // einem 700 px breiten Block liegt er eine Handbreit von dem Wort entfernt,
+  // um das es geht — man muss die Zeile suchen, hinfahren, hovern, treffen.
+  // Deshalb drei zusaetzliche Wege zum SELBEN Dialog, alle dort, wo der Blick
+  // ohnehin schon ist:
+  //   (a) Markierung  — Doppelklick auf ein Wort, Dreifachklick, Ziehen oder
+  //       Strg+A blendet eine Blase direkt ueber der Markierung ein.
+  //   (b) Doppelklick auf eine vorhandene Antwort (siehe dblclick am Block).
+  //   (c) Alt+A, solange der Cursor in der Zeile steht (siehe keydown).
+  //   (d) Ein ruhiger Chip am Ende des Zeilentextes, solange sie fokussiert
+  //       ist — der sichtbare Hinweis, dass es die anderen Wege gibt.
+  //
+  // Warum die Blase KEIN "Antwort löschen" anbietet, obwohl sie es koennte:
+  // Loeschen ist selten und zerstoerend, und in der Blase saehe man dabei
+  // nicht, WAS man wegwirft. Sie oeffnet darum immer den Dialog — dort steht
+  // die Antwort im Feld, und der Loeschknopf sitzt daneben. Eine Blase, ein
+  // Ziel; die Entscheidung faellt da, wo der Text zu sehen ist.
+
+  // Aus einem Zeilenknoten Element und Zeilenindex bestimmen. Der Knoten kann
+  // am Board haengen ODER im mobilen Blatt — beide Wege enden im selben
+  // Dialog, also loest eine Funktion beide auf.
+  function zeileAufloesen(zeile) {
+    if (!zeile || !zeile.parentElement) return null;
+    const idx = zeilenIndex(zeile);
+    const blockKnoten = zeile.closest(".wb-el");
+    if (blockKnoten) {
+      const el = elemente.get(blockKnoten.dataset.id);
+      return el && darfBearbeiten(el) ? { el, idx, mobil: false } : null;
+    }
+    if (mobilOffen && mobilOffen.blatt.contains(zeile)) return { el: mobilOffen.el, idx, mobil: true };
+    return null;
+  }
+
+  // Den Antwort-Dialog fuer eine ZEILE oeffnen, egal von welchem Weg. Vorher
+  // wird der getippte Stand ins Modell geschrieben: sonst antwortet man auf
+  // eine Zeile, die es so noch gar nicht gibt (dieselbe Falle wie beim
+  // Verknuepfen aus dem Blatt heraus).
+  function antwortWegOeffnen(zeile) {
+    const ziel = zeileAufloesen(zeile);
+    if (!ziel) return false;
+    if (ziel.mobil) mobilUebernehmen();
+    else blockSerialisieren(ziel.el);
+    antwortDialogOeffnen(ziel.el, ziel.idx);
+    return true;
+  }
+
+  // ------------------------------------------------- (d) Der Fokus-Chip
+  // EIN Knoten fuer die ganze Wand, der zur jeweils fokussierten Zeile
+  // umzieht — pro Zeile einen anzulegen waere Ballast in jedem Block, und
+  // sichtbar ist ohnehin immer nur einer.
+  let chipEl = null;
+
+  function chipBauen() {
+    if (chipEl) return chipEl;
+    const c = document.createElement("button");
+    c.type = "button"; c.className = "wb-zeile-chip"; c.tabIndex = -1;
+    c.innerHTML = '<i>' + ICON.antwortPfeil + "</i><span></span>";
+    // Wie beim Abhak-Kreis: ohne preventDefault nimmt das Aufsetzen der Maus
+    // der Zeile den Fokus — der Chip verschwaende dann in genau dem Moment,
+    // in dem man ihn anklickt, und der Klick liefe ins Leere.
+    c.addEventListener("pointerdown", (ev) => ev.preventDefault());
+    chipEl = c;
+    return c;
+  }
+
+  // Den Chip an eine Zeile haengen und ausrichten. Er ist ABSOLUT gesetzt und
+  // verschiebt den Textfluss darum um nichts — das war die Bedingung: ein
+  // Hinweis, der beim Auftauchen den Satz verrueckt, ist schlimmer als keiner.
+  function chipAnZeile(zeile) {
+    if (!zeile || !zeile.querySelector(".wb-zeile-text")) return chipWeg();
+    if (!zeileAufloesen(zeile)) return chipWeg();
+    const c = chipBauen();
+    if (c.parentElement !== zeile) zeile.appendChild(c);
+    const hat = !!zeile.dataset.antwort;
+    const wort = hat ? "Antwort" : "Antworten";
+    const span = c.lastElementChild;
+    if (span.textContent !== wort) span.textContent = wort;
+    c.title = hat ? "Antwort bearbeiten (Alt+A)" : "Auf diese Zeile antworten (Alt+A)";
+    c.setAttribute("aria-label", c.title);
+    chipNachziehen();
+  }
+
+  function chipWeg() {
+    if (chipEl && chipEl.parentElement) chipEl.remove();
+  }
+
+  // Den stehenden Chip neu beschriften und ausrichten. Mit knoten: nur, wenn
+  // er wirklich in DIESEM Block haengt — sonst zahlte jedes Rendern
+  // irgendeines Blocks die Layout-Messung mit.
+  function chipAuffrischen(knoten) {
+    if (!chipEl || !chipEl.parentElement) return;
+    if (knoten && !knoten.contains(chipEl)) return;
+    chipAnZeile(chipEl.parentElement);
+  }
+
+  // Den Chip an die gerade beschriebene Zeile zurueckholen. Gebraucht, wenn
+  // die Markier-Blase wieder verschwindet: solange SIE steht, waeren es zwei
+  // Bernstein-Knoepfe fuer dieselbe Sache in einer Zeile.
+  function chipAmFokus() {
+    const a = document.activeElement;
+    if (a && a.classList && a.classList.contains("wb-zeile-text")) chipAnZeile(a.closest(".wb-zeile"));
+  }
+
+  // Die Lage misst das ENDE des Textes, nicht das Ende des Spans: der Span ist
+  // immer blockbreit (flex:1), sein rechter Rand liegt also an der Blockkante
+  // — genau dort, wo der Chip NICHT hin soll. Gerechnet wird in Layout-px der
+  // Zeile; der Massstab kommt aus der Zeile selbst (Bildschirmbreite geteilt
+  // durch Layoutbreite), damit dieselbe Rechnung auf der gezoomten Buehne und
+  // im ungezoomten mobilen Blatt stimmt.
+  function chipNachziehen() {
+    const c = chipEl;
+    if (!c || !c.parentElement) return;
+    const zeile = c.parentElement;
+    const span = $(".wb-zeile-text", zeile);
+    if (!span) return;
+    const zr = zeile.getBoundingClientRect();
+    const skala = zeile.offsetWidth > 0 ? (zr.width / zeile.offsetWidth) : 1;
+    if (!skala || !isFinite(skala)) return;
+    let ende;
+    const r = document.createRange();
+    r.selectNodeContents(span);
+    const kaesten = r.getClientRects();
+    if (kaesten.length) ende = kaesten[kaesten.length - 1];
+    else {
+      // Leere Zeile: es gibt kein letztes Zeichen — der Chip steht dann am
+      // Zeilenanfang, wo auch der Caret blinkt.
+      const b = span.getBoundingClientRect();
+      ende = { right: b.left, top: b.top, height: b.height || zr.height };
+    }
+    const luft = 8;                       // Layout-px Abstand zum letzten Wort
+    let links = (ende.right - zr.left) / skala + luft;
+    // Nicht ueber die rechte Blockkante hinaus: dort begaenne sonst das
+    // Niemandsland neben dem Block, und bei einer randvollen Zeile laege der
+    // Chip unter den Zeilenwerkzeugen.
+    const breite = c.offsetWidth || 0;
+    if (zeile.clientWidth > breite) links = Math.min(links, zeile.clientWidth - breite);
+    c.style.left = Math.round(links) + "px";
+    c.style.top = Math.round((ende.top + ende.height / 2 - zr.top) / skala) + "px";
+  }
+
+  // ------------------------------------------------- (a) Die Markier-Blase
+  //
+  // Die Blase ist bewusst eine kleine LEISTE und kein einzelner Knopf: sie
+  // gehoert der Markierung, nicht dem Antworten. Was man mit einem markierten
+  // Stueck Text tun kann, waechst — die naechste Aktion (ein Teilstueck der
+  // Zeile durchstreichen) setzt hier an und bekommt einfach einen zweiten
+  // Knopf in .wb-blase-knoepfe, ohne dass an Lage, Erscheinen oder
+  // Verschwinden etwas zu aendern waere.
+  let blaseEl = null;          // der eine Leisten-Knoten
+  let blaseZeile = null;       // Zeile, zu der die stehende Blase gehoert
+  let blaseZeigerUnten = false; // Maus/Finger unten: erst loslassen, dann fragen
+  let blaseZeigerImText = false; // ... und die Geste begann IM Zeilentext
+  let blaseTouch = false;      // letzte Geste kam vom Finger
+  let blaseAus = false;        // per Escape stillgelegt, bis wieder etwas passiert
+  let blasePlan = 0;
+
+  // Was gerade markiert ist — Zeile UND Zeichenbereich im Zeilentext.
+  // {zeile, span, el, idx, von, bis, text}. von/bis sind Offsets in zeile.t,
+  // also genau das Format, in dem Zeilen-Metadaten am Server liegen. Wer eine
+  // zweite Markierungs-Aktion baut, liest hier und muss die Offset-Rechnerei
+  // nicht noch einmal bauen (siehe markierungLesen).
+  let markierung = null;
+
+  function blaseBauen() {
+    if (blaseEl) return blaseEl;
+    const b = document.createElement("div");
+    b.className = "wb-markierblase";
+    b.setAttribute("role", "toolbar");
+    b.setAttribute("aria-label", "Was mit der Markierung tun");
+    b.hidden = true;
+    b.innerHTML = '<div class="wb-blase-knoepfe">'
+      + '<button type="button" class="wb-blase-knopf wb-blase-antwort" tabindex="-1">'
+      + "<i>" + ICON.antwortPfeil + '</i><span class="wb-blase-wort">Antworten</span></button>'
+      + "</div>";
+    // DIE Falle dieser Funktion: ohne preventDefault beim Aufsetzen gibt der
+    // Browser der Zeile den Fokus ab und LEERT die Markierung — die Blase
+    // verschwaende, bevor der Klick sie erreicht. Genau wie beim Abhak-Kreis
+    // (siehe blockInteraktionAnbinden). Die Regel gilt fuer die ganze Leiste,
+    // damit sie auch fuer spaetere Knoepfe automatisch stimmt.
+    b.addEventListener("pointerdown", (ev) => { ev.preventDefault(); ev.stopPropagation(); });
+    b.addEventListener("click", (ev) => {
+      const knopf = ev.target.closest(".wb-blase-knopf");
+      if (!knopf) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const zeile = blaseZeile;
+      blaseVerstecken();
+      if (knopf.classList.contains("wb-blase-antwort") && zeile) antwortWegOeffnen(zeile);
+    });
+    wurzel.appendChild(b);
+    blaseEl = b;
+    return b;
+  }
+
+  function blaseVerstecken() {
+    if (!blaseEl || blaseEl.hidden) { blaseZeile = null; return; }
+    blaseEl.hidden = true;
+    blaseZeile = null;
+    // Der Chip kommt zurueck, sobald die Blase weg ist — er ist der ruhige
+    // Dauerhinweis, sie der laute Moment.
+    chipAmFokus();
+  }
+
+  // Gehoert die Markierung GENAU EINER Zeile? Beim Dreifachklick liegt das
+  // Ende der Auswahl oft schon ausserhalb des Spans (der Browser nimmt den
+  // Absatz) — das ist in Ordnung. Eine Auswahl, die in einer ANDEREN Zeile
+  // endet, ist es nicht: auf zwei Zeilen zugleich kann man nicht antworten.
+  function markierterSpan(bereich) {
+    const alsElement = (k) => (k && (k.nodeType === 1 ? k : k.parentElement)) || null;
+    const a = alsElement(bereich.startContainer);
+    const b = alsElement(bereich.endContainer);
+    const sa = a && a.closest(".wb-zeile-text");
+    const sb = b && b.closest(".wb-zeile-text");
+    if (!sa) return null;
+    if (sb && sb !== sa) return null;
+    return sa;
+  }
+
+  // Die aktuelle Markierung als ZEICHENBEREICH im Zeilentext lesen.
+  // Gerechnet wird wie in caretOffset ueber die Textlaenge eines Teilbereichs
+  // — nicht ueber node.textContent-Summen: der Span kann nach einer
+  // Browser-Korrektur mehrere Textknoten haben, und dann stimmte jede
+  // Abkuerzung nicht mehr. Liegt das Ende ausserhalb des Spans (Dreifachklick
+  // nimmt den ganzen Absatz), wird auf die Textlaenge geklemmt.
+  function markierungLesen(bereich, span) {
+    const bis = (knoten, versatz) => {
+      const r = document.createRange();
+      r.selectNodeContents(span);
+      try { r.setEnd(knoten, versatz); } catch { return span.textContent.length; }
+      return r.toString().length;
+    };
+    const laenge = span.textContent.length;
+    let von = klemm(bis(bereich.startContainer, bereich.startOffset), 0, laenge);
+    let ende = klemm(bis(bereich.endContainer, bereich.endOffset), 0, laenge);
+    if (ende < von) { const t = von; von = ende; ende = t; }
+    return { von, bis: ende };
+  }
+
+  function markierungPruefen() {
+    if (blaseAus || blaseZeigerUnten) return;
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || sel.isCollapsed) return blaseVerstecken();
+    if (!String(sel).trim()) return blaseVerstecken();
+    const bereich = sel.getRangeAt(0);
+    const span = markierterSpan(bereich);
+    if (!span) return blaseVerstecken();
+    const zeile = span.closest(".wb-zeile");
+    const ziel = zeileAufloesen(zeile);
+    if (!ziel) return blaseVerstecken();
+    const bereichImText = markierungLesen(bereich, span);
+    markierung = { zeile, span, el: ziel.el, idx: ziel.idx, mobil: ziel.mobil,
+                   von: bereichImText.von, bis: bereichImText.bis,
+                   text: span.textContent.slice(bereichImText.von, bereichImText.bis) };
+    blaseZeigen(zeile, bereich.getBoundingClientRect(), !!zeile.dataset.antwort);
+  }
+
+  function blaseZeigen(zeile, kasten, hatAntwort) {
+    if (!kasten || (!kasten.width && !kasten.height)) return blaseVerstecken();
+    const b = blaseBauen();
+    const wort = hatAntwort ? "Antwort bearbeiten" : "Antworten";
+    const s = $(".wb-blase-wort", b);
+    if (s.textContent !== wort) s.textContent = wort;
+    b.hidden = false;
+    blaseZeile = zeile;
+    // Solange die Blase steht, tritt der Fokus-Chip ab: zwei Bernstein-Knoepfe
+    // fuer dieselbe Sache in einer Zeile waeren einer zu viel.
+    chipWeg();
+    // Gerechnet wird gegen die WURZEL: die Blase haengt dort und kennt weder
+    // Zoom noch Pan der Buehne — sie ist damit immer bildschirmgross.
+    const w = wurzel.getBoundingClientRect();
+    const bb = b.getBoundingClientRect();
+    const luft = 10;
+    // Auf dem Telefon legt der Browser seine eigene Auswahl-Leiste UEBER die
+    // Markierung. Also weicht die Blase dort nach unten aus, statt sich mit
+    // ihr zu ueberlagern. Nicht nur bei pointerType "touch": auf einem
+    // schmalen Fenster gilt dasselbe, und die Geste kann von einem Stift
+    // oder einer Maus am Touchgeraet gekommen sein.
+    let unten = blaseTouch || istMobil();
+    let y = unten ? (kasten.bottom - w.top + luft) : (kasten.top - w.top - bb.height - luft);
+    if (!unten && y < 4) { unten = true; y = kasten.bottom - w.top + luft; }
+    if (unten && y + bb.height > w.height - 4) { unten = false; y = kasten.top - w.top - bb.height - luft; }
+    b.classList.toggle("wb-unten", unten);
+    let x = kasten.left + kasten.width / 2 - w.left - bb.width / 2;
+    x = klemm(x, 6, Math.max(6, w.width - bb.width - 6));
+    y = klemm(y, 4, Math.max(4, w.height - bb.height - 4));
+    b.style.left = Math.round(x) + "px";
+    b.style.top = Math.round(y) + "px";
+  }
+
+  const markierungPlanen = () => {
+    clearTimeout(blasePlan);
+    // Kleine Verzoegerung: selectionchange feuert waehrend eines Doppelklicks
+    // mehrfach (erst leer, dann das Wort). Ohne die Rast blitzte die Blase
+    // zuerst an der falschen Stelle auf.
+    blasePlan = setTimeout(markierungPruefen, 30);
+  };
+
+  document.addEventListener("selectionchange", markierungPlanen);
+  // Capture, damit die Blase auch dann verschwindet, wenn ein anderer Handler
+  // das Ereignis unterwegs anhaelt.
+  document.addEventListener("pointerdown", (ev) => {
+    blaseTouch = ev.pointerType === "touch";
+    // Auf der Blase selbst passiert nichts — sonst raeumte der eigene Klick
+    // sie weg, bevor er ankommt.
+    if (blaseEl && blaseEl.contains(ev.target)) return;
+    blaseZeigerUnten = true;
+    // Nur eine Geste, die IM Zeilentext beginnt, kann eine Markierung machen.
+    // Ohne diese Unterscheidung kam die Blase nach einem Klick ins Leere
+    // sofort zurueck: der Klick auf die Wand LEERT die Markierung naemlich
+    // nicht, die Pruefung nach dem Loslassen fand sie also unveraendert vor
+    // (am 31.08. gemessen — "Klick woandershin" raeumte die Blase nicht weg).
+    blaseZeigerImText = !!(ev.target.closest && ev.target.closest(".wb-zeile-text"));
+    blaseAus = false;
+    blaseVerstecken();
+  }, true);
+  // Loslassen heisst: jetzt steht die Markierung fest, jetzt darf gefragt
+  // werden. pointercancel zaehlt dabei GENAUSO wie pointerup — beim Ziehen
+  // ueber Text uebernimmt Chrome die Geste und bricht den Zeigerstrom mit
+  // einem pointercancel ab; das pointerup kommt danach trotzdem, aber die
+  // Sperre war schon gefallen. Wer hier nur auf pointerup hoerte und die
+  // Sperre als Bedingung nahm, sah die Blase nach jedem ZIEHEN nie wieder
+  // (gemessen am 31.08.: Doppelklick und Strg+A gingen, Ziehen nicht).
+  const zeigerLos = () => {
+    blaseZeigerUnten = false;
+    if (blaseZeigerImText) markierungPlanen();
+  };
+  document.addEventListener("pointerup", zeigerLos, true);
+  document.addEventListener("pointercancel", zeigerLos, true);
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") {
+      // Escape heisst hier "lass mich in Ruhe": die Markierung bleibt oft
+      // stehen, die Blase soll trotzdem weg — und nicht sofort wiederkommen.
+      blaseAus = true;
+      blaseVerstecken();
+      return;
+    }
+    if (ev.key === "Shift" || ev.key === "Control" || ev.key === "Alt" || ev.key === "Meta") return;
+    // Beim Tippen verschwindet sie. Bei Tasten, die die Markierung erweitern
+    // (Shift+Pfeil), holt selectionchange sie gleich wieder.
+    blaseAus = false;
+    blaseVerstecken();
+  }, true);
+  // Zoomen und Schieben verruecken die Markierung unter der Blase — sie steht
+  // in Bildschirmkoordinaten und waere danach falsch.
+  wurzel.addEventListener("wheel", () => blaseVerstecken(), { passive: true });
 
   // =================================================================
   // Sync: Poll alle 5 s, idempotenter Upsert, Backoff bei Fehlern
@@ -5234,6 +5641,13 @@
       const span = ev.target.closest(".wb-zeile-text");
       if (!span) return;
       const zeile = span.closest(".wb-zeile");
+      // Alt+A gilt auch im Blatt — ein Kuerzel, das nur an einem der beiden
+      // Orte funktioniert, waere kein Kuerzel, sondern eine Falle.
+      if (ev.altKey && !ev.ctrlKey && !ev.metaKey && ev.code === "KeyA") {
+        ev.preventDefault();
+        antwortWegOeffnen(zeile);
+        return;
+      }
       if (ev.key === "Enter") {
         ev.preventDefault();
         const neue = zeileBauen(true);
@@ -5296,11 +5710,20 @@
         }
       }
     });
+    // Doppelklick (bzw. Doppeltipp) auf eine vorhandene Antwort bearbeitet sie
+    // — derselbe Weg wie am Board.
+    blatt.addEventListener("dblclick", (ev) => {
+      const antwort = ev.target.closest(".wb-antwort");
+      if (!antwort) return;
+      ev.preventDefault();
+      antwortWegOeffnen(antwort.closest(".wb-zeile"));
+    });
     $(".wb-mobil-fertig", blatt).addEventListener("click", mobilSchliessen);
     // Wie am Board: Abhaken/Zeilenwerkzeuge klauen der aktiven Zeile
-    // nicht den Fokus (Tastatur bliebe sonst nicht offen).
+    // nicht den Fokus (Tastatur bliebe sonst nicht offen). Die Antwort steht
+    // aus demselben Grund mit in der Liste — sie ist zum Antippen da.
     blatt.addEventListener("pointerdown", (ev) => {
-      if (ev.target.closest(".wb-abhaken,.wb-zeile-tools")) ev.preventDefault();
+      if (ev.target.closest(".wb-abhaken,.wb-zeile-tools,.wb-antwort")) ev.preventDefault();
     });
 
     // In die WURZEL haengen, nicht an document.body: saemtliche
@@ -5447,6 +5870,28 @@
     get neuGroesse() { return neuGroesse; },
     get wand() { return { breite: WAND_B, hoehe: WAND_H, reihen, jeReihe }; },
     get ich() { return ich.id; },
+    // Die Markier-Blase und der Fokus-Chip: sichtbar? mit welchem Wort? an
+    // welcher Zeile? Beide sind fluechtige Anzeigen — ohne diesen Blick
+    // muesste ein Test sie ueber Bildpunkte suchen.
+    get blase() {
+      if (!blaseEl || blaseEl.hidden) return null;
+      const r = blaseEl.getBoundingClientRect();
+      return { text: blaseEl.textContent, x: r.x, y: r.y, breite: r.width, hoehe: r.height,
+               zeile: blaseZeile && blaseZeile.parentElement ? zeilenIndex(blaseZeile) : -1 };
+    },
+    // Der markierte ZEICHENBEREICH der aktuellen Blase (siehe markierungLesen):
+    // Zeile, Index und von/bis als Offsets im Zeilentext.
+    get markierung() {
+      if (!blaseEl || blaseEl.hidden || !markierung) return null;
+      return { idx: markierung.idx, von: markierung.von, bis: markierung.bis,
+               text: markierung.text, id: markierung.el ? markierung.el.id : null };
+    },
+    get chip() {
+      if (!chipEl || !chipEl.parentElement) return null;
+      const r = chipEl.getBoundingClientRect();
+      return { text: chipEl.textContent, x: r.x, y: r.y, breite: r.width, hoehe: r.height,
+               zeile: zeilenIndex(chipEl.parentElement) };
+    },
     // Welche Nachbar-Pfeile stehen gerade zur Verfuegung?
     get pfeile() {
       return RICHTUNGEN.filter((r) => !$(".wb-pfeil-" + r, pfeileEl).hidden);

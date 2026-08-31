@@ -135,6 +135,20 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   --wb-warte:#AE7413;
   --wb-warte-flaeche:#FDF4E3;
   --wb-warte-chrom:#8A5210;
+  /* Die geparkte Zeile bekommt eine EIGENE, neutrale Graustufe — nicht mehr
+     eine Deckkraft auf der Blockfarbe. Grund: mit opacity erbte sie die Tinte
+     des Blocks und blieb bei blauer, roter oder lila Schrift BUNT; "geparkt"
+     las sich dann wie "etwas helleres Blau". Grau ist die Farbe von "gerade
+     nicht dran", und Grau bleibt Grau, egal womit der Block geschrieben ist.
+     Der Wert haengt an der TAFEL, nicht am Theme-Chrom: die Tafel ist ueberall
+     hell, im Dunkelmodus aber entblendet (also dunkler) — dort darf die Zeile
+     ein Stueck dunkler sein, sonst faellt sie unter 3:1. */
+  --wb-warte-zeile:#79818B;
+  /* Der Antworttext. Bewusst NICHT --wb-warte-chrom: der dreht im Dunkelmodus
+     ins Helle, die Antwortblase liegt aber auf der (immer hellen) Tafel. Ein
+     tiefes, gedaempftes Bernsteinbraun — 6,6:1 auf der Blasenfuellung, und
+     kleiner Text braucht 4,5. */
+  --wb-antwort-text:#7C4E10;
 
   /* Haftnotizen: Papier, kein Plastik — leicht warm, unten minimal dunkler. */
   --wb-zettel-gelb:linear-gradient(178deg,#FDF3A4 0%,#F7E77E 100%);
@@ -179,6 +193,10 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   /* Nur der CHROM-Bernstein dreht mit: #8A5210 kaeme auf #121C2B auf 1,9:1.
      Das Zeichen auf der Tafel bleibt, wie es ist — die Tafel bleibt hell. */
   --wb-warte-chrom:#E0A33C;
+  /* Die Tafel ist hier ENTBLENDET (#EDF0F3 … #DDE2E7), nicht weiss. Das Grau
+     der geparkten Zeile geht deshalb eine Stufe dunkler mit — mit dem hellen
+     Wert laege sie auf der dunkelsten Tafelecke bei 2,9:1. Gemessen: 3,5:1. */
+  --wb-warte-zeile:#6E7681;
   /* Auf dunklem Grund reicht die Tinte allein nicht: Rot (#C03B3B) und
      Lila (#7A4FB6) sind fuer die HELLE Tafel gemischt und kommen auf
      #121C2B nur auf gut 4:1 (gemessen). Also mehr helle Textfarbe
@@ -216,6 +234,10 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
      dann haette sonst der helle #E0A33C von dort ueberlebt — auf weissem
      Chrom waeren das 2,2:1. */
   --wb-warte-chrom:#8A5210;
+  /* Aus demselben Grund zurueck auf den hellen Wert: Weiss hat wieder eine
+     rein weisse Tafel, und der dunklere Dunkelmodus-Wert waere dort unnoetig
+     laut (er soll ja zuruecktreten). */
+  --wb-warte-zeile:#79818B;
   --wb-chip:#0F1B2D;--wb-chip-text:#FFFFFF;--wb-ring:#FFFFFF;--wb-flaeche-fest:#FFFFFF;
   --wb-zettel-gelb:#FBF0A0;--wb-zettel-rosa:#F9D9E2;--wb-zettel-mint:#D2EEDE;--wb-zettel-blau:#D8E7F9;
   --wb-board-schatten:0 14px 34px -14px rgba(15,27,45,.25),0 4px 10px -4px rgba(15,27,45,.12);
@@ -742,48 +764,93 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   text-decoration-color:color-mix(in srgb,var(--wb-tinte-gruen) 65%,transparent);opacity:.5}
 .wb-zeile.wb-gestrichen .wb-zeile-text{text-decoration:line-through;text-decoration-thickness:2px;opacity:.6}
 
-/* Die wartende Zeile wird ABGEBLENDET, nicht durchgestrichen — sie ist nicht
-   erledigt, sie ruht. .7 ist bewusst zwischen "offen" (1) und "erledigt"
-   (.5) gewaehlt: mit schwarzer Tinte misst die Zeile so 5,1:1 auf der
-   weissen und 4,6:1 auf der entblendeten Tafel (Ziel war 3:1), waehrend eine
-   erledigte Zeile bei 2,9:1 liegt. Beide Zustaende bleiben also messbar
-   auseinanderzuhalten, und die wartende bleibt klar lesbar.
-   Einen zusaetzlichen Balken links braucht sie nicht: das Kaestchen sagt es
-   schon lauter, als ein Balken es koennte — und der Platz links davon
-   gehoert bei Nicht-Check-Listen bereits dem Kaestchen selbst. */
-.wb-zeile.wb-wartet .wb-zeile-text{opacity:.7}
+/* Die wartende Zeile TRITT ZURUECK — sie wird nicht durchgestrichen, sie ist
+   nicht erledigt, sie ruht. Runde 7 machte das ueber opacity:.7; beim
+   Ueberfliegen einer Tafel war der Unterschied schlicht zu klein (und bei
+   farbiger Tinte blieb die Zeile bunt). Jetzt drei Mittel zusammen:
+
+     1. EIGENE NEUTRALE GRAUSTUFE (--wb-warte-zeile) statt Deckkraft auf der
+        Blockfarbe. Der Kontrast faellt damit von 5,1:1 auf 3,9:1 (weisse
+        Tafel) bzw. von 4,7:1 auf 3,5:1 (entblendete Tafel im Dunkelmodus) —
+        deutlich blasser, aber ueberall ueber der Untergrenze von 3:1, denn
+        lesen soll man sie weiterhin.
+     2. Eine sehr leise BERNSTEIN-UNTERLEGUNG unter Zeile UND Antwort, damit
+        der geparkte Bereich als EIN Bereich gelesen wird.
+     3. Ein schmaler BERNSTEIN-BALKEN links davor als Anker fuers Auge.
+
+   Woran man eine wartende von einer ERLEDIGTEN Zeile unterscheidet: die
+   erledigte ist durchgestrichen (gruene Linie), liegt bei opacity .5 und
+   damit noch blasser, traegt den gruenen Haken im Kaestchen und hat KEINE
+   Unterlegung. Die wartende ist ungestrichen, grau, unterlegt und traegt die
+   Bernstein-Pause. Zwei Unterschiede in Form, zwei in Farbe. */
+.wb-zeile.wb-wartet{color:var(--wb-warte-zeile)}
+/* Die Unterlegung haengt am ::after der Zeile — ::before gehoert dem
+   Listenmarker. Sie liegt HINTER dem Text: ein negativer z-index waere unter
+   dem Zettelpapier verschwunden, also heben stattdessen die Kinder der Zeile
+   sich mit z-index:1 heraus. 5 % Fuellung ist bewusst wenig — die Tafel darf
+   nicht bunt werden; das Signal traegt der Balken links. */
+.wb-zeile.wb-wartet::after{
+  content:"";position:absolute;z-index:0;pointer-events:none;
+  left:-.42em;right:-.12em;top:-.06em;bottom:-.02em;
+  border-radius:.2em;
+  background:color-mix(in srgb,var(--wb-warte) 5%,transparent);
+  box-shadow:inset .09em 0 0 0 color-mix(in srgb,var(--wb-warte) 58%,transparent);
+}
+/* Nur die Kinder benennen, die wirklich vor der Unterlegung liegen muessen —
+   ein pauschales "> *" haette den absolut gesetzten Werkzeugen und dem
+   Kaestchen ihre Position weggenommen (position:relative gewaenne gegen
+   .wb-zeile-tools). */
+.wb-zeile.wb-wartet>.wb-zeile-text,
+.wb-zeile.wb-wartet>.wb-antwort{position:relative;z-index:1}
+.wb-zeile.wb-wartet>.wb-abhaken,
+.wb-zeile.wb-wartet>.wb-zeile-link{z-index:1}
 
 /* -------------------------------------------------- Antwort auf die Zeile
-   Sie steht UNTER der Aufgabe, eingerueckt und kleiner: ein zweiter Gedanke
-   ("worauf warte ich"), kein Zusatz zum Aufgabentext. flex-wrap steht nur an
-   Zeilen, die wirklich eine Antwort haben — die uebrigen behalten ihr
+   Sie steht UNTER der Aufgabe, eingerueckt und deutlich kleiner: ein zweiter
+   Gedanke ("worauf warte ich"), kein Zusatz zum Aufgabentext. flex-wrap steht
+   nur an Zeilen, die wirklich eine Antwort haben — die uebrigen behalten ihr
    nowrap-Verhalten unveraendert. */
 .wb-zeile.wb-hat-antwort{flex-wrap:wrap}
 .wb-antwort{
   flex:0 0 100%;min-width:0;
-  display:flex;align-items:flex-start;gap:.3em;
+  display:flex;align-items:flex-start;gap:.34em;
   /* Die Einrueckung ist PADDING, nicht margin: flex-basis:100% zaehlt bei
      border-box (crm.css, *) das Padding mit, ein margin kaeme obendrauf —
      die Antwort ragte dann genau um ihre Einrueckung ueber die rechte
      Blockkante hinaus (gemessen: 15 px am Board, 20 px im Blatt). */
-  margin:.1em 0 .25em;padding-left:1.5em;
-  font-size:.8em;line-height:1.4;
-  /* Ein ruhiger, leicht warmer Ton — NICHT der volle Bernstein: der gehoert
-     dem Zeichen im Kaestchen, und zwei laute Bernsteine in einer Zeile
-     schrieen um dieselbe Aufmerksamkeit. Der Ton allein ordnet die Antwort
-     aber nicht unter; das tun Einrueckung und Groesse. Gemessen 6,7:1 auf
-     der weissen Tafel — leise, aber ohne Muehe zu lesen. */
-  color:color-mix(in srgb,var(--wb-tinte-schwarz) 82%,var(--wb-warte));
-  opacity:.82;
-  overflow-wrap:anywhere;word-break:break-word;
+  margin:.16em 0 .12em;padding-left:1.5em;
+  /* OBERFLAECHENSCHRIFT statt Caveat. Das ist der eigentliche Unterschied:
+     Was auf der Tafel STEHT, ist Handschrift — die Antwort ist eine Notiz
+     UEBER der Aufgabe, kein zweiter Satz von derselben Hand. Ein anderes
+     Medium bekommt eine andere Schrift; dieselbe Familie wie Werkzeugleiste
+     und Werkzeugkasten, damit die Tafel nicht eine dritte Schrift bekommt.
+     0,62 em der Zeile, weil eine Notiz nicht so laut sein darf wie die
+     Aufgabe (Caveat traegt auf gleicher em-Groesse ohnehin kleiner auf —
+     die alten .8em lasen sich deshalb fast wie der Aufgabentext). */
+  font-family:'Inter','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;
+  font-weight:500;font-size:.62em;line-height:1.4;letter-spacing:.005em;
   transition:opacity var(--tempo);
 }
 .wb-antwort-pfeil{
-  flex:0 0 auto;display:block;width:1em;height:1em;margin-top:.12em;
+  flex:0 0 auto;display:block;width:1.15em;height:1.15em;margin-top:.3em;
   color:var(--wb-warte);
 }
 .wb-antwort-pfeil svg{width:100%;height:100%;display:block;stroke-width:2.2}
-.wb-antwort-text{min-width:0}
+/* Die BLASE ist der Text selbst, nicht die ganze Reihe: die Reihe traegt die
+   Einrueckung und die Breitenbindung (flex-basis 100 % + padding, siehe
+   oben), die Blase legt sich nur um so viel Text, wie wirklich dasteht. So
+   kann sie nie ueber die Blockkante ragen — und ein kurzes "Warte auf
+   Rueckruf" sieht nicht aus wie eine halbleere Leiste.
+   Die Fuellung ist DECKEND: damit steht der Kontrast des Antworttexts fest
+   (6,6:1), egal ob darunter weisse Tafel, entblendete Tafel oder ein gelber
+   Zettel liegt. */
+.wb-antwort-text{
+  min-width:0;padding:.2em .62em .26em;border-radius:.7em;
+  background:var(--wb-warte-flaeche);
+  border:1px solid color-mix(in srgb,var(--wb-warte) 26%,transparent);
+  color:var(--wb-antwort-text);
+  overflow-wrap:anywhere;word-break:break-word;
+}
 /* Erledigt und gestrichen schlagen wartend (siehe zeileFuellen): die Antwort
    bleibt stehen, weil sie erklaert, warum die Zeile so aussieht — sie tritt
    aber noch einen Schritt zurueck. Durchgestrichen wird sie NICHT: der Text
@@ -886,6 +953,97 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 .wb-zeile-link:focus-visible{outline:2px solid var(--wb-primaer);outline-offset:2px;opacity:1}
 .wb-zeile.wb-erledigt .wb-zeile-link{opacity:.4}
 .wb-el:not(.wb-darf) .wb-zeile-link{pointer-events:auto}
+
+/* --------------------------------------------- Antworten BEIM WORT
+   Zwei Wege, die beide dort sitzen, wo der Blick ohnehin ist — nicht am
+   Blockrand, der bei einem breiten Block eine Handbreit weit weg liegt.
+
+   (1) Der FOKUS-CHIP: steht der Cursor in einer Zeile, haengt am ENDE ihres
+       Textes ein kleiner ruhiger Chip. Er ist absolut gesetzt und verschiebt
+       den Textfluss darum um nichts, wenn er auftaucht — seine Lage misst
+       whiteboard.js am letzten Zeichen-Rechteck des Spans. --wb-anti2 haelt
+       ihn bildschirmgross, genau wie die Zeilenwerkzeuge; transform-origin
+       links/mittig, damit er beim Gegen-Skalieren von der Zeile WEG waechst
+       und nie ueber das letzte Wort rutscht. */
+/* Die :active-Fassung steht MIT DABEI, und das ist kein Schmuck: crm.css
+   setzt global button:active{transform:translateY(1px)} — das schlug beim
+   Aufsetzen der Maus die ganze Transformation weg. Der Chip sprang dadurch
+   auf ein Drittel seiner Groesse zusammen, der Zeiger lag danach neben ihm,
+   und das Loslassen erzeugte gar keinen Klick mehr: der Chip liess sich
+   schlicht nicht druecken (am 31.08. gemessen, Dialog blieb zu). */
+.wb-zeile-chip,.wb-zeile-chip:active{
+  position:absolute;z-index:6;display:inline-flex;align-items:center;gap:.3em;
+  padding:0 .55em;height:1.7em;border-radius:.55em;cursor:pointer;
+  transform:translateY(-50%) scale(var(--wb-anti2,1));transform-origin:0 50%;
+  background:var(--wb-chrom-flaeche);border:1px solid var(--wb-chrom-rand);
+  box-shadow:var(--wb-schatten1);color:var(--wb-warte-chrom);
+  font:600 .5em/1 'Inter','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;
+  letter-spacing:.01em;white-space:nowrap;
+  transition:background var(--tempo),border-color var(--tempo);
+}
+.wb-zeile-chip i{display:block;width:1.15em;height:1.15em;flex:0 0 auto;color:var(--wb-warte)}
+.wb-zeile-chip i svg{width:100%;height:100%;display:block;stroke-width:2.2}
+/* Unsichtbare Trefferflaeche auf 40 px — der Chip selbst misst bei der
+   Vorwahl M nur rund 24 px hoch. ::after ist hier frei (kein data-tip). */
+.wb-zeile-chip::after{content:"";position:absolute;inset:min(0px,calc((1.7em - 40px) / 2))}
+.wb-zeile-chip:hover{
+  background:color-mix(in srgb,var(--wb-warte-chrom) 12%,var(--wb-flaeche-fest));
+  border-color:color-mix(in srgb,var(--wb-warte-chrom) 45%,var(--wb-chrom-rand));
+}
+
+/* (2) Die MARKIER-BLASE: markiert man in einer Zeile ein Wort (Doppelklick),
+       eine Zeile (Dreifachklick, Strg+A) oder zieht mit der Maus, erscheint
+       sie direkt an der Markierung. Sie haengt an der WURZEL, nicht in der
+       Buehne — damit ist sie ohne Gegen-Skalierung bildschirmgross und wird
+       von keinem overflow:clip abgeschnitten. z-index ueber dem mobilen
+       Blatt (60), damit sie auch dort ueber den Zeilen steht.
+
+       Sie ist eine LEISTE, kein Knopf: sie gehoert der Markierung, nicht dem
+       Antworten. Was man mit einem markierten Stueck Text tun kann, waechst —
+       ein zweiter Knopf legt sich in .wb-blase-knoepfe daneben, ohne dass an
+       Huelle, Zipfel oder Lage etwas zu aendern waere. */
+.wb-markierblase{
+  position:absolute;z-index:70;
+  border-radius:11px;padding:3px;
+  background:var(--wb-chrom-flaeche);border:1px solid var(--wb-chrom-rand-stark);
+  box-shadow:var(--wb-schatten2);
+  font:650 13px/1 'Inter','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;
+  white-space:nowrap;
+  animation:wb-blase-auf .13s ease-out;
+}
+.wb-blase-knoepfe{display:flex;align-items:stretch;gap:2px}
+/* Der Trenner steht ZWISCHEN den Knoepfen und erscheint von selbst, sobald
+   ein zweiter dazukommt — kein Strich am Rand, wenn nur einer da ist. */
+.wb-blase-knopf + .wb-blase-knopf::before{
+  content:"";position:absolute;left:-2px;top:6px;bottom:6px;width:1px;
+  background:var(--wb-chrom-rand);
+}
+.wb-blase-knopf{
+  position:relative;display:inline-flex;align-items:center;gap:7px;
+  padding:0 12px;height:30px;border:0;border-radius:8px;cursor:pointer;
+  background:none;color:var(--wb-warte-chrom);font:inherit;
+  transition:background var(--tempo);
+}
+.wb-blase-knopf i{display:block;width:15px;height:15px;flex:0 0 auto;color:var(--wb-warte)}
+.wb-blase-knopf i svg{width:100%;height:100%;display:block;stroke-width:2.2}
+.wb-blase-knopf:hover{background:color-mix(in srgb,var(--wb-warte-chrom) 12%,var(--wb-flaeche-fest))}
+/* Das Zipfelchen zeigt auf die Markierung — sonst schwebte ein Kaestchen im
+   Nichts und man muesste raten, wozu es gehoert. ::before, weil ::after die
+   Trefferzone traegt. */
+.wb-markierblase::before{
+  content:"";position:absolute;left:50%;bottom:-5px;width:9px;height:9px;
+  transform:translateX(-50%) rotate(45deg);
+  background:var(--wb-chrom-flaeche);
+  border-right:1px solid var(--wb-chrom-rand-stark);
+  border-bottom:1px solid var(--wb-chrom-rand-stark);
+}
+.wb-markierblase.wb-unten::before{
+  bottom:auto;top:-5px;
+  border:0;border-left:1px solid var(--wb-chrom-rand-stark);
+  border-top:1px solid var(--wb-chrom-rand-stark);
+}
+.wb-markierblase::after{content:"";position:absolute;inset:-5px;z-index:-1}
+@keyframes wb-blase-auf{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
 
 /* Blasser Platzhalter in der leeren Haftnotiz. Sie bleibt stehen (man
    klebt sie hin und beschriftet sie spaeter) — ohne Platzhalter saehe
@@ -1441,7 +1599,10 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
    die Knoepfe. Etwas groesser als am Board (.86 statt .8), weil das Blatt
    ohnehin auf 24 px Mindestschrift hochgeht und darunter alles klein wird. */
 .wb-mobil-zeilen .wb-zeile.wb-hat-antwort{align-items:flex-start;padding-bottom:8px}
-.wb-mobil-zeilen .wb-antwort{font-size:.86em;margin:2px 0 0;padding-left:1.5em;order:9}
+/* Etwas groesser als am Board (.68 statt .62 em): das Blatt geht auf 24 px
+   Mindestschrift hoch, und in der Oberflaechenschrift waeren 0,62 em davon
+   nur noch 15 px — am Telefon zu klein fuer eine Notiz, die man lesen soll. */
+.wb-mobil-zeilen .wb-antwort{font-size:.68em;margin:3px 0 0;padding-left:1.5em;order:9}
 /* Der Antwort-Knopf ist auch ohne Hover da (Finger haben keinen Hover) —
    am Telefon zeigt eine beantwortete Zeile deshalb die ganze Leiste. */
 .wb-mobil-zeilen .wb-zeile.wb-hat-antwort:not(:hover) .wb-zeile-tools>*{display:grid}
@@ -1542,7 +1703,15 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
      ueber das Vollbild-Blatt bearbeitbar, die GROESSE aber hier. */
   .wb-groesse-griff{width:34px;height:34px;right:-6px;bottom:-6px}
   .wb-groesse-griff svg{width:16px;height:16px}
+  /* Am Telefon ist die Blase ein DAUMENZIEL, kein Mauszeigerziel: 46 px hoch
+     und breiter gepolstert. Sie weicht dort ausserdem nach unten aus (JS),
+     damit sie die native Auswahl-Leiste des Browsers nicht verdeckt. */
+  .wb-markierblase{font-size:14.5px}
+  .wb-blase-knopf{height:44px;padding:0 18px;gap:9px}
+  .wb-blase-knopf i{width:17px;height:17px}
   .wb-link-dialog{width:calc(100vw - 24px)}
+  .wb-antwort-dialog{width:calc(100vw - 24px)}
+  .wb-antwort-dialog .dialog-fuss{flex-wrap:wrap}
   .wb-link-treffer{max-height:44vh}
   .wb-link-treffer-zeile{padding:12px 11px}
   .wb-link-dialog .dialog-fuss{flex-wrap:wrap}
@@ -1578,7 +1747,10 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   [data-tip]::after,.wb-knopf,.wb-seg,.wb-dicke,.wb-zeile-text,
   .wb-pfeile .wb-pfeil,.wb-zeile-link,.wb-neugroesse,.wb-groesse-griff,
   .wb-link-treffer-zeile,.wb-rahmen,.wb-tafelflaeche,
-  .wb-abhaken .wb-warte-feld,.wb-abhaken .wb-warte-symbol,.wb-antwort{transition:none}
+  .wb-abhaken .wb-warte-feld,.wb-abhaken .wb-warte-symbol,.wb-antwort,
+  .wb-zeile-chip,.wb-blase-knopf{transition:none}
+  /* Die Blase soll erscheinen, nicht anfliegen. */
+  .wb-markierblase{animation:none}
   /* Die Pfeile heben sich nicht mehr an; sichtbar bleiben sie ueber die
      Deckkraft, die ohnehin nicht wandert. Mit .wb-pfeile davor, sonst
      gewinnt die Grundregel (gleiche Spezifitaet, spaeter im Blatt). */
