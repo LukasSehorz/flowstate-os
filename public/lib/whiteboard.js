@@ -4,10 +4,19 @@
 
    Eine Wand mit einer Tafel je Person (Reihenfolge = WB_DATEN.team),
    Zoom und Pan wie an einer echten Buerowand: herantreten, schreiben,
-   abhaken, wegwischen. Geschrieben wird NUR auf der eigenen Tafel,
-   gesehen wird alles — Konflikte zwischen zwei Personen gibt es darum
-   nicht, nur "dieselbe Person in zwei Tabs" (dafuer die Versionspruefung
-   der API).
+   abhaken, wegwischen.
+
+   ZWEI Personen je Element (31.08.2026): "tafel" ist das Board, auf dem
+   es HAENGT — daraus folgt seine Lage an der Wand; "besitzer" ist, wer
+   es GESCHRIEBEN hat. Gehen die auseinander, hat jemand einem anderen
+   eine Aufgabe hingeschrieben; das Element traegt dann eine Fahne
+   "von X". Schreiben darf jeder auf jede Tafel, aendern und loeschen
+   genau zwei: Autor und Tafel-Besitzer (darfBearbeiten()). Der Server
+   erzwingt dieselbe Regel — ein Dritter bekommt 404.
+
+   MERKSATZ fuer alles, was mit Koordinaten zu tun hat: Position, Culling,
+   Clipping, Treffer und Fits gehen IMMER ueber el.tafel, nie ueber
+   el.besitzer. Der Autor entscheidet nur ueber Herkunft und Rechte.
 
    Die drei Ebenen, von hinten nach vorn:
      1. DOM-Buehne (.wb-buehne)  — Boards, Textbloecke, Haftnotizen.
@@ -61,6 +70,35 @@
   const MAX_PUNKTE_JE_STRICH = 2900;       // Stuetzpunkte; Server erlaubt 3000 (6000 Zahlen)
   const SCHWAMM_RADIUS_PX = 18;            // Bildschirm-px, wird durch s geteilt
 
+  // Haftnotizen sind GEGENSTAENDE mit einer Groesse: aufziehbar, spaeter
+  // skalierbar, innen scrollend. Darunter waere kein Zettel mehr zu lesen.
+  const NOTIZ_MIN_B = 140, NOTIZ_MIN_H = 120;
+  const TEXT_MIN_B = 160;
+  const ZIEH_SCHWELLE = 4;                 // px, ab hier ist ein Klick ein Zug
+  const GROESSE_SCHLUESSEL = "flowstate-wb-groesse";
+
+  // Adressen, die der Client ueberhaupt anbieten darf. Der Server filtert
+  // ein zweites Mal (nur http/https/mailto) — aber was hier nicht durchkommt,
+  // wird gar nicht erst gesetzt: ein Klick auf einen Link darf nie Code
+  // ausfuehren.
+  const LINK_ERLAUBT = /^(https?:\/\/|mailto:|\/)/i;
+  // Eine getippte Adresse am ZEILENENDE erkennen ("... siehe www.kunde.de").
+  const ADRESSE_AM_ENDE = /(?:https?:\/\/[^\s]{2,}|www\.[^\s]{2,}|[^\s@]+@[^\s@]+\.[a-z]{2,})\s*$/i;
+
+  // Fuellwoerter, die als Suchwort nichts taugen: Aus "E-Mail an Krotzer
+  // schicken" soll "Krotzer" uebrig bleiben. Bewusst kurz gehalten — was
+  // hier fehlt, sucht der Nutzer eben mit einem Wort zu viel.
+  const STOPPWORTE = new Set([
+    "e-mail", "email", "mail", "mails", "an", "am", "auf", "aus", "bei", "bis", "für", "fuer",
+    "im", "in", "mit", "nach", "von", "vom", "zu", "zum", "zur", "über", "ueber",
+    "der", "die", "das", "den", "dem", "des", "ein", "eine", "einen", "einem", "einer",
+    "und", "oder", "noch", "nochmal", "bitte", "heute", "morgen", "neu", "neue", "neuen",
+    "schicken", "senden", "schreiben", "anrufen", "rufen", "melden", "nachfassen",
+    "calls", "call", "cold", "webseite", "website", "seite", "bauen", "machen", "erstellen",
+    "erledigen", "prüfen", "pruefen", "checken", "klären", "klaeren", "abschließen",
+    "abschliessen", "aufräumen", "aufraeumen", "vorbereiten", "termin", "fertig", "offen",
+  ]);
+
   // Tintenfarben: EINE Palette fuer alle Themes. Die Tafel bleibt auch im
   // Dunkelmodus hell — das dunkle Haus-Blau #4B8DF8 ist fuer dunkle
   // Untergruende gedacht und faellt auf der hellen Tafel auf 2,5:1 ab
@@ -72,6 +110,24 @@
 
   const ich = DATEN.ich;
   const team = Array.isArray(DATEN.team) && DATEN.team.length ? DATEN.team : [ich];
+  const person = (id) => team.find((p) => p.id === id) || null;
+  const vorname = (id) => { const p = person(id); return p ? p.name.split(" ")[0] : "jemand"; };
+  // "Janniks Tafel", aber "Lukas' Tafel": ein Name auf s/x/z/ß bekommt im
+  // Deutschen nur den Apostroph. Kleinigkeit — aber "Lukass Tafel" liest
+  // sich wie ein Tippfehler des Hauses.
+  const besitzform = (name) => name + (/[sxzß]$/i.test(name) ? "'" : "s");
+
+  // Auf WESSEN Board haengt das Element? Ein Stand aus der ersten Fassung
+  // (nur "besitzer") faellt auf den Autor zurueck, statt beim Rendern zu
+  // verschwinden.
+  const tafelVon = (el) => el.tafel || el.besitzer;
+  // Aendern und Loeschen duerfen genau zwei: der Autor und die Person,
+  // auf deren Tafel es haengt (sie darf ihre Aufgabe abhaken und wischen).
+  // Dieselbe Regel steht im Server — hier nur, damit die Oberflaeche gar
+  // nicht erst etwas anbietet, was gleich mit 404 zurueckkaeme.
+  const darfBearbeiten = (el) => !!el && (el.besitzer === ich.id || tafelVon(el) === ich.id);
+  // Fremde Aufgabe: Autor und Tafel gehen auseinander -> Fahne "von X".
+  const istFremdeHand = (el) => !!el && el.besitzer !== tafelVon(el);
 
   // Wandversatz je Besitzer. Ab vier Personen haengt die Wand ZWEIREIHIG
   // (zeilenweise in team-Reihenfolge, bei fuenf also 3 oben + 2 unten):
@@ -91,7 +147,7 @@
   const WAND_H = reihen * BOARD_H + (reihen - 1) * LUECKE_Y;
 
   const elemente = new Map();              // id -> Element (inhalt als Objekt)
-  const stricheJeBoard = new Map();        // besitzerId -> [Element] in Zeichenreihenfolge
+  const stricheJeBoard = new Map();        // TAFEL-id -> [Element] in Zeichenreihenfolge
   team.forEach((p) => stricheJeBoard.set(p.id, []));
 
   const ansicht = { s: 0.5, tx: 0, ty: 0 };
@@ -99,6 +155,15 @@
   let stiftFarbe = "schwarz";
   let stiftDicke = "mittel";
   let zettelFarbe = "gelb";
+  // Schriftgroesse fuer NEUE Bloecke — vorab in der Leiste waehlbar und
+  // ueber die Sitzung hinaus gemerkt. Wer gross schreibt, schreibt meist
+  // weiter gross; jedes Mal nachtraeglich umzustellen waere Arbeit fuer
+  // nichts. localStorage kann werfen (privates Fenster) — dann M.
+  let neuGroesse = 28;
+  try {
+    const g = Number(localStorage.getItem(GROESSE_SCHLUESSEL));
+    if (GROESSEN.includes(g)) neuGroesse = g;
+  } catch { /* kein Speicher: M bleibt */ }
   const auswahl = new Set();               // ids gewaehlter eigener Elemente
 
   // Elemente, die der Sync NICHT anfassen darf: gerade im Editor, gerade
@@ -167,6 +232,9 @@
     listeBuchstabe: S('<path d="M10 7h9M10 12h9M10 17h9"/><path d="M4.5 9.5 6 5l1.5 4.5M5 8h2"/><path d="M4.7 14.5h1.6a1.2 1.2 0 0 1 0 2.4H4.7zM4.7 16.9h1.9a1.2 1.2 0 0 1 0 2.4H4.7z"/>', 24),
     listePunkt: S('<path d="M10 7h9M10 12h9M10 17h9"/><circle cx="5.5" cy="7" r="1.4" fill="currentColor" stroke="none"/><circle cx="5.5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="5.5" cy="17" r="1.4" fill="currentColor" stroke="none"/>'),
     listeCheck: S('<path d="M11 7h8M11 12h8M11 17h8"/><path d="m4 6.5 1.4 1.4L8 5.4M4 11.5l1.4 1.4L8 10.4M4 16.5l1.4 1.4L8 15.4"/>'),
+    kette: S('<path d="M10.6 13.4a3.6 3.6 0 0 0 5.2 0l2.6-2.6a3.7 3.7 0 0 0-5.2-5.2l-1.5 1.5"/><path d="M13.4 10.6a3.6 3.6 0 0 0-5.2 0l-2.6 2.6a3.7 3.7 0 0 0 5.2 5.2l1.5-1.5"/>'),
+    pfeil: S('<path d="m14.5 5.5-6 6.5 6 6.5"/>'),
+    ecke: S('<path d="M20 10v10H10"/><path d="M20 20 12.5 12.5"/>'),
   };
 
   // Escaping ist hier KEIN Thema der Vorsicht, sondern der Regel: Nutzdaten
@@ -186,8 +254,19 @@
         <div class="wb-buehne"></div>
         <canvas class="wb-tinte"></canvas>
         <div class="wb-marquee" hidden></div>
+        <div class="wb-neurahmen" hidden></div>
         <div class="wb-schwammkreis" hidden></div>
       </div>
+      ${/* Nachbar-Pfeile: nur in Richtungen, in denen an der zweireihigen
+            Wand wirklich eine Tafel haengt. Bildschirmfest, damit sie beim
+            Zoomen nicht mitwandern. */""}
+      <div class="wb-pfeile" hidden>
+        <button type="button" class="wb-pfeil wb-pfeil-links" data-richtung="links" hidden>${ICON.pfeil}<span></span></button>
+        <button type="button" class="wb-pfeil wb-pfeil-rechts" data-richtung="rechts" hidden>${ICON.pfeil}<span></span></button>
+        <button type="button" class="wb-pfeil wb-pfeil-oben" data-richtung="oben" hidden>${ICON.pfeil}<span></span></button>
+        <button type="button" class="wb-pfeil wb-pfeil-unten" data-richtung="unten" hidden>${ICON.pfeil}<span></span></button>
+      </div>
+      <div class="wb-fremdleiste" hidden>${ICON.stift}<span></span></div>
       ${/* Die Leiste steht im DOM VOR der Kopfzeile: Tab laeuft dann
             Werkzeuge -> Ansichten -> Zoom. Beide sind absolut
             positioniert, optisch aendert die Reihenfolge nichts. */""}
@@ -203,6 +282,15 @@
           <div class="wb-leiste-trenner"></div>
           <div class="wb-kontext-dicken"></div>
         </div>
+        ${/* Schriftgroesse fuer den naechsten Block — S/M/L, gemerkt ueber
+              die Sitzung hinaus. Der Umschalter IM Block-Werkzeugkasten
+              aendert weiterhin bestehende Bloecke; dieser hier entscheidet,
+              womit der naechste anfaengt. */""}
+        <div class="wb-kontext wb-kontext-groesse" hidden>
+          <span class="wb-kontext-wort">Größe</span>
+          <div class="wb-kontext-groessen"></div>
+        </div>
+        <div class="wb-leiste-trenner wb-kontext-zettel-trenner" hidden></div>
         <div class="wb-kontext wb-kontext-notiz" hidden></div>
         <div class="wb-leiste-trenner wb-kontext-trenner" hidden></div>
         <button type="button" class="wb-knopf wb-undo" data-tip="Rückgängig (Strg+Z)" aria-label="Rückgängig" disabled>${ICON.zurueck}</button>
@@ -225,9 +313,10 @@
           ${/* Kurzer Begriff, sonst bricht die Zeile um; die Zuordnung
                 V=Auswahl usw. steht in den Tooltips der Leiste. */""}
           <dt>Werkzeuge wechseln</dt><dd><kbd>V</kbd><kbd>S</kbd><kbd>T</kbd><kbd>N</kbd><kbd>E</kbd></dd>
-          <dt>Zoom auf den Mauszeiger</dt><dd><kbd>Rad</kbd></dd>
+          <dt>Zoom auf den Mauszeiger</dt><dd><kbd>Rad</kbd> · <kbd>Strg</kbd>+<kbd>Rad</kbd></dd>
+          <dt>Wand verschieben</dt><dd>Zwei Finger · <kbd>Leertaste</kbd>+Ziehen</dd>
           <dt>Seitwärts an der Wand entlang</dt><dd><kbd>Shift</kbd>+<kbd>Rad</kbd></dd>
-          <dt>Wand verschieben</dt><dd><kbd>Leertaste</kbd>+Ziehen</dd>
+          <dt>Zur Nachbar-Tafel</dt><dd><kbd>Alt</kbd>+<kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd></dd>
           <dt>Rückgängig / Wiederholen</dt><dd><kbd>Strg</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></dd>
           <dt>Auswahl löschen</dt><dd><kbd>Entf</kbd></dd>
           <dt>Zoom · 100 % · alles zeigen</dt><dd><kbd>+</kbd><kbd>−</kbd> · <kbd>1</kbd> · <kbd>0</kbd></dd>
@@ -241,6 +330,25 @@
         <div class="dialog-fuss">
           <button type="button" class="sekundaer wb-wischen-nein">Abbrechen</button>
           <button type="button" class="gefahr wb-wischen-ja">Tafel wischen</button>
+        </div>
+      </dialog>
+      ${/* Zeile verknuepfen: Adressfeld + Live-Vorschlaege aus dem CRM.
+            Ein Dialog statt eines Popovers, weil hier getippt wird — und
+            weil er die Wand fuer den Moment stillstellen darf. */""}
+      <dialog class="wb-dialog wb-link-dialog">
+        <h2>Zeile verknüpfen</h2>
+        <div class="sub wb-link-zeile"></div>
+        <label class="wb-link-feld">
+          <span>Adresse</span>
+          <input type="text" class="wb-link-eingabe" placeholder="https://… oder name@firma.de"
+                 autocomplete="off" spellcheck="false">
+        </label>
+        <div class="wb-link-treffer" role="listbox" aria-label="Vorschläge"></div>
+        <div class="dialog-fuss">
+          <button type="button" class="sekundaer wb-link-weg" hidden>Link entfernen</button>
+          <span class="wb-link-luft"></span>
+          <button type="button" class="sekundaer wb-link-abbrechen">Abbrechen</button>
+          <button type="button" class="wb-link-ok">Übernehmen</button>
         </div>
       </dialog>
       <div class="wb-anmelden" hidden>
@@ -258,8 +366,11 @@
   const leinwand = $(".wb-tinte");
   const ctx = leinwand.getContext("2d");
   const marqueeEl = $(".wb-marquee");
+  const neuRahmen = $(".wb-neurahmen");
   const schwammKreis = $(".wb-schwammkreis");
   const toastsEl = $(".wb-toasts");
+  const pfeileEl = $(".wb-pfeile");
+  const fremdLeiste = $(".wb-fremdleiste");
 
   // Farb- und Dickenwahl in der Leiste fuellen (Kontext des Stifts).
   (function kontexteFuellen() {
@@ -291,6 +402,16 @@
       b.setAttribute("aria-label", "Zettelfarbe " + name);
       zettel.appendChild(b);
     });
+    const groessen = $(".wb-kontext-groessen");
+    [[GROESSEN[0], "S", "klein"], [GROESSEN[1], "M", "mittel"], [GROESSEN[2], "L", "groß"]]
+      .forEach(([wert, wort, tip]) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "wb-neugroesse"; b.dataset.groesse = String(wert);
+        b.textContent = wort;
+        b.setAttribute("data-tip", "Schrift " + tip);
+        b.setAttribute("aria-label", "Schriftgröße " + tip);
+        groessen.appendChild(b);
+      });
   })();
 
   // =================================================================
@@ -303,7 +424,10 @@
     const eigen = person.id === ich.id;
     const wrap = document.createElement("div");
     wrap.className = "wb-board" + (eigen ? " wb-eigen" : "");
+    // Beide Namen fuer dieselbe Person: das Board GEHOERT ihr (besitzer,
+    // so heisst es seit der ersten Fassung) und IST ihre Tafel.
     wrap.dataset.besitzer = person.id;
+    wrap.dataset.tafel = person.id;
     wrap.style.left = versatz.get(person.id) + "px";
     wrap.style.top = versatzY.get(person.id) + "px";
     wrap.style.width = BOARD_B + "px";
@@ -387,7 +511,9 @@
       if (!k) continue;
       let gesamt = 0, erledigt = 0, anzahl = 0;
       for (const el of elemente.values()) {
-        if (el.besitzer !== person.id) continue;
+        // Gezaehlt wird, was auf der TAFEL liegt — eine Aufgabe, die jemand
+        // hier hingeschrieben hat, gehoert zum Fortschritt dieser Person.
+        if (tafelVon(el) !== person.id) continue;
         anzahl++;
         if ((el.art === "text" || el.art === "notiz") && el.inhalt.liste === "check") {
           for (const z of el.inhalt.zeilen) { gesamt++; if (z.erledigt) erledigt++; }
@@ -518,6 +644,18 @@
   window.addEventListener("resize", () => { flaecheRect = null; });
   dprBeobachten();
 
+  // Rueckfall fuer Engines ohne overflow:clip (siehe whiteboard.css): dort
+  // bleibt die Flaeche ein Scroll-Container, und der Browser scrollt ihn
+  // ungefragt, sobald ein Caret ausserhalb liegt. Die DOM-Buehne wanderte
+  // dann gegen den Tinten-Canvas — Schrift und Striche laegen nicht mehr
+  // uebereinander. Also: sofort zuruecksetzen, es gibt hier nichts zu
+  // scrollen. Verschoben wird ausschliesslich ueber "ansicht".
+  const scrollZurueck = (el) => el.addEventListener("scroll", () => {
+    if (el.scrollLeft || el.scrollTop) { el.scrollLeft = 0; el.scrollTop = 0; flaecheRect = null; }
+  }, { passive: true });
+  scrollZurueck(flaeche);
+  scrollZurueck(raum);
+
   // ------------------------------------------------------------ Koordinaten
 
   const schirmZuWelt = (sx, sy) => ({ x: (sx - ansicht.tx) / ansicht.s, y: (sy - ansicht.ty) / ansicht.s });
@@ -623,8 +761,8 @@
   // Besitzers ist eingebacken. Midpoint-Quadratic glaettet die Kette.
   function strichPfadBauen(el, grob) {
     const p = el.inhalt.punkte;
-    const vx = versatz.get(el.besitzer) || 0;
-    const vy = versatzY.get(el.besitzer) || 0;
+    const vx = versatz.get(tafelVon(el)) || 0;
+    const vy = versatzY.get(tafelVon(el)) || 0;
     const pfad = new Path2D();
     if (p.length < 4) return pfad;
     pfad.moveTo(p[0] + vx, p[1] + vy);
@@ -663,12 +801,18 @@
   // OPTISCH (translate beim Zeichnen); gebacken wird erst beim Loslassen.
   const ziehVersatz = { aktiv: false, dx: 0, dy: 0 };
 
-  // Der Schwamm tintet Striche, BEVOR er loescht: alles in dieser Menge
-  // wird halbtransparent gezeichnet.
-  const schwammOpfer = new Set();
+  // Der Schwamm radiert PUNKTGENAU: waehrend des Wischens merkt er sich je
+  // Strich, welche Stuetzpunkte er beruehrt hat (Set von Indizes), und
+  // zeichnet nur diese blass. Erst beim Loslassen zerfaellt der Strich in
+  // seine Reststuecke. Fuer getippten Text merkt er sich je Zeile die
+  // getroffenen Zeichen und legt eine Vorschau auf den Canvas — das
+  // contenteditable wird waehrend der Geste NICHT angefasst (Fokus und
+  // Caret waeren sonst hin).
+  const schwammStriche = new Map();   // strichId -> Set(Punkt-Index)
+  const schwammTexte = new Map();     // blockId -> {zeilen:[{span, kaesten:[..], weg:Set}]}
 
   // Der gerade entstehende Strich (Werkzeug Stift).
-  let liveStrich = null; // {punkte:[welt-boardrelativ], farbe, dicke, besitzer, letzteX, letzteY}
+  let liveStrich = null; // {punkte:[welt-boardrelativ], farbe, dicke, tafel, ...}
 
   function vollZeichnen() {
     const t0 = performance.now();
@@ -702,13 +846,17 @@
           const b = el; // bbox liegt am Element (x,y,breite,hoehe, board-relativ)
           const ex0 = b.x + bx, ey0 = b.y + by, ex1 = ex0 + b.breite, ey1 = ey0 + b.hoehe;
           if (ex0 > sichtX1 || ex1 < sichtX0 || ey0 > sichtY1 || ey1 < sichtY0) continue;
-          const gewischt = schwammOpfer.has(el.id);
+          const weg = schwammStriche.get(el.id);
           const gezogen = ziehVersatz.aktiv && auswahl.has(el.id);
           ctx.strokeStyle = tinte(el.inhalt.farbe);
           ctx.lineWidth = el.inhalt.dicke;
-          ctx.globalAlpha = gewischt ? 0.22 : 1;
+          ctx.globalAlpha = 1;
           if (gezogen) { ctx.save(); ctx.translate(ziehVersatz.dx, ziehVersatz.dy); }
-          ctx.stroke(grobModus ? (el._pfadGrob || (el._pfadGrob = strichPfadBauen(el, true))) : pfadVon(el));
+          // Angeknabberter Strich: die uebrigen Stuecke voll, die vom
+          // Schwamm beruehrten blass — man sieht schon beim Wischen, wo
+          // die Luecke entstehen wird.
+          if (weg && weg.size) strichStueckeZeichnen(el, bx, by, weg);
+          else ctx.stroke(grobModus ? (el._pfadGrob || (el._pfadGrob = strichPfadBauen(el, true))) : pfadVon(el));
           if (gezogen) ctx.restore();
           if (auswahl.has(el.id)) auswahlRahmen(el, bx, by, gezogen);
         } catch (fehler) {
@@ -722,8 +870,8 @@
 
     // Der Strich unterm Stift, immer scharf und zuoberst.
     if (liveStrich) {
-      const bx = versatz.get(liveStrich.besitzer) || 0;
-      const by = versatzY.get(liveStrich.besitzer) || 0;
+      const bx = versatz.get(liveStrich.tafel) || 0;
+      const by = versatzY.get(liveStrich.tafel) || 0;
       ctx.save();
       ctx.beginPath(); ctx.rect(bx, by, BOARD_B, BOARD_H); ctx.clip();
       ctx.strokeStyle = tinte(liveStrich.farbe);
@@ -743,10 +891,57 @@
     }
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    schwammTextVorschau();
 
     redrawZeit += (performance.now() - t0 - redrawZeit) * 0.2;
     if (!grobModus && redrawZeit > 20.5) { grobModus = true; }
     else if (grobModus && redrawZeit < 14) { grobModus = false; }
+  }
+
+  // Ein angeknabberter Strich, Stueck fuer Stueck: zusammenhaengende Laeufe
+  // gleichen Zustands werden als eigener Pfad gezogen, die weggewischten
+  // blass. Ein Uebergangspunkt gehoert BEIDEN Laeufen, sonst klaffte schon
+  // in der Vorschau eine zu grosse Luecke.
+  function strichStueckeZeichnen(el, bx, by, weg) {
+    const p = el.inhalt.punkte;
+    const n = p.length / 2;
+    let i = 0;
+    while (i < n) {
+      const raus = weg.has(i);
+      let j = i;
+      while (j + 1 < n && weg.has(j + 1) === raus) j++;
+      const von = Math.max(0, i - 1), bis = Math.min(n - 1, j + 1);
+      if (bis > von) {
+        ctx.globalAlpha = raus ? 0.18 : 1;
+        ctx.beginPath();
+        ctx.moveTo(p[von * 2] + bx, p[von * 2 + 1] + by);
+        for (let k = von + 1; k <= bis; k++) ctx.lineTo(p[k * 2] + bx, p[k * 2 + 1] + by);
+        ctx.stroke();
+      }
+      i = j + 1;
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Vorschau fuer radierte ZEICHEN: halbtransparente Rechtecke ueber den
+  // getroffenen Buchstaben, gezeichnet in BILDSCHIRM-Koordinaten (die
+  // Rechtecke kommen aus getClientRects und die Ansicht steht waehrend der
+  // Wischgeste still). Das contenteditable bleibt unberuehrt.
+  function schwammTextVorschau() {
+    if (!schwammTexte.size) return;
+    const r = rectHolen();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = "rgba(192,59,59,.28)";
+    for (const eintrag of schwammTexte.values()) {
+      for (const zeile of eintrag.zeilen) {
+        for (const i of zeile.weg) {
+          const k = zeile.kaesten[i];
+          if (!k) continue;
+          ctx.fillRect(k.x - r.left, k.y - r.top, k.b, k.h);
+        }
+      }
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
   // Auswahlrahmen fuer Striche: gestrichelte Box, Strichbreite in
@@ -780,8 +975,8 @@
     const p = liveStrich.punkte;
     const n = p.length;
     if (n < 4) return;
-    const bx = versatz.get(liveStrich.besitzer) || 0;
-    const by = versatzY.get(liveStrich.besitzer) || 0;
+    const bx = versatz.get(liveStrich.tafel) || 0;
+    const by = versatzY.get(liveStrich.tafel) || 0;
     ctx.setTransform(dpr * ansicht.s, 0, 0, dpr * ansicht.s, dpr * ansicht.tx, dpr * ansicht.ty);
     ctx.save();
     ctx.beginPath(); ctx.rect(bx, by, BOARD_B, BOARD_H); ctx.clip();
@@ -812,23 +1007,59 @@
   // =================================================================
 
   const elementKnoten = new Map();         // id -> DOM-Knoten (nur text/notiz)
+  const strichFahnen = new Map();          // id -> DOM-Fahne "von X" eines Strichs
+
+  // "von Lukas" — die Herkunftsfahne. Bei Bloecken haengt sie IM Knoten
+  // (folgt jedem Verschieben von selbst), bei Strichen als eigener Knoten
+  // an der Bounding-Box oben links: Tinte lebt auf dem Canvas, dort gibt
+  // es kein DOM, an das sie sich haengen koennte.
+  function fahneFuellen(fahne, el) {
+    fahne.textContent = "von " + vorname(el.besitzer);
+    fahne.title = vorname(el.besitzer) + " hat das auf "
+      + besitzform(vorname(tafelVon(el))) + " Tafel geschrieben";
+  }
+
+  function strichFahne(el) {
+    const noetig = istFremdeHand(el);
+    let fahne = strichFahnen.get(el.id);
+    if (!noetig) { if (fahne) { fahne.remove(); strichFahnen.delete(el.id); } return; }
+    const ebene = boardKnoten.get(tafelVon(el));
+    if (!ebene) return;
+    if (!fahne) {
+      fahne = document.createElement("div");
+      fahne.className = "wb-fahne wb-fahne-strich";
+      strichFahnen.set(el.id, fahne);
+    }
+    if (fahne.parentElement !== ebene.inhalt) ebene.inhalt.appendChild(fahne);
+    fahne.style.left = el.x + "px";
+    fahne.style.top = el.y + "px";
+    fahneFuellen(fahne, el);
+  }
 
   // Ein Element vollstaendig uebernehmen (Erstaufbau UND Poll-Delta).
   // Idempotent per id: der komplette Zustand wird ersetzt — Duplikate aus
   // dem 10-Sekunden-Ueberlappungsfenster des Servers sind dadurch gratis.
   function elementUebernehmen(el, quelle) {
     try {
-      if (!versatz.has(el.besitzer)) return;               // unbekanntes Board
+      // Ein Element ohne "tafel" (Stand der ersten Fassung) haengt auf dem
+      // Board seines Autors — EINMAL hier normalisieren, damit der ganze
+      // Rest des Clients nur noch el.tafel kennt.
+      if (!el.tafel) el.tafel = el.besitzer;
+      if (!versatz.has(el.tafel)) return;                  // unbekanntes Board
       if (quelle === "poll" && inArbeit.has(el.id)) return; // Finger drauf: nicht anfassen
       const alt = elemente.get(el.id);
+      // Wechselt ein Element das Board (kommt nur ueber einen Vollabgleich
+      // vor), muss es aus der alten Strichliste bzw. Inhaltsebene heraus.
+      if (alt && alt.tafel !== el.tafel) elementAusBoardNehmen(alt);
       elemente.set(el.id, el);
       if (el.art === "strich") {
         el._pfad = null; el._pfadGrob = null;
-        const liste = stricheJeBoard.get(el.besitzer);
-        if (alt && alt.art === "strich") {
+        const liste = stricheJeBoard.get(el.tafel);
+        if (alt && alt.art === "strich" && alt.tafel === el.tafel) {
           const i = liste.indexOf(alt);
           if (i >= 0) liste[i] = el; else liste.push(el);
         } else liste.push(el);
+        strichFahne(el);
         tintenDirty = true; zeichnenAnfordern();
       } else {
         blockRendern(el, alt);
@@ -838,21 +1069,27 @@
     }
   }
 
+  // Nur aus Zeichenliste bzw. DOM nehmen — ohne das Modell anzufassen.
+  function elementAusBoardNehmen(el) {
+    if (el.art === "strich") {
+      const liste = stricheJeBoard.get(tafelVon(el));
+      if (liste) { const i = liste.indexOf(el); if (i >= 0) liste.splice(i, 1); }
+      const f = strichFahnen.get(el.id);
+      if (f) { f.remove(); strichFahnen.delete(el.id); }
+      tintenDirty = true; zeichnenAnfordern();
+    } else {
+      const k = elementKnoten.get(el.id);
+      if (k) { k.remove(); elementKnoten.delete(el.id); }
+    }
+  }
+
   function elementEntfernen(id) {
     const el = elemente.get(id);
     if (!el) return;
     elemente.delete(id);
     auswahl.delete(id);
     inArbeit.delete(id);
-    if (el.art === "strich") {
-      const liste = stricheJeBoard.get(el.besitzer);
-      const i = liste.indexOf(el);
-      if (i >= 0) liste.splice(i, 1);
-      tintenDirty = true; zeichnenAnfordern();
-    } else {
-      const k = elementKnoten.get(id);
-      if (k) { k.remove(); elementKnoten.delete(id); }
-    }
+    elementAusBoardNehmen(el);
     auswahlAnzeigen();
     schilderAuffrischen();
   }
@@ -877,19 +1114,24 @@
 
   function blockRendernInnen(el, alt) {
     let knoten = elementKnoten.get(el.id);
-    const eigen = el.besitzer === ich.id;
+    // "darf" ersetzt das alte "eigen": bearbeiten kann jetzt auch, wer die
+    // Tafel besitzt (eine Aufgabe abhaken) — und wer auf einer fremden
+    // Tafel geschrieben hat, behaelt seinen eigenen Text.
+    const darf = darfBearbeiten(el);
     if (!knoten) {
       knoten = document.createElement("div");
       knoten.dataset.id = el.id;
-      const inhalt = boardKnoten.get(el.besitzer).inhalt;
-      inhalt.appendChild(knoten);
+      boardKnoten.get(tafelVon(el)).inhalt.appendChild(knoten);
       elementKnoten.set(el.id, knoten);
-      if (eigen) blockInteraktionAnbinden(knoten);
+      if (darf) blockInteraktionAnbinden(knoten);
     }
     // wb-fokus lebt am Fokus, nicht am Modell — die Klasse muss das
     // Neuschreiben von className ueberleben, sonst schliesst sich der
     // Werkzeugkasten nach jedem Rendern (Farbe klicken -> Kasten weg).
     knoten.className = "wb-el " + (el.art === "notiz" ? "wb-el-notiz" : "wb-el-text")
+      + (darf ? " wb-darf" : "")
+      + (istFremdeHand(el) ? " wb-fremdhand" : "")
+      + (istFremdeHand(el) && tafelVon(el) === ich.id ? " wb-fuermich" : "")
       + (auswahl.has(el.id) ? " wb-gewaehlt" : "")
       + (knoten.classList.contains("wb-fokus") ? " wb-fokus" : "");
     knoten.style.left = el.x + "px";
@@ -900,13 +1142,17 @@
     if (el.art === "notiz") {
       knoten.style.setProperty("--zf", "var(--wb-zettel-" + el.inhalt.zettel + ")");
       knoten.style.setProperty("--drehung", zettelDrehung(el.id));
+      // Eine Haftnotiz ist ein Gegenstand mit fester Groesse: sie waechst
+      // nicht mit dem Text, sondern scrollt innen. Ohne feste Hoehe waere
+      // "aufziehen" und "skalieren" folgenlos.
+      knoten.style.height = Math.max(NOTIZ_MIN_H, Math.round(el.hoehe || NOTIZ_MIN_H)) + "px";
     }
 
-    // Struktur: Griff + Zeilenliste (+ Kasten nur am eigenen Block).
+    // Struktur: Griff + Zeilenliste (+ Kasten und Anfasser nur, wo man darf).
     let zeilenEl = $(".wb-zeilen", knoten);
     if (!zeilenEl) {
       knoten.innerHTML = "";
-      if (eigen) {
+      if (darf) {
         const griff = document.createElement("div");
         griff.className = "wb-griff";
         griff.setAttribute("data-tip", "Verschieben");
@@ -918,9 +1164,28 @@
       zeilenEl = document.createElement("div");
       zeilenEl.className = "wb-zeilen";
       knoten.appendChild(zeilenEl);
-      if (eigen) knoten.appendChild(kastenBauen(el.id));
+      if (darf) {
+        knoten.appendChild(kastenBauen(el.id));
+        const anfasser = document.createElement("div");
+        anfasser.className = "wb-groesse-griff";
+        anfasser.setAttribute("data-tip", el.art === "notiz" ? "Größe ändern" : "Breite ändern");
+        anfasser.innerHTML = ICON.ecke;
+        knoten.appendChild(anfasser);
+        anfasserAnbinden(anfasser, knoten);
+      }
     }
     zeilenEl.dataset.liste = el.inhalt.liste;
+
+    // Fahne "von X" — nur, wenn Autor und Tafel auseinandergehen.
+    let fahne = $(".wb-fahne", knoten);
+    if (istFremdeHand(el)) {
+      if (!fahne) {
+        fahne = document.createElement("div");
+        fahne.className = "wb-fahne";
+        knoten.appendChild(fahne);
+      }
+      fahneFuellen(fahne, el);
+    } else if (fahne) fahne.remove();
 
     // Zeilen abgleichen: vorhandene Knoten wiederverwenden, damit Fokus
     // und Caret bei jedem Rendern ueberleben wuerden (der Poll meidet
@@ -929,13 +1194,40 @@
     const daKnoten = Array.from(zeilenEl.children);
     for (let i = 0; i < zeilen.length; i++) {
       let z = daKnoten[i];
-      if (!z) { z = zeileBauen(eigen); zeilenEl.appendChild(z); }
-      zeileFuellen(z, zeilen[i], eigen);
+      if (!z) { z = zeileBauen(darf); zeilenEl.appendChild(z); }
+      zeileFuellen(z, zeilen[i], darf);
     }
     for (let i = daKnoten.length - 1; i >= zeilen.length; i--) daKnoten[i].remove();
 
-    if (eigen) kastenAuffrischen(el);
+    leerMarkieren(el, knoten);
+    scrollMarkieren(el, zeilenEl);
+    if (darf) kastenAuffrischen(el);
     schilderAuffrischen();
+  }
+
+  // Passt der Text nicht mehr in die Notiz, wird INNEN gescrollt statt
+  // ueber den Zettel hinauszulaufen. Die Klasse steht nur dann, weil ein
+  // Scroll-Kasten alles abschneidet, was neben den Zeilen liegt.
+  function scrollMarkieren(el, zeilenEl) {
+    const z = zeilenEl || (elementKnoten.get(el.id) && $(".wb-zeilen", elementKnoten.get(el.id)));
+    if (!z || el.art !== "notiz") return;
+    // Erst ohne Klasse messen: mit gesetztem overflow waere scrollHeight
+    // die gescrollte Hoehe und die Klasse bliebe fuer immer haengen.
+    const hatte = z.classList.contains("wb-scrollt");
+    if (hatte) z.classList.remove("wb-scrollt");
+    const laeuftUeber = z.scrollHeight > z.clientHeight + 1;
+    z.classList.toggle("wb-scrollt", laeuftUeber);
+  }
+
+  // Eine leere Haftnotiz bleibt stehen (sie ist ein Gegenstand — man klebt
+  // sie hin und schreibt spaeter drauf) und zeigt einen ganz blassen
+  // Platzhalter. Die Klasse sagt "alle Zeilen leer"; das :empty im CSS
+  // sorgt dafuer, dass der Platzhalter beim ersten Zeichen verschwindet,
+  // ohne dass dafuer neu gerendert werden muss.
+  function leerMarkieren(el, knoten) {
+    const k = knoten || elementKnoten.get(el.id);
+    if (!k) return;
+    k.classList.toggle("wb-blockleer", el.inhalt.zeilen.every((z) => !z.t));
   }
 
   function zeileBauen(eigen) {
@@ -959,9 +1251,21 @@
       t.tabIndex = -1;
     }
     z.appendChild(t);
+    // Das Ketten-Symbol HINTER dem Text (nicht der Text selbst): ein
+    // klickbarer Zeilentext kollidierte mit dem Bearbeiten — man kaeme nie
+    // mehr ans Caret.
+    const anker = document.createElement("a");
+    anker.className = "wb-zeile-link";
+    anker.innerHTML = ICON.kette;
+    anker.hidden = true;
+    z.appendChild(anker);
     if (eigen) {
       const tools = document.createElement("span");
       tools.className = "wb-zeile-tools";
+      const kette = document.createElement("button");
+      kette.type = "button"; kette.className = "wb-zeile-kette"; kette.tabIndex = -1;
+      kette.setAttribute("aria-label", "Verknüpfen");
+      kette.innerHTML = ICON.kette;
       const streich = document.createElement("button");
       streich.type = "button"; streich.className = "wb-zeile-streichen"; streich.tabIndex = -1;
       streich.setAttribute("aria-label", "Durchstreichen");
@@ -970,7 +1274,7 @@
       weg.type = "button"; weg.className = "wb-zeile-weg"; weg.tabIndex = -1;
       weg.setAttribute("aria-label", "Zeile löschen");
       weg.innerHTML = ICON.weg;
-      tools.append(streich, weg);
+      tools.append(kette, streich, weg);
       z.appendChild(tools);
     }
     return z;
@@ -985,6 +1289,46 @@
     // beim Klick selbst (hakenZiehen).
     const haken = $(".wb-haken", z);
     if (haken) haken.style.strokeDashoffset = daten.erledigt ? "0" : "1";
+    linkAnkerSetzen(z, daten.link);
+  }
+
+  // Den Link-Anker einer Zeile auf den Stand bringen. Die Adresse wird HIER
+  // ein zweites Mal geprueft: was aus einer alten Zeile oder einer fremden
+  // Sitzung kommt, darf niemals ungeprueft in ein href.
+  function linkAnkerSetzen(z, adresse) {
+    const anker = $(".wb-zeile-link", z);
+    if (!anker) return;
+    const ziel = String(adresse || "").trim();
+    if (!ziel || !LINK_ERLAUBT.test(ziel)) {
+      anker.hidden = true;
+      anker.removeAttribute("href");
+      anker.removeAttribute("target");
+      anker.removeAttribute("rel");
+      return;
+    }
+    anker.hidden = false;
+    anker.setAttribute("href", ziel);
+    anker.title = ziel;
+    anker.setAttribute("aria-label", "Öffnen: " + ziel);
+    if (intern(ziel)) {
+      // Eigene Seiten bleiben im selben Tab — das OS ist EINE Anwendung,
+      // ein zweiter Tab davon waere nur ein zweiter Ort zum Zurechtfinden.
+      anker.removeAttribute("target");
+      anker.removeAttribute("rel");
+    } else {
+      anker.setAttribute("target", "_blank");
+      anker.setAttribute("rel", "noopener");
+    }
+  }
+
+  // Zeigt die Adresse auf dieses OS? Der Server nimmt nur http/https/mailto
+  // (siehe LINK in whiteboard-routes.js) — interne Ziele reisen deshalb als
+  // absolute Adresse auf den eigenen Ursprung und werden hier wieder als
+  // "intern" erkannt.
+  function intern(adresse) {
+    if (adresse.startsWith("/")) return true;
+    try { return new URL(adresse, location.href).origin === location.origin; }
+    catch { return false; }
   }
 
   // Der gruene Haken wird GEZOGEN, nicht eingeblendet — wie mit dem
@@ -1081,8 +1425,12 @@
     const neu = [];
     for (let i = 0; i < spans.length; i++) {
       const alt = el.inhalt.zeilen[i] || { erledigt: false, gestrichen: false };
-      neu.push({ t: spans[i].textContent.replace(/\u00A0/g, " ").slice(0, DATEN.grenzen.zeichenJeZeile),
-                 erledigt: !!alt.erledigt, gestrichen: !!alt.gestrichen });
+      const zeile = { t: spans[i].textContent.replace(/\u00A0/g, " ").slice(0, DATEN.grenzen.zeichenJeZeile),
+                      erledigt: !!alt.erledigt, gestrichen: !!alt.gestrichen };
+      // Der Link ist Metadatum wie erledigt/gestrichen: er steht nicht im
+      // DOM-Text und darf beim Zurueckschreiben nicht verloren gehen.
+      if (alt.link) zeile.link = alt.link;
+      neu.push(zeile);
     }
     el.inhalt.zeilen = neu.length ? neu : [{ t: "", erledigt: false, gestrichen: false }];
   }
@@ -1093,7 +1441,10 @@
     const knoten = elementKnoten.get(el.id);
     if (knoten) {
       el.breite = Math.max(el.breite, 40);
-      el.hoehe = Math.round(knoten.offsetHeight);
+      // Nur Textbloecke wachsen mit dem Text. Die Hoehe einer Haftnotiz ist
+      // gewaehlt (aufgezogen oder skaliert) \u2014 sie hier nachzumessen wuerde
+      // die Wahl bei jedem Tastendruck ueberschreiben.
+      if (el.art !== "notiz") el.hoehe = Math.round(knoten.offsetHeight);
     }
     aenderungEinreihen(el, sofort);
     schilderAuffrischen();
@@ -1123,15 +1474,30 @@
       if (!el) return;
       blockSerialisieren(el);
       const leer = el.inhalt.zeilen.every((z) => !z.t.trim());
-      if (leer) {
+      // Eine leere HAFTNOTIZ bleibt: sie ist ein Gegenstand, den man
+      // hinklebt und spaeter beschriftet. Ein leerer TEXTBLOCK verschwindet
+      // weiterhin — unsichtbar und leer waere er nur eine Falle.
+      if (leer && el.art !== "notiz") {
         elementLoeschen([el.id], { still: true });
       } else {
+        if (adressenErkennen(el)) blockRendern(el);
+        leerMarkieren(el, knoten);
         blockGeaendert(el, true);
       }
       inArbeit.delete(el.id);
     });
 
-    // ---- pointerdown im Block: zwei Sonderfaelle VOR dem Fokus.
+    // ---- pointerdown im Block: greifen, fokussieren oder heranfahren.
+    //
+    // Neu (31.08.2026): Man packt eine Haftnotiz UEBERALL an, nicht nur am
+    // Griff — wie am echten Board. Der Zeiger entscheidet: bewegt er sich
+    // ueber 4 px, ist es ein Zug; bleibt er stehen, war es ein Klick und
+    // die Zeile bekommt den Caret an genau die geklickte Stelle.
+    //
+    // Warum preventDefault schon beim Aufsetzen: sonst gaebe der Browser
+    // dem contenteditable sofort den Fokus UND begaenne eine Textauswahl —
+    // beides mitten in einem Zug. Der Fokus wird darum von Hand gesetzt,
+    // erst wenn feststeht, dass es kein Zug war.
     knoten.addEventListener("pointerdown", (ev) => {
       // Abhaken und Zeilenwerkzeuge nehmen beim Klick KEINEN Fokus an
       // (tabIndex -1 steht schon): das mousedown wuerde sonst wb-fokus
@@ -1139,16 +1505,113 @@
       // inArbeit-Sperre bliebe haengen (der Poll traegt Fremdstaende
       // dann nicht mehr nach, bis irgendwo ins Leere geklickt wird).
       if (ev.target.closest(".wb-abhaken,.wb-zeile-tools")) { ev.preventDefault(); return; }
-      // Winzig-Zoom: unter 35 % ist ein Caret nur noch Deko — aber der
-      // Fokus finge danach die Tastenkuerzel (T/S/...) ab und tippte sie
-      // in den Block. Statt zu fokussieren heranfahren, wie beim
-      // Doppelklick weiter unten.
-      if (ansicht.s < ZOOM_TEXT_MIN && ev.target.closest(".wb-zeile-text")) {
-        ev.preventDefault();
-        const el = elVonKnoten(knoten);
-        if (el) aufElementZoomen(el);
+      // Diese Kinder regeln sich selbst — Kasten, Griff, Anfasser, Link.
+      if (ev.target.closest(".wb-kasten,.wb-griff,.wb-groesse-griff,.wb-zeile-link")) return;
+      if (ev.button !== 0 && ev.pointerType === "mouse") return;
+      // Mit Stift/Notiz/Schwamm in der Hand gehoert der Klick dem Werkzeug
+      // (neuer Block ueber dem alten, Radieren) — nicht dem Verschieben.
+      if (werkzeug !== "auswahl") return;
+      if (leertaste) return;                 // Leertaste = Wand schieben
+      const el = elVonKnoten(knoten);
+      if (!el || !darfBearbeiten(el)) return;
+
+      // Shift ergaenzt die Auswahl (Muster der Flaeche), ohne zu ziehen.
+      if (ev.shiftKey) {
+        ev.preventDefault(); ev.stopPropagation();
+        if (auswahl.has(el.id)) auswahl.delete(el.id); else auswahl.add(el.id);
+        auswahlAnzeigen();
+        return;
       }
+
+      // Steht der Cursor schon IM Block, darf nur Griff/Rand ziehen —
+      // sonst koennte man Text nicht mehr markieren.
+      const imText = !!ev.target.closest(".wb-zeile-text");
+      if (knoten.classList.contains("wb-fokus") && imText) return;
+
+      ev.stopPropagation();
+      ev.preventDefault();
+      if (!auswahl.has(el.id)) { auswahl.clear(); auswahl.add(el.id); auswahlAnzeigen(); }
+
+      const startX = ev.clientX, startY = ev.clientY, zeiger = ev.pointerId;
+      const ziel = ev.target;
+      let gestartet = false;
+      const pruefen = (m) => {
+        if (m.pointerId !== zeiger || gestartet) return;
+        if (Math.abs(m.clientX - startX) <= ZIEH_SCHWELLE
+            && Math.abs(m.clientY - startY) <= ZIEH_SCHWELLE) return;
+        gestartet = true;
+        abmelden();
+        blockZiehen(el, { clientX: startX, clientY: startY, pointerId: zeiger, target: ziel });
+      };
+      const los = (m) => {
+        if (m.pointerId !== zeiger) return;
+        abmelden();
+        if (gestartet || m.type === "pointercancel") return;
+        klickImBlock(el, knoten, m);
+      };
+      const abmelden = () => {
+        window.removeEventListener("pointermove", pruefen, true);
+        window.removeEventListener("pointerup", los, true);
+        window.removeEventListener("pointercancel", los, true);
+      };
+      // Am FENSTER lauschen, mit capture: der Zeiger verlaesst beim Ziehen
+      // regelmaessig den Block, und ein Listener am Knoten bekaeme das
+      // Loslassen dann nie zu sehen.
+      window.addEventListener("pointermove", pruefen, true);
+      window.addEventListener("pointerup", los, true);
+      window.addEventListener("pointercancel", los, true);
     });
+
+    // Klick ohne Bewegung: bearbeiten. Am Telefon oeffnet das Vollbild-
+    // Blatt, bei winziger Ansicht wird erst herangefahren (ein Caret unter
+    // 35 % ist Deko, und der Fokus finge danach die Tastenkuerzel ab).
+    function klickImBlock(el, knoten, ev) {
+      if (istMobil()) { if (!mobilOffen) mobilOeffnen(el); return; }
+      if (ansicht.s < ZOOM_TEXT_MIN) { aufElementZoomen(el); return; }
+      let span = ev.target.closest && ev.target.closest(".wb-zeile-text");
+      if (!span) {
+        // Klick auf die freie Zettelflaeche: die naechstliegende Zeile
+        // bekommt den Caret. Ein Zettel ist zum Beschriften da — ihn
+        // anzutippen und nichts passieren zu lassen, waere eine tote Stelle.
+        const spans = $$(".wb-zeile-text", knoten);
+        if (!spans.length) return;
+        let bester = spans[0], abstand = Infinity;
+        for (const s of spans) {
+          const r = s.getBoundingClientRect();
+          const dy = ev.clientY < r.top ? r.top - ev.clientY
+                   : ev.clientY > r.bottom ? ev.clientY - r.bottom : 0;
+          if (dy < abstand) { abstand = dy; bester = s; }
+        }
+        span = bester;
+      }
+      caretSetzen(span, caretAusPunkt(span, ev.clientX, ev.clientY));
+    }
+
+    // Der Caret gehoert dorthin, wo geklickt wurde — nicht an den Anfang.
+    // Gemessen wird ueber die Zeichen-Rechtecke, nicht ueber
+    // caretPositionFromPoint: das liefert fuer einen Klick NEBEN dem Text
+    // (der Zeilen-Span ist immer blockbreit) den Span selbst mit Offset 0 —
+    // der Caret landete dann am Zeilenanfang statt am Ende, und ein
+    // getipptes Wort stand ploetzlich vor dem alten.
+    function caretAusPunkt(span, x, y) {
+      try {
+        const kaesten = zeichenRechtecke(span);
+        if (!kaesten.length) return 0;
+        let bester = null, bestesMass = Infinity, besterIndex = 0;
+        for (let i = 0; i < kaesten.length; i++) {
+          const k = kaesten[i];
+          if (!k) continue;
+          // Erst die Zeile finden (senkrechter Abstand wiegt schwerer),
+          // dann darin die naechste Zeichengrenze.
+          const dy = y < k.y ? k.y - y : y > k.y + k.h ? y - (k.y + k.h) : 0;
+          const dx = x < k.x ? k.x - x : x > k.x + k.b ? x - (k.x + k.b) : 0;
+          const mass = dy * 1000 + dx;
+          if (mass < bestesMass) { bestesMass = mass; bester = k; besterIndex = i; }
+        }
+        if (!bester) return span.textContent.length;
+        return x > bester.x + bester.b / 2 ? besterIndex + 1 : besterIndex;
+      } catch { return span.textContent.length; }
+    }
 
     // ---- Tastenlogik je Zeile.
     knoten.addEventListener("keydown", (ev) => {
@@ -1230,6 +1693,8 @@
       // historyUndo/historyRedo: der Browser hat den Zeileninhalt selbst
       // veraendert — einfach neu ablesen, unser Modell folgt dem DOM.
       blockSerialisieren(el);
+      leerMarkieren(el, knoten);
+      scrollMarkieren(el);
       blockGeaendert(el, false);
     });
     knoten.addEventListener("compositionend", () => {
@@ -1284,6 +1749,17 @@
       // Strg+Z nach dem Abhaken ueberraschend die letzte ANDERE Aktion
       // zurueck (im Test verschwand ein Strich).
       const inhaltKopie = () => JSON.parse(JSON.stringify(el.inhalt));
+
+      // Der Link-Anker macht seine Arbeit selbst (href/target stehen) —
+      // hier nur dafuer sorgen, dass der Klick nicht zusaetzlich als
+      // Block-Klick gewertet wird.
+      if (ev.target.closest(".wb-zeile-link")) { ev.stopPropagation(); return; }
+
+      if (ev.target.closest(".wb-zeile-kette")) {
+        ev.preventDefault();
+        linkDialogOeffnen(el, idx);
+        return;
+      }
 
       if (ev.target.closest(".wb-abhaken")) {
         ev.preventDefault();
@@ -1517,6 +1993,86 @@
     });
   }
 
+  // ------------------------------------------------------- Groesse aendern
+  //
+  // Der Anfasser unten rechts. Haftnotizen bekommen Breite UND Hoehe (sie
+  // sind Gegenstaende und scrollen innen), Textbloecke nur die Breite —
+  // ihre Hoehe gehoert dem Text. Live wird der Knoten gestellt, gespeichert
+  // wird EINMAL beim Loslassen (ein aendern, ein Undo-Eintrag).
+  function anfasserAnbinden(anfasser, knoten) {
+    anfasser.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0 && ev.pointerType === "mouse") return;
+      ev.preventDefault(); ev.stopPropagation();
+      const el = elVonKnoten(knoten);
+      if (!el || !darfBearbeiten(el)) return;
+      const start = ereignisZuWelt(ev);
+      const b0 = el.breite, h0 = el.hoehe;
+      const minB = el.art === "notiz" ? NOTIZ_MIN_B : TEXT_MIN_B;
+      let breiteNeu = b0, hoeheNeu = h0;
+      inArbeit.add(el.id);
+      knoten.classList.add("wb-skaliert");
+      try { anfasser.setPointerCapture(ev.pointerId); } catch { /* schon weg */ }
+
+      const move = (m) => {
+        if (m.pointerId !== ev.pointerId) return;
+        const p = ereignisZuWelt(m);
+        // Hoechstmass ist die Tafel: ein Zettel, der ueber den Rahmen
+        // haengt, waere an einer echten Wand auch heruntergefallen.
+        breiteNeu = Math.round(klemm(b0 + (p.x - start.x), minB, BOARD_B - el.x));
+        knoten.style.width = breiteNeu + "px";
+        if (el.art === "notiz") {
+          hoeheNeu = Math.round(klemm(h0 + (p.y - start.y), NOTIZ_MIN_H, BOARD_H - el.y));
+          knoten.style.height = hoeheNeu + "px";
+        }
+      };
+      const ende = (m) => {
+        if (m.pointerId !== ev.pointerId) return;
+        anfasser.removeEventListener("pointermove", move);
+        anfasser.removeEventListener("pointerup", ende);
+        anfasser.removeEventListener("pointercancel", ende);
+        knoten.classList.remove("wb-skaliert");
+        const geaendert = breiteNeu !== b0 || (el.art === "notiz" && hoeheNeu !== h0);
+        if (geaendert) {
+          const vorher = { breite: b0, hoehe: h0 };
+          el.breite = breiteNeu;
+          if (el.art === "notiz") el.hoehe = hoeheNeu;
+          blockRendern(el);
+          // Textbloecke messen ihre neue Hoehe erst NACH dem Umbruch —
+          // blockGeaendert tut das, darum steht der Undo-Eintrag danach.
+          blockGeaendert(el, true);
+          undoMerken({ typ: "aendern", id: el.id, vorher,
+                       nachher: { breite: el.breite, hoehe: el.hoehe } });
+        } else blockRendern(el);
+        if (!istInBearbeitung(el.id)) inArbeit.delete(el.id);
+      };
+      anfasser.addEventListener("pointermove", move);
+      anfasser.addEventListener("pointerup", ende);
+      anfasser.addEventListener("pointercancel", ende);
+    });
+  }
+
+  // ------------------------------------------------- Adressen automatisch
+  //
+  // Endet eine Zeile beim Verlassen auf eine Adresse, wird sie verknuepft —
+  // der Text bleibt stehen wie getippt. Wer "www.kunde.de" schreibt, meint
+  // die Seite; sie danach noch von Hand einzuhaengen waere Arbeit fuer
+  // etwas, das schon dasteht. Liefert true, wenn sich etwas geaendert hat.
+  function adressenErkennen(el) {
+    let neu = false;
+    for (const z of el.inhalt.zeilen) {
+      if (z.link) continue;
+      const treffer = ADRESSE_AM_ENDE.exec(z.t || "");
+      if (!treffer) continue;
+      const roh = treffer[0].trim().replace(/[.,;:!?)\]]+$/, "");
+      let ziel = "";
+      if (/^https?:\/\//i.test(roh)) ziel = roh;
+      else if (/^www\./i.test(roh)) ziel = "https://" + roh;
+      else if (roh.includes("@")) ziel = "mailto:" + roh;
+      if (ziel && LINK_ERLAUBT.test(ziel)) { z.link = ziel; neu = true; }
+    }
+    return neu;
+  }
+
   // Einen (oder mehrere gewaehlte) Bloecke ziehen. Live wird nur left/top
   // gesetzt; gespeichert wird EINMAL beim Loslassen.
   function blockZiehen(el, startEv) {
@@ -1606,6 +2162,7 @@
     el.x += dx; el.y += dy;
     el._pfad = null; el._pfadGrob = null;
     undoMerken({ typ: "aendern", id, vorher, nachher: { x: el.x, y: el.y, inhalt: { punkte: p.slice(), farbe: el.inhalt.farbe, dicke: el.inhalt.dicke } } });
+    strichFahne(el);
     aenderungEinreihen(el, true);
   }
 
@@ -1703,15 +2260,69 @@
   function ansichtWechseln(ziel) {
     ansichtWahl = ziel;
     segmenteMarkieren();
+    pfeileAuffrischen();
+    flaeche.dataset.ansicht = ziel;
     const r = ansichtRechteck(ziel);
     if (!r) return;
     ansichtPassend = true;
     fitAuf(r.x, r.y, r.b, r.h, undefined, fitLuftDeckel(ziel));
   }
 
+  // =================================================================
+  // Nachbar-Pfeile: die Wand hat Kanten, und man soll sie sehen
+  // =================================================================
+  //
+  // Sieht man EINE Tafel an, erscheinen an den Raendern Pfeile — aber nur
+  // dort, wo in der zweireihigen Wand wirklich eine Nachbar-Tafel haengt.
+  // Ein Pfeil ins Leere waere schlimmer als keiner: er verspricht etwas.
+
+  const RICHTUNGEN = ["links", "rechts", "oben", "unten"];
+
+  // Index der angesehenen Tafel im team, oder -1 in der "Alle"-Ansicht.
+  function angeseheneTafel() {
+    const id = ansichtWahl === "mein" ? ich.id : ansichtWahl;
+    return team.findIndex((p) => p.id === id);
+  }
+
+  function nachbar(richtung) {
+    const i = angeseheneTafel();
+    if (i < 0) return null;
+    const spalte = i % jeReihe, reihe = Math.floor(i / jeReihe);
+    let j = -1;
+    if (richtung === "links" && spalte > 0) j = i - 1;
+    else if (richtung === "rechts" && spalte < jeReihe - 1) j = i + 1;
+    else if (richtung === "oben" && reihe > 0) j = i - jeReihe;
+    else if (richtung === "unten") j = i + jeReihe;
+    return j >= 0 && j < team.length ? team[j] : null;
+  }
+
+  function pfeileAuffrischen() {
+    const einzeln = ansichtWahl !== "alle";
+    pfeileEl.hidden = !einzeln;
+    for (const richtung of RICHTUNGEN) {
+      const knopf = $(".wb-pfeil-" + richtung, pfeileEl);
+      const p = einzeln ? nachbar(richtung) : null;
+      knopf.hidden = !p;
+      if (!p) continue;
+      // title statt des Haus-Tooltips: der Knopf traegt den Namen schon
+      // sichtbar, und ein Chip ueber dem Oben-Pfeil laege genau auf der
+      // Kopfzeile.
+      const wort = "Zu " + besitzform(p.name.split(" ")[0]) + " Tafel";
+      knopf.title = wort;
+      knopf.setAttribute("aria-label", wort);
+      $("span", knopf).textContent = p.name.split(" ")[0];
+      knopf.dataset.ziel = p.id === ich.id ? "mein" : p.id;
+    }
+  }
+
+  pfeileEl.addEventListener("click", (ev) => {
+    const knopf = ev.target.closest(".wb-pfeil");
+    if (knopf && knopf.dataset.ziel) ansichtWechseln(knopf.dataset.ziel);
+  });
+
   function aufElementZoomen(el) {
-    const bx = versatz.get(el.besitzer) || 0;
-    const by = versatzY.get(el.besitzer) || 0;
+    const bx = versatz.get(tafelVon(el)) || 0;
+    const by = versatzY.get(tafelVon(el)) || 0;
     const b = Math.max(el.breite, 420), h = Math.max(el.hoehe || 200, 300);
     ansichtPassend = false; // Element-Fit ist keine benannte Ansicht
     fitAuf(el.x + bx - 60, el.y + by - 60, b + 120, h + 120, 60);
@@ -1774,12 +2385,16 @@
     flaeche.dataset.werkzeug = neu;
     $$(".wb-leiste .wb-knopf[data-werkzeug]").forEach((b) =>
       b.classList.toggle("wb-aktiv", b.dataset.werkzeug === neu));
+    const blockWerkzeug = neu === "text" || neu === "notiz";
     $(".wb-kontext-stift").hidden = neu !== "stift";
+    $(".wb-kontext-groesse").hidden = !blockWerkzeug;
+    $(".wb-kontext-zettel-trenner").hidden = neu !== "notiz";
     $(".wb-kontext-notiz").hidden = neu !== "notiz";
-    $(".wb-kontext-trenner").hidden = neu !== "stift" && neu !== "notiz";
+    $(".wb-kontext-trenner").hidden = neu !== "stift" && !blockWerkzeug;
     // Der Schwammkreis erscheint erst mit der ersten Mausbewegung — sonst
     // staende er nach dem Umschalten verloren in der Ecke.
     schwammKreis.hidden = true;
+    if (neu !== "stift" && neu !== "text" && neu !== "notiz") fremdLeisteZeigen(null);
     kontextMarkieren();
     ablagenMarkieren();
     cursorSetzen();
@@ -1789,6 +2404,7 @@
     $$(".wb-kontext-farben .wb-farbe").forEach((b) => b.classList.toggle("wb-aktiv", b.dataset.farbe === stiftFarbe));
     $$(".wb-kontext-dicken .wb-dicke").forEach((b) => b.classList.toggle("wb-aktiv", b.dataset.dicke === stiftDicke));
     $$(".wb-kontext-notiz .wb-zettelwahl").forEach((b) => b.classList.toggle("wb-aktiv", b.dataset.zettel === zettelFarbe));
+    $$(".wb-neugroesse").forEach((b) => b.classList.toggle("wb-aktiv", Number(b.dataset.groesse) === neuGroesse));
   }
 
   // Die Ablage am eigenen Board spiegelt die Wahl: der aktive Marker ist
@@ -1809,6 +2425,15 @@
     if (farbe) { stiftFarbe = farbe.dataset.farbe; kontextMarkieren(); ablagenMarkieren(); cursorSetzen(); return; }
     const dicke = ev.target.closest(".wb-dicke");
     if (dicke) { stiftDicke = dicke.dataset.dicke; kontextMarkieren(); return; }
+    const neugroesse = ev.target.closest(".wb-neugroesse");
+    if (neugroesse) {
+      neuGroesse = Number(neugroesse.dataset.groesse);
+      // Ueber die Sitzung hinaus merken: wer gross schreibt, schreibt meist
+      // weiter gross. localStorage kann in privaten Fenstern werfen.
+      try { localStorage.setItem(GROESSE_SCHLUESSEL, String(neuGroesse)); } catch { /* egal */ }
+      kontextMarkieren();
+      return;
+    }
     const zettel = ev.target.closest(".wb-zettelwahl");
     if (zettel) { zettelFarbe = zettel.dataset.zettel; kontextMarkieren(); return; }
     if (ev.target.closest(".wb-undo")) { undoAusfuehren(); return; }
@@ -1857,27 +2482,72 @@
   let pinch = null;                        // {abstand, mitte, s0, tx0, ty0}
   let pan = null;                          // {x0,y0,tx0,ty0,pointerId}
   let marquee = null;                      // {x0,y0} Welt
+  let aufziehen = null;                    // Vorschau-Rahmen fuer eine neue Notiz
   const fremdHinweisZuletzt = new Map();   // boardId -> ms des letzten Hinweises
 
-  // Rad: Zoom auf den Mauszeiger; Shift+Rad faehrt seitwaerts an der Wand
-  // entlang. passive:false ist Pflicht — Chromium macht Wheel-Listener
-  // sonst passiv, und preventDefault verhallt (Seite zoomt/scrollt mit).
+  // Kommt dieses Rad-Ereignis von einem Touchpad? Der Browser sagt es
+  // nicht, also wird geschlossen: Ein Mausrad rastet — es liefert grosse,
+  // GANZE deltaY-Schritte (100/120/150), nie ein deltaX und manchmal
+  // deltaMode 1 (Zeilen). Ein Touchpad schiebt stufenlos: gebrochene
+  // Werte, kleine Betraege und sehr wohl ein deltaX.
+  //
+  // Die Entscheidung wird kurz gepuffert: ein Geraet wechselt nicht
+  // mitten in einer Geste, und am Ende eines Wischschwungs faellt beim
+  // Touchpad gern einmal ein runder ganzer Wert an. Erst nach 400 ms
+  // Ruhe wird neu entschieden.
+  const radMerk = { touchpad: false, zeit: -1e9 };
+  function istTouchpad(ev) {
+    const jetzt = performance.now();
+    if (jetzt - radMerk.zeit < 400) { radMerk.zeit = jetzt; return radMerk.touchpad; }
+    let touchpad;
+    if (ev.deltaMode !== 0) touchpad = false;                       // Zeilen/Seiten = Rad
+    else if (ev.deltaX !== 0) touchpad = true;                      // Raeder kennen kein X
+    else if (!Number.isInteger(ev.deltaY)) touchpad = true;         // stufenlos = Touchpad
+    else touchpad = Math.abs(ev.deltaY) > 0 && Math.abs(ev.deltaY) < 50;
+    radMerk.touchpad = touchpad; radMerk.zeit = jetzt;
+    return touchpad;
+  }
+
+  // Rad: Strg/Pinch zoomt auf den Zeiger, Zweifinger-Wischen verschiebt die
+  // Wand, das klassische Mausrad zoomt weiter (daran sind Mausnutzer
+  // gewoehnt), Shift+Rad faehrt seitwaerts. passive:false ist Pflicht —
+  // Chromium macht Wheel-Listener sonst passiv, und preventDefault verhallt
+  // (die Seite zoomt/scrollt dann mit).
   flaeche.addEventListener("wheel", (ev) => {
     ev.preventDefault();
+    const zeilen = ev.deltaMode === 1 ? 24 : 1;
+    // Ueber einer zu vollen Haftnotiz blaettert das Rad IM Zettel. Die
+    // Wand nimmt den Rad-Ereignissen sonst alles weg (preventDefault) —
+    // das interne Scrollen kaeme nie zustande.
+    if (!ev.ctrlKey && ev.deltaY) {
+      const kasten = ev.target.closest && ev.target.closest(".wb-zeilen.wb-scrollt");
+      if (kasten) {
+        const vorher = kasten.scrollTop;
+        kasten.scrollTop += ev.deltaY * zeilen;
+        if (kasten.scrollTop !== vorher) return;
+      }
+    }
     const p = ereignisZuSchirm(ev);
     radGesteAnstossen();
-    if (ev.shiftKey && !ev.ctrlKey) {
-      const d = (ev.deltaY || ev.deltaX) * (ev.deltaMode === 1 ? 24 : 1);
-      ansicht.tx -= d;
+    // Pinch am Touchpad kommt als ctrl+wheel mit kleinen Deltas — feinere
+    // Uebersetzung, sonst springt der Zoom.
+    if (ev.ctrlKey) { zoomUm(Math.exp(-ev.deltaY * zeilen * 0.012), p.x, p.y); return; }
+    if (ev.shiftKey) {
+      ansicht.tx -= (ev.deltaY || ev.deltaX) * zeilen;
       ansichtPassend = false;
       panKlemmen(); anwenden();
       return;
     }
-    const roh = ev.deltaY * (ev.deltaMode === 1 ? 24 : 1);
-    // Trackpad-Pinch kommt als ctrl+wheel mit kleinen Deltas — feinere
-    // Uebersetzung, sonst springt der Zoom.
-    const staerke = ev.ctrlKey ? 0.012 : 0.0022;
-    zoomUm(Math.exp(-roh * staerke), p.x, p.y);
+    if (istTouchpad(ev)) {
+      // Zweifinger-Wischen schiebt die Wand in BEIDE Richtungen — genau
+      // das, was die Geste ueberall sonst tut.
+      ansicht.tx -= ev.deltaX * zeilen;
+      ansicht.ty -= ev.deltaY * zeilen;
+      ansichtPassend = false;
+      panKlemmen(); anwenden();
+      return;
+    }
+    zoomUm(Math.exp(-ev.deltaY * zeilen * 0.0022), p.x, p.y);
   }, { passive: false });
 
   // Leertaste: gedrueckt halten = Schieben. Nicht, wenn gerade getippt wird.
@@ -1922,7 +2592,7 @@
 
   // ---- Pointer auf der FLAECHE (Auswahl, Pan, Platzieren, Pinch).
   flaeche.addEventListener("pointerdown", (ev) => {
-    if (ev.target.closest(".wb-kopf,.wb-leiste,.wb-hilfe,.wb-toasts,.wb-schild,.wb-wischenknopf,.wb-ablage,.wb-kasten,.wb-griff,.wb-zeile-tools,.wb-abhaken")) return;
+    if (ev.target.closest(".wb-kopf,.wb-leiste,.wb-hilfe,.wb-toasts,.wb-pfeile,.wb-fremdleiste,.wb-schild,.wb-wischenknopf,.wb-ablage,.wb-kasten,.wb-griff,.wb-groesse-griff,.wb-zeile-tools,.wb-zeile-link,.wb-abhaken")) return;
     $(".wb-hilfe").hidden = true;
 
     aktivePointer.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
@@ -1952,7 +2622,7 @@
       }
       auswahlPointer(ev);
     } else if (werkzeug === "text" || werkzeug === "notiz") {
-      platzieren(ev);
+      neuAufziehenStarten(ev);
     }
   });
 
@@ -1961,13 +2631,17 @@
     if (merk) { merk.x = ev.clientX; merk.y = ev.clientY; }
     if (pinch) { pinchBewegen(); return; }
     if (pan) { panBewegen(ev); return; }
-    if (marquee) marqueeBewegen(ev);
+    if (aufziehen) { neuAufziehenBewegen(ev); return; }
+    if (marquee) { marqueeBewegen(ev); return; }
+    fremdLeisteAktualisieren(ev);
   });
+  flaeche.addEventListener("pointerleave", () => fremdLeisteZeigen(null));
 
   const pointerLoslassen = (ev) => {
     aktivePointer.delete(ev.pointerId);
     if (pinch && aktivePointer.size < 2) { pinch = null; gesteBeenden(); }
     if (pan && ev.pointerId === pan.pointerId) panBeenden();
+    if (aufziehen) neuAufziehenBeenden(ev, ev.type === "pointercancel");
     if (marquee) marqueeBeenden(ev);
   };
   flaeche.addEventListener("pointerup", pointerLoslassen);
@@ -2020,23 +2694,29 @@
   }
 
   // Was liegt unter dem Zeiger? Erst DOM-Bloecke (oben), dann Striche.
-  // Fremde Elemente sind bewusst NIE Treffer.
+  // Was man nicht bearbeiten darf, ist bewusst NIE ein Treffer — sonst
+  // wuerde man es anfassen und der Server antwortete mit 404.
   function elementTreffer(ev) {
     const blockKnoten = ev.target.closest && ev.target.closest(".wb-el");
-    if (blockKnoten && blockKnoten.closest(".wb-board.wb-eigen")) {
-      return elemente.get(blockKnoten.dataset.id) || null;
+    if (blockKnoten) {
+      const el = elemente.get(blockKnoten.dataset.id);
+      return el && darfBearbeiten(el) ? el : null;
     }
     const w = ereignisZuWelt(ev);
     return strichTreffer(w, 6 / ansicht.s);
   }
 
-  // Punkt-zu-Strich: bbox-Vorfilter, dann Abstand Punkt->Segment.
+  // Punkt-zu-Strich auf der Tafel unter dem Zeiger: bbox-Vorfilter, dann
+  // Abstand Punkt->Segment.
   function strichTreffer(w, toleranz) {
-    const striche = stricheJeBoard.get(ich.id);
-    const bx = versatz.get(ich.id), by = versatzY.get(ich.id);
+    const boardId = boardAnPunkt(w);
+    if (!boardId) return null;
+    const striche = stricheJeBoard.get(boardId) || [];
+    const bx = versatz.get(boardId), by = versatzY.get(boardId);
     const x = w.x - bx, y = w.y - by;
     for (let i = striche.length - 1; i >= 0; i--) {
       const el = striche[i];
+      if (!darfBearbeiten(el)) continue;
       const r = toleranz + el.inhalt.dicke / 2;
       if (x < el.x - r || x > el.x + el.breite + r || y < el.y - r || y > el.y + el.hoehe + r) continue;
       if (strichAbstandOk(el, x, y, r)) return el;
@@ -2084,7 +2764,8 @@
     }
     // Leere Flaeche: Marquee aufziehen (Maus) bzw. Auswahl loesen.
     if (!ev.shiftKey) auswahlLeeren();
-    marquee = { x0: ev.clientX, y0: ev.clientY, zusatz: ev.shiftKey };
+    marquee = { x0: ev.clientX, y0: ev.clientY, zusatz: ev.shiftKey,
+                aufElement: !!(ev.target.closest && ev.target.closest(".wb-el")) };
     try { flaeche.setPointerCapture(ev.pointerId); } catch { /* egal */ }
   }
 
@@ -2168,13 +2849,26 @@
     const a = schirmZuWelt(Math.min(marquee.x0, ev.clientX) - r.left, Math.min(marquee.y0, ev.clientY) - r.top);
     const z = schirmZuWelt(Math.max(marquee.x0, ev.clientX) - r.left, Math.max(marquee.y0, ev.clientY) - r.top);
     const zusatz = marquee.zusatz;
+    const aufElement = marquee.aufElement;
     marqueeAbbrechen();
-    if (Math.abs(z.x - a.x) < 4 && Math.abs(z.y - a.y) < 4) return;
+    if (Math.abs(z.x - a.x) < 4 && Math.abs(z.y - a.y) < 4) {
+      // Klick auf eine Tafel in der Uebersicht: hinfahren. In der Wand
+      // stehen fuenf Boards nebeneinander — sie anzuklicken ist die
+      // naheliegendste Art hinzukommen, naeher als der Umschalter oben.
+      if (ansichtWahl === "alle" && !aufElement) {
+        const boardId = boardAnPunkt(a);
+        if (boardId) ansichtWechseln(boardId === ich.id ? "mein" : boardId);
+      }
+      return;
+    }
     if (!zusatz) auswahl.clear();
-    // Bounding-Box-Schnitt ueber ALLE eigenen Elemente — Striche wie Bloecke.
-    const bx = versatz.get(ich.id), by = versatzY.get(ich.id);
+    // Bounding-Box-Schnitt ueber alles, was man anfassen darf — eigene
+    // Elemente und fremde Aufgaben auf der eigenen Tafel, Striche wie
+    // Bloecke, jeweils am Versatz IHRER Tafel gemessen.
     for (const el of elemente.values()) {
-      if (el.besitzer !== ich.id) continue;
+      if (!darfBearbeiten(el)) continue;
+      const bx = versatz.get(tafelVon(el)), by = versatzY.get(tafelVon(el));
+      if (bx === undefined) continue;
       const ex0 = el.x + bx, ey0 = el.y + by, ex1 = ex0 + el.breite, ey1 = ey0 + (el.hoehe || 40);
       if (ex0 <= z.x && ex1 >= a.x && ey0 <= z.y && ey1 >= a.y) auswahl.add(el.id);
     }
@@ -2198,42 +2892,117 @@
   // Text & Notiz platzieren
   // =================================================================
 
-  function fremdHinweis(boardId) {
-    // Entprellt wiederholen statt einmal je Sitzung: wer spaeter nochmal
-    // auf Janniks Tafel malt, soll wieder hoeren WARUM nichts passiert —
-    // ein stummer Stift wirkt kaputt.
+  // Hinweis, wenn man etwas anfassen will, das einem nicht gehoert — also
+  // weder selbst geschrieben noch auf der eigenen Tafel. SCHREIBEN darf man
+  // seit dem 31.08.2026 ueberall; nur wegwischen und aendern nicht.
+  function fremdHinweis(el) {
+    const schluessel = el.id || el;
     const jetzt = Date.now();
-    if ((fremdHinweisZuletzt.get(boardId) || 0) > jetzt - 5000) return;
-    fremdHinweisZuletzt.set(boardId, jetzt);
-    const person = team.find((p) => p.id === boardId);
-    toast("Nur ansehen — das ist " + (person ? person.name.split(" ")[0] + "s" : "eine fremde") + " Tafel.");
+    if ((fremdHinweisZuletzt.get(schluessel) || 0) > jetzt - 5000) return;
+    fremdHinweisZuletzt.set(schluessel, jetzt);
+    toast("Nur ansehen — das gehört zu " + besitzform(vorname(tafelVon(el))) + " Tafel.");
   }
 
-  function platzieren(ev) {
+  // Die dezente Leiste "Du schreibst auf Janniks Tafel": solange ein
+  // Schreibwerkzeug ueber einer fremden Tafel steht. Ohne sie waere die
+  // neue Freiheit eine Falle — man notierte versehentlich bei anderen.
+  function fremdLeisteZeigen(boardId) {
+    if (!boardId) {
+      fremdLeiste.hidden = true;
+      raum.classList.remove("wb-schreibhinweis");
+      return;
+    }
+    $("span", fremdLeiste).textContent = "Du schreibst auf " + besitzform(vorname(boardId)) + " Tafel";
+    fremdLeiste.hidden = false;
+    raum.classList.add("wb-schreibhinweis");
+  }
+
+  function fremdLeisteAktualisieren(ev) {
+    const schreibend = werkzeug === "stift" || werkzeug === "text" || werkzeug === "notiz";
+    if (!schreibend) { fremdLeisteZeigen(null); return; }
+    const boardId = boardAnPunkt(ereignisZuWelt(ev));
+    fremdLeisteZeigen(boardId && boardId !== ich.id ? boardId : null);
+  }
+
+  // Nach dem Anlegen auf fremder Tafel: kurz sagen, was passiert ist.
+  function aufgabeGemeldet(boardId) {
+    if (boardId === ich.id) return;
+    toast("Aufgabe für " + vorname(boardId) + " notiert.");
+  }
+
+  // ------------------------------------------------- Notiz/Text aufziehen
+  //
+  // Ein Klick legt die Standardgroesse an (wie bisher), ein aufgezogenes
+  // Rechteck genau diese Groesse. Der Vorschau-Rahmen zeigt dabei, was
+  // entsteht — sonst zoege man ins Blaue.
+  function neuAufziehenStarten(ev) {
     const w = ereignisZuWelt(ev);
     const boardId = boardAnPunkt(w);
     if (!boardId) return;
-    if (boardId !== ich.id) { fremdHinweis(boardId); return; }
     // Ohne preventDefault nimmt das Standard-mousedown dem frisch
     // fokussierten Span den Fokus sofort wieder weg — der neue Block
-    // waere leer, und leer heisst beim Verlassen: geloescht.
+    // waere leer, und leer heisst bei Textbloecken: geloescht.
     ev.preventDefault();
+    aufziehen = { x0: ev.clientX, y0: ev.clientY, boardId, pointerId: ev.pointerId, gezogen: false };
+    try { flaeche.setPointerCapture(ev.pointerId); } catch { /* egal */ }
+  }
 
-    const bx = versatz.get(ich.id), by = versatzY.get(ich.id);
+  function neuAufziehenBewegen(ev) {
+    if (ev.pointerId !== aufziehen.pointerId) return;
+    const r = rectHolen();
+    const b = Math.abs(ev.clientX - aufziehen.x0), h = Math.abs(ev.clientY - aufziehen.y0);
+    aufziehen.gezogen = aufziehen.gezogen || b > 8 || h > 8;
+    neuRahmen.hidden = !aufziehen.gezogen;
+    neuRahmen.style.left = (Math.min(aufziehen.x0, ev.clientX) - r.left) + "px";
+    neuRahmen.style.top = (Math.min(aufziehen.y0, ev.clientY) - r.top) + "px";
+    neuRahmen.style.width = b + "px";
+    neuRahmen.style.height = h + "px";
+  }
+
+  function neuAufziehenBeenden(ev, abgebrochen) {
+    if (ev.pointerId !== aufziehen.pointerId) return;
+    const zug = aufziehen;
+    aufziehen = null;
+    neuRahmen.hidden = true;
+    if (abgebrochen) return;
+    const a = ereignisZuWelt({ clientX: zug.x0, clientY: zug.y0 });
+    const z = ereignisZuWelt(ev);
     const istNotiz = werkzeug === "notiz";
-    const breiteNeu = istNotiz ? 340 : 520;
+    const masse = zug.gezogen
+      ? { breite: Math.abs(z.x - a.x), hoehe: Math.abs(z.y - a.y),
+          x: Math.min(a.x, z.x), y: Math.min(a.y, z.y) }
+      : null;
+    platzieren(zug.boardId, a, masse, istNotiz);
+  }
+
+  // welt = Weltpunkt des Klicks, masse = aufgezogenes Weltrechteck (oder
+  // null fuer Standardgroesse).
+  function platzieren(boardId, welt, masse, istNotiz) {
+    const bx = versatz.get(boardId), by = versatzY.get(boardId);
+    const standardB = istNotiz ? 340 : 520;
+    let breiteNeu, hoeheNeu, x, y;
+    if (masse) {
+      breiteNeu = Math.round(klemm(masse.breite, istNotiz ? NOTIZ_MIN_B : TEXT_MIN_B, BOARD_B));
+      hoeheNeu = Math.round(klemm(masse.hoehe, NOTIZ_MIN_H, BOARD_H));
+      x = klemm(Math.round(masse.x - bx), 0, BOARD_B - breiteNeu);
+      y = klemm(Math.round(masse.y - by), 0, BOARD_H - hoeheNeu);
+    } else {
+      breiteNeu = standardB;
+      hoeheNeu = istNotiz ? 200 : 60;
+      x = klemm(Math.round(welt.x - bx - (istNotiz ? breiteNeu / 2 : 20)), 0, BOARD_B - breiteNeu);
+      y = klemm(Math.round(welt.y - by - (istNotiz ? 60 : 24)), 0, BOARD_H - 120);
+    }
+    const zeile = () => [{ t: "", erledigt: false, gestrichen: false }];
     const el = {
       id: crypto.randomUUID(),
-      besitzer: ich.id,
+      besitzer: ich.id,        // wer es geschrieben hat
+      tafel: boardId,          // auf wessen Board es haengt
       art: istNotiz ? "notiz" : "text",
-      x: klemm(Math.round(w.x - bx - (istNotiz ? breiteNeu / 2 : 20)), 0, BOARD_B - breiteNeu),
-      y: klemm(Math.round(w.y - by - (istNotiz ? 60 : 24)), 0, BOARD_H - 120),
-      breite: breiteNeu,
-      hoehe: istNotiz ? 200 : 60,
+      x, y, breite: breiteNeu, hoehe: hoeheNeu,
       version: 1,
       inhalt: istNotiz
-        ? { zeilen: [{ t: "", erledigt: false, gestrichen: false }], liste: "keine", farbe: stiftFarbe, groesse: 24, zettel: zettelFarbe }
-        : { zeilen: [{ t: "", erledigt: false, gestrichen: false }], liste: "keine", farbe: stiftFarbe, groesse: 28 },
+        ? { zeilen: zeile(), liste: "keine", farbe: stiftFarbe, groesse: neuGroesse, zettel: zettelFarbe }
+        : { zeilen: zeile(), liste: "keine", farbe: stiftFarbe, groesse: neuGroesse },
     };
     elemente.set(el.id, el);
     inArbeit.add(el.id);
@@ -2241,6 +3010,7 @@
     anlegenEinreihen(el);
     undoMerken({ typ: "anlegen", id: el.id });
     werkzeugSetzen("auswahl");
+    aufgabeGemeldet(boardId);
     // Sofort lostippen: Fokus in die erste Zeile.
     const knoten = elementKnoten.get(el.id);
     const span = knoten && $(".wb-zeile-text", knoten);
@@ -2315,7 +3085,7 @@
     if (zeichnung && ev.pointerId === zeichnung.pointerId) stiftBewegen(ev);
     else if (schwammZug && ev.pointerId === schwammZug.pointerId) schwammBewegen(ev);
     else if (werkzeug === "schwamm") schwammKreisSetzen(ev);
-    else if (werkzeug === "stift") stiftCursorPruefen(ev);
+    else if (werkzeug === "stift") fremdLeisteAktualisieren(ev);
   });
 
   const leinwandLoslassen = (ev) => {
@@ -2334,24 +3104,16 @@
   leinwand.addEventListener("pointercancel", leinwandLoslassen);
   leinwand.addEventListener("pointerleave", () => {
     if (werkzeug === "schwamm" && !schwammZug) schwammKreis.hidden = true;
+    fremdLeisteZeigen(null);
   });
-
-  function stiftCursorPruefen(ev) {
-    const w = ereignisZuWelt(ev);
-    const boardId = boardAnPunkt(w);
-    leinwand.style.cursor = boardId && boardId !== ich.id ? "not-allowed" : "";
-    if (!leinwand.style.cursor) cursorSetzen();
-  }
 
   function stiftAnsetzen(ev) {
     const w = ereignisZuWelt(ev);
     const boardId = boardAnPunkt(w);
-    if (boardId !== ich.id) {
-      if (boardId) fremdHinweis(boardId);
-      return;
-    }
+    // Auf JEDE Tafel darf geschrieben werden — so gibt man eine Aufgabe.
+    if (!boardId) return;
     try { leinwand.setPointerCapture(ev.pointerId); } catch { /* egal */ }
-    const bx = versatz.get(ich.id), by = versatzY.get(ich.id);
+    const bx = versatz.get(boardId), by = versatzY.get(boardId);
     zeichnung = {
       pointerId: ev.pointerId,
       punkte: [klemm(w.x - bx, 0, BOARD_B), klemm(w.y - by, 0, BOARD_H)],
@@ -2362,13 +3124,13 @@
       minAbstand: 1.5 / ansicht.s, // 1,5 BILDSCHIRM-px
       farbe: stiftFarbe,
       dicke: DICKEN[stiftDicke],
-      besitzer: ich.id,
+      tafel: boardId,
     };
     liveStrich = zeichnung;
   }
 
   function stiftBewegen(ev) {
-    const bx = versatz.get(ich.id), by = versatzY.get(ich.id);
+    const bx = versatz.get(zeichnung.tafel), by = versatzY.get(zeichnung.tafel);
     // getCoalescedEvents: der Browser buendelt bei 120+-Hz-Eingabe mehrere
     // Messpunkte in ein Event — ohne sie wuerde jede schnelle Kurve eckig.
     const roh = (typeof ev.getCoalescedEvents === "function" ? ev.getCoalescedEvents() : null) || [ev];
@@ -2399,9 +3161,11 @@
   function zeichnungAbschliessen(abgebrochen) {
     if (!zeichnung) return;
     const zuWenig = zeichnung.punkte.length < (abgebrochen ? 12 : 4);
+    const tafel = zeichnung.tafel;
     if (!zuWenig) zeichnungFestschreiben();
     zeichnung = null;
     liveStrich = null;
+    if (!zuWenig) aufgabeGemeldet(tafel);
     tintenDirty = true; zeichnenAnfordern();
   }
 
@@ -2413,32 +3177,50 @@
       // der Server (min. 4 Zahlen) und lineCap:round einen Punkt malen.
       punkte.push(punkte[0] + 1, punkte[1]);
     }
-    const bbox = strichBbox(punkte, zeichnung.dicke);
+    strichAnlegen(punkte, zeichnung.farbe, zeichnung.dicke, zeichnung.tafel);
+  }
+
+  // Ein Strich-Element aus fertigen Punkten bauen, anzeigen und speichern.
+  // Gemeinsamer Weg fuer den Stift und fuer die Reststuecke des Schwamms.
+  function strichAnlegen(punkte, farbe, dicke, tafel) {
+    const bbox = strichBbox(punkte, dicke);
     const el = {
       id: crypto.randomUUID(),
       besitzer: ich.id,
+      tafel,
       art: "strich",
       x: bbox.x, y: bbox.y, breite: bbox.breite, hoehe: bbox.hoehe,
       version: 1,
-      inhalt: { punkte, farbe: zeichnung.farbe, dicke: zeichnung.dicke },
+      inhalt: { punkte, farbe, dicke },
     };
     elemente.set(el.id, el);
-    stricheJeBoard.get(ich.id).push(el);
+    stricheJeBoard.get(tafel).push(el);
+    strichFahne(el);
     anlegenEinreihen(el);
     undoMerken({ typ: "anlegen", id: el.id });
     schilderAuffrischen();
+    return el;
   }
 
   // =================================================================
-  // Schwamm: ganze Striche wegwischen
+  // Schwamm: radiert punktgenau — Tinte wie getippten Text
   // =================================================================
   //
   // Der Radius ist in BILDSCHIRM-px konstant (wird durch s geteilt): der
   // Schwamm in der Hand ist immer gleich gross, egal wie nah man an der
   // Wand steht. Die Bewegung wird in Radius/2-Schritten interpoliert,
-  // damit eine schnelle Wischbewegung keine Striche ueberspringt.
-  // Getroffene Striche blassen erst ab (Vorschau) — geloescht wird beim
-  // Loslassen, EIN Undo-Eintrag fuer die ganze Wischbewegung.
+  // damit eine schnelle Wischbewegung nichts ueberspringt.
+  //
+  // Es verschwindet NUR, was der Schwamm wirklich beruehrt:
+  //   Striche  — die Stuetzpunkte im Radius fallen weg; beim Loslassen
+  //              wird der Strich durch seine Reststuecke ersetzt (altes
+  //              Element loeschen, je Stueck ein neues anlegen).
+  //   Text     — die beruehrten ZEICHEN fallen weg ("Test" -> "Tet").
+  //              Waehrend der Geste wird das contenteditable NICHT
+  //              angefasst (Fokus und Caret waeren hin), sondern eine
+  //              Vorschau auf den Tinten-Canvas gelegt.
+  // Die GANZE Wischbewegung ist EIN Undo-Eintrag und stellt exakt den
+  // Ausgangszustand wieder her.
 
   let schwammZug = null; // {pointerId, letzte:{x,y} Welt}
 
@@ -2453,12 +3235,11 @@
 
   function schwammAnsetzen(ev) {
     const w = ereignisZuWelt(ev);
-    const boardId = boardAnPunkt(w);
-    if (boardId && boardId !== ich.id) { fremdHinweis(boardId); return; }
+    if (!boardAnPunkt(w)) return;
     try { leinwand.setPointerCapture(ev.pointerId); } catch { /* egal */ }
     schwammZug = { pointerId: ev.pointerId, letzte: w };
     schwammKreisSetzen(ev);
-    schwammTreffen(w);
+    schwammTreffen(w, ev);
   }
 
   function schwammBewegen(ev) {
@@ -2466,41 +3247,206 @@
     const w = ereignisZuWelt(ev);
     const radius = SCHWAMM_RADIUS_PX / ansicht.s;
     const schritt = radius / 2;
-    let { x, y } = schwammZug.letzte;
+    const { x, y } = schwammZug.letzte;
     const dx = w.x - x, dy = w.y - y;
     const strecke = Math.hypot(dx, dy);
     const schritte = Math.max(1, Math.ceil(strecke / schritt));
+    const r = rectHolen();
     for (let i = 1; i <= schritte; i++) {
-      schwammTreffen({ x: x + (dx * i) / schritte, y: y + (dy * i) / schritte });
+      const t = i / schritte;
+      schwammTreffen({ x: x + dx * t, y: y + dy * t },
+                     // Bildschirmpunkt fuer den Textvergleich mitfuehren:
+                     // getClientRects liefert Viewport-Koordinaten.
+                     { clientX: r.left + (x + dx * t) * ansicht.s + ansicht.tx,
+                       clientY: r.top + (y + dy * t) * ansicht.s + ansicht.ty });
     }
     schwammZug.letzte = w;
   }
 
-  function schwammTreffen(w) {
+  function schwammTreffen(w, schirm) {
     const radius = SCHWAMM_RADIUS_PX / ansicht.s;
-    const bx = versatz.get(ich.id), by = versatzY.get(ich.id);
+    const boardId = boardAnPunkt(w);
+    if (!boardId) return;
+    const bx = versatz.get(boardId), by = versatzY.get(boardId);
     const x = w.x - bx, y = w.y - by;
-    const striche = stricheJeBoard.get(ich.id);
     let neu = false;
-    for (const el of striche) {
-      if (schwammOpfer.has(el.id)) continue;
+
+    for (const el of stricheJeBoard.get(boardId) || []) {
       const r = radius + el.inhalt.dicke / 2;
       if (x < el.x - r || x > el.x + el.breite + r || y < el.y - r || y > el.y + el.hoehe + r) continue;
-      if (strichAbstandOk(el, x, y, r)) { schwammOpfer.add(el.id); neu = true; }
+      if (!strichAbstandOk(el, x, y, r)) continue;
+      if (!darfBearbeiten(el)) { fremdHinweis(el); continue; }
+      let weg = schwammStriche.get(el.id);
+      if (!weg) { weg = new Set(); schwammStriche.set(el.id, weg); }
+      const p = el.inhalt.punkte, r2 = r * r;
+      for (let i = 0; i < p.length; i += 2) {
+        const ddx = p[i] - x, ddy = p[i + 1] - y;
+        if (ddx * ddx + ddy * ddy <= r2 && !weg.has(i / 2)) { weg.add(i / 2); neu = true; }
+      }
     }
+
+    // Getippter Text: je Zeile die Zeichen-Rechtecke gegen den Kreis
+    // pruefen. Die Rechtecke werden EINMAL je Block gemessen — waehrend
+    // der Wischgeste steht die Ansicht still, und getClientRects fuer
+    // jedes Zeichen bei jeder Bewegung waere pures Layout-Verbrennen.
+    if (schirm) {
+      for (const el of elemente.values()) {
+        if (el.art === "strich" || tafelVon(el) !== boardId) continue;
+        const knoten = elementKnoten.get(el.id);
+        if (!knoten) continue;
+        const kasten = knoten.getBoundingClientRect();
+        if (schirm.clientX < kasten.left - SCHWAMM_RADIUS_PX || schirm.clientX > kasten.right + SCHWAMM_RADIUS_PX
+            || schirm.clientY < kasten.top - SCHWAMM_RADIUS_PX || schirm.clientY > kasten.bottom + SCHWAMM_RADIUS_PX) continue;
+        if (!darfBearbeiten(el)) { fremdHinweis(el); continue; }
+        const eintrag = schwammTextEintrag(el, knoten);
+        if (!eintrag) continue;
+        const r2 = SCHWAMM_RADIUS_PX * SCHWAMM_RADIUS_PX;
+        for (const zeile of eintrag.zeilen) {
+          for (let i = 0; i < zeile.kaesten.length; i++) {
+            if (zeile.weg.has(i)) continue;
+            const k = zeile.kaesten[i];
+            if (!k) continue;
+            // Ein Zeichen faellt, wenn der Schwamm seine MITTE erwischt.
+            // Gemessen an der Kante waere ein 36-px-Schwamm ueber einer
+            // Handschrift immer drei Buchstaben breit — man koennte nie
+            // gezielt eines wegnehmen. Die Mitte macht daraus eine Regel,
+            // die man nach dem ersten Mal im Gefuehl hat.
+            const ddx = schirm.clientX - (k.x + k.b / 2);
+            const ddy = schirm.clientY - (k.y + k.h / 2);
+            if (ddx * ddx + ddy * ddy <= r2) { zeile.weg.add(i); neu = true; }
+          }
+        }
+      }
+    }
+
     if (neu) { tintenDirty = true; zeichnenAnfordern(); }
+  }
+
+  // Zeichen-Rechtecke eines Blocks messen (einmal je Wischgeste).
+  function schwammTextEintrag(el, knoten) {
+    let eintrag = schwammTexte.get(el.id);
+    if (eintrag) return eintrag;
+    const spans = $$(".wb-zeile-text", knoten);
+    if (!spans.length) return null;
+    eintrag = { id: el.id, zeilen: spans.map((span, idx) => ({
+      idx, span, text: span.textContent, kaesten: zeichenRechtecke(span), weg: new Set(),
+    })) };
+    schwammTexte.set(el.id, eintrag);
+    return eintrag;
+  }
+
+  // Ein Rechteck je Zeichen — ueber Range.getClientRects auf den
+  // Textknoten. Ein Zeichen ohne Rechteck (Umbruchstelle, Leerzeichen am
+  // Zeilenende) bekommt null und ist damit unradierbar; es faellt spaeter
+  // nur weg, wenn es das Wort tut.
+  function zeichenRechtecke(span) {
+    const raus = [];
+    const bereich = document.createRange();
+    const lauf = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
+    let knoten;
+    while ((knoten = lauf.nextNode())) {
+      const laenge = knoten.textContent.length;
+      for (let i = 0; i < laenge; i++) {
+        let kasten = null;
+        try {
+          bereich.setStart(knoten, i);
+          bereich.setEnd(knoten, i + 1);
+          const rects = bereich.getClientRects();
+          for (const r of rects) {
+            if (r.width > 0 && r.height > 0) { kasten = { x: r.x, y: r.y, b: r.width, h: r.height }; break; }
+          }
+        } catch { kasten = null; }
+        raus.push(kasten);
+      }
+    }
+    return raus;
+  }
+
+  function schwammVerwerfen() {
+    schwammStriche.clear();
+    schwammTexte.clear();
+    tintenDirty = true; zeichnenAnfordern();
   }
 
   function schwammLoslassen(abgebrochen) {
     schwammZug = null;
-    if (abgebrochen || !schwammOpfer.size) {
-      schwammOpfer.clear();
-      tintenDirty = true; zeichnenAnfordern();
-      return;
+    if (abgebrochen || (!schwammStriche.size && !schwammTexte.size)) { schwammVerwerfen(); return; }
+
+    const striche = [...schwammStriche.entries()];
+    const texte = [...schwammTexte.values()];
+    schwammStriche.clear();
+    schwammTexte.clear();
+
+    // Die ganze Wischbewegung ist EIN Undo-Schritt — sonst braeuchte man
+    // nach einem Zug ueber drei Striche dreimal Strg+Z.
+    sammelnBeginnen();
+    try {
+      for (const [id, weg] of striche) {
+        if (!weg.size) continue;
+        strichZerteilen(elemente.get(id), weg);
+      }
+      for (const eintrag of texte) zeichenSchneiden(eintrag);
+    } finally { sammelnAbschliessen(); }
+    tintenDirty = true; zeichnenAnfordern();
+  }
+
+  // Einen Strich durch seine Reststuecke ersetzen. Stuecke unter zwei
+  // Punkten fallen weg — ein einzelner Punkt waere ein Tupfer, den
+  // niemand stehen lassen wollte, wenn er ihn gerade wegwischt.
+  function strichZerteilen(el, weg) {
+    if (!el || el.art !== "strich") return;
+    const p = el.inhalt.punkte;
+    const n = p.length / 2;
+    const stuecke = [];
+    let lauf = [];
+    for (let i = 0; i < n; i++) {
+      if (weg.has(i)) {
+        if (lauf.length >= 4) stuecke.push(lauf);
+        lauf = [];
+      } else {
+        lauf.push(p[i * 2], p[i * 2 + 1]);
+        // Server-Grenze (6000 Zahlen): ein Stueck bleibt teilbar.
+        if (lauf.length / 2 >= MAX_PUNKTE_JE_STRICH) {
+          stuecke.push(lauf);
+          lauf = [p[i * 2], p[i * 2 + 1]];
+        }
+      }
     }
-    const ids = [...schwammOpfer];
-    schwammOpfer.clear();
-    elementLoeschen(ids);
+    if (lauf.length >= 4) stuecke.push(lauf);
+    const tafel = tafelVon(el);
+    const { farbe, dicke } = el.inhalt;
+    elementLoeschen([el.id]);
+    for (const stueck of stuecke) strichAnlegen(stueck, farbe, dicke, tafel);
+  }
+
+  // Die radierten Zeichen wirklich aus dem Modell schneiden — EINMAL je
+  // Block, danach ein einziges blockRendern.
+  function zeichenSchneiden(eintrag) {
+    const el = elemente.get(eintrag.id);
+    if (!el) return;
+    let etwas = false;
+    const neueZeilen = eintrag.zeilen.map((zeile) => {
+      if (!zeile.weg.size) return null;
+      etwas = true;
+      let raus = "";
+      for (let i = 0; i < zeile.text.length; i++) if (!zeile.weg.has(i)) raus += zeile.text[i];
+      return raus.replace(/ /g, " ");
+    });
+    if (!etwas) return;
+
+    // Ein Textblock, der komplett leer wird, verschwindet (Regel wie beim
+    // Verlassen); eine Haftnotiz bleibt als Gegenstand stehen. Der
+    // Loesch-Weg fasst el.inhalt bewusst NICHT an — die Undo-Kopie soll
+    // den Originaltext tragen.
+    const kuenftig = el.inhalt.zeilen.map((z, i) => (neueZeilen[i] == null ? z.t : neueZeilen[i]));
+    if (el.art === "text" && kuenftig.every((t) => !t.trim())) { elementLoeschen([el.id]); return; }
+
+    const vorher = JSON.parse(JSON.stringify(el.inhalt));
+    el.inhalt.zeilen.forEach((z, i) => { if (neueZeilen[i] != null) z.t = neueZeilen[i]; });
+    blockRendern(el);
+    blockGeaendert(el, true);
+    undoMerken({ typ: "aendern", id: el.id, vorher: { inhalt: vorher },
+                 nachher: { inhalt: JSON.parse(JSON.stringify(el.inhalt)) } });
   }
 
   // =================================================================
@@ -2557,7 +3503,10 @@
   function anlegenEinreihen(el) {
     if (sitzungWeg) return;
     const body = {
-      id: el.id, art: el.art, x: el.x, y: el.y, breite: el.breite, hoehe: el.hoehe,
+      // "tafel" entscheidet, auf WESSEN Board es landet; den Autor setzt
+      // der Server selbst auf die angemeldete Person.
+      id: el.id, tafel: tafelVon(el), art: el.art,
+      x: el.x, y: el.y, breite: el.breite, hoehe: el.hoehe,
       inhalt: el.inhalt,
     };
     ausstehend.set(el.id, { pfad: "/api/whiteboard/anlegen", body });
@@ -2570,7 +3519,8 @@
           el.version = daten.version || 1;
           speicherFehler = 0;
         } else if (status === 400 && daten.grund === "voll") {
-          toast("Deine Tafel ist voll — erst etwas wegwischen.");
+          toast(tafelVon(el) === ich.id ? "Deine Tafel ist voll — erst etwas wegwischen."
+                                        : besitzform(vorname(tafelVon(el))) + " Tafel ist voll.");
           elementEntfernen(el.id);
         } else {
           speicherfehlerZaehlen();
@@ -2762,6 +3712,7 @@
     }
     if (el.art === "strich") {
       el._pfad = null; el._pfadGrob = null;
+      strichFahne(el);
       tintenDirty = true; zeichnenAnfordern();
     } else {
       blockRendern(el);
@@ -2850,7 +3801,7 @@
 
   function wischenFragen() {
     let n = 0;
-    for (const el of elemente.values()) if (el.besitzer === ich.id) n++;
+    for (const el of elemente.values()) if (tafelVon(el) === ich.id) n++;
     if (!n) { toast("Deine Tafel ist schon leer."); return; }
     $(".wb-wischen-text").textContent = n === 1
       ? "Damit verschwindet 1 Element von deiner Tafel."
@@ -2864,7 +3815,9 @@
   });
 
   function tafelWischen() {
-    const kopien = [...elemente.values()].filter((el) => el.besitzer === ich.id);
+    // Gewischt wird das BOARD — auch Aufgaben, die andere hier
+    // hingeschrieben haben. Wie am echten Whiteboard; Undo holt alles zurueck.
+    const kopien = [...elemente.values()].filter((el) => tafelVon(el) === ich.id);
     if (!kopien.length) return;
 
     const fertig = () => {
@@ -2901,6 +3854,171 @@
         gsap.to(bahn, { opacity: 0, duration: 0.3, onComplete: () => bahn.remove() });
       },
     });
+  }
+
+  // =================================================================
+  // Zeile verknuepfen: Adressfeld + Live-Vorschlaege aus dem CRM
+  // =================================================================
+  //
+  // "100 Cold Calls für YoKan" soll die Anrufliste danebenhaengen haben,
+  // "E-Mail an Krotzer" die Adresse. Die Daten liegen im CRM — sie noch
+  // einmal abzutippen waere die schlechteste Art, sie zu haben. Gesucht
+  // wird ueber /api/whiteboard/verknuepfung; die Zeile selbst liefert das
+  // erste Suchwort (ohne Fuellwoerter).
+
+  const linkDialog = $(".wb-link-dialog");
+  const linkEingabe = $(".wb-link-eingabe");
+  const linkTrefferEl = $(".wb-link-treffer");
+  let linkZiel = null;          // {el, idx}
+  let linkTimer = 0;
+  let linkLauf = 0;             // laufende Nummer: alte Antworten verfallen
+
+  const GRUPPEN = [["kunde", "Kundenakte"], ["mail", "E-Mail"], ["web", "Webseite"], ["liste", "Anrufliste"]];
+
+  // Suchwort aus einer Zeile: Fuellwoerter und reine Zahlen raus, der Rest
+  // bleibt stehen. Aus "E-Mail an Krotzer schicken" wird "Krotzer".
+  function suchwortAus(text) {
+    const worte = String(text || "")
+      .split(/[\s,;:!?"'()\[\]/]+/)
+      .map((w) => w.replace(/^[.\-–—]+|[.\-–—]+$/g, ""))
+      .filter((w) => w.length > 1 && !/^\d+$/.test(w) && !STOPPWORTE.has(w.toLowerCase()));
+    return worte.slice(0, 4).join(" ").slice(0, 60);
+  }
+
+  function linkDialogOeffnen(el, idx) {
+    const zeile = el.inhalt.zeilen[idx];
+    if (!zeile) return;
+    linkZiel = { el, idx };
+    $(".wb-link-zeile").textContent = zeile.t.trim() || "Leere Zeile";
+    linkEingabe.value = zeile.link || "";
+    $(".wb-link-weg").hidden = !zeile.link;
+    linkTrefferEl.textContent = "";
+    linkDialog.showModal();
+    // Vorbefuellt wird die SUCHE, nicht das Adressfeld: das Wort ist ein
+    // Suchbegriff, keine Adresse.
+    const wort = suchwortAus(zeile.t);
+    if (wort && !zeile.link) linkSuchen(wort);
+    else if (zeile.link) linkHinweis("Adresse steht — oder unten neu suchen.");
+    linkEingabe.focus();
+    linkEingabe.select();
+  }
+
+  function linkHinweis(text) {
+    linkTrefferEl.textContent = "";
+    const p = document.createElement("p");
+    p.className = "wb-link-leer";
+    p.textContent = text;
+    linkTrefferEl.appendChild(p);
+  }
+
+  async function linkSuchen(wort) {
+    const q = String(wort || "").trim();
+    if (q.length < 2) { linkTrefferEl.textContent = ""; return; }
+    const lauf = ++linkLauf;
+    try {
+      const antwort = await fetch("/api/whiteboard/verknuepfung?q=" + encodeURIComponent(q));
+      if (antwort.status === 401) { sitzungAbgelaufen(); return; }
+      const daten = await antwort.json();
+      if (lauf !== linkLauf) return;                 // eine neuere Suche laeuft
+      linkTrefferZeigen(daten.treffer || [], q);
+    } catch {
+      // Ohne Vorschlaege laesst sich die Adresse trotzdem eintippen —
+      // ein Fehlerdialog waere hier lauter als der Nutzen.
+      if (lauf === linkLauf) linkHinweis("Keine Vorschläge gerade — Adresse von Hand eintragen.");
+    }
+  }
+
+  function linkTrefferZeigen(treffer, wort) {
+    linkTrefferEl.textContent = "";
+    if (!treffer.length) { linkHinweis("Nichts zu „" + wort + "“ gefunden."); return; }
+    for (const [art, ueberschrift] of GRUPPEN) {
+      const teil = treffer.filter((t) => t.art === art);
+      if (!teil.length) continue;
+      const kopf = document.createElement("div");
+      kopf.className = "wb-link-gruppe";
+      kopf.textContent = ueberschrift;
+      linkTrefferEl.appendChild(kopf);
+      for (const t of teil) {
+        if (!LINK_ERLAUBT.test(String(t.url || ""))) continue;
+        const knopf = document.createElement("button");
+        knopf.type = "button"; knopf.className = "wb-link-treffer-zeile";
+        knopf.dataset.url = t.url;
+        const titel = document.createElement("b");
+        titel.textContent = t.titel || t.url;
+        const unter = document.createElement("span");
+        unter.textContent = t.unter || t.url;
+        knopf.append(titel, unter);
+        linkTrefferEl.appendChild(knopf);
+      }
+    }
+    // Reicht die Liste ueber den Rand, sagt eine weiche Kante unten, dass
+    // es weitergeht — ein am Dialogfuss abgeschnittener Eintrag saehe sonst
+    // aus wie ein Fehler, nicht wie eine Liste.
+    linkTrefferEl.classList.toggle("wb-mehr",
+      linkTrefferEl.scrollHeight > linkTrefferEl.clientHeight + 1);
+  }
+
+  linkEingabe.addEventListener("input", () => {
+    clearTimeout(linkTimer);
+    const wert = linkEingabe.value.trim();
+    // Wer schon eine Adresse tippt, sucht nicht mehr — sonst blinkte die
+    // Liste bei jedem Zeichen einer langen URL.
+    if (/^(https?:\/\/|mailto:|\/)/i.test(wert)) { linkTrefferEl.textContent = ""; return; }
+    linkTimer = setTimeout(() => linkSuchen(wert), 250);
+  });
+
+  linkTrefferEl.addEventListener("click", (ev) => {
+    const knopf = ev.target.closest(".wb-link-treffer-zeile");
+    if (!knopf) return;
+    linkEingabe.value = knopf.dataset.url;
+    linkUebernehmen();
+  });
+
+  $(".wb-link-abbrechen").addEventListener("click", () => linkDialog.close());
+  $(".wb-link-ok").addEventListener("click", () => linkUebernehmen());
+  $(".wb-link-weg").addEventListener("click", () => linkSetzen(""));
+  linkEingabe.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") { ev.preventDefault(); linkUebernehmen(); }
+  });
+
+  function linkUebernehmen() {
+    const roh = linkEingabe.value.trim();
+    if (!roh) { linkSetzen(""); return; }
+    const ziel = adresseNormalisieren(roh);
+    if (!ziel) { linkHinweis("Das ist keine Adresse — es geht https://, http://, mailto: oder eine Seite dieses OS."); return; }
+    linkSetzen(ziel);
+  }
+
+  // Aus Eingetipptem eine erlaubte Adresse machen — oder "" (dann nichts).
+  // Interne Ziele reisen ABSOLUT: der Server nimmt nur http/https/mailto,
+  // ein "/crm/firma/…" wuerde beim Speichern still verschwinden. Beim
+  // Anzeigen erkennt intern() den eigenen Ursprung wieder und oeffnet im
+  // selben Tab.
+  function adresseNormalisieren(roh) {
+    if (roh.startsWith("/")) return location.origin + roh;
+    if (/^(https?:\/\/|mailto:)/i.test(roh)) return LINK_ERLAUBT.test(roh) ? roh : "";
+    if (/^www\./i.test(roh)) return "https://" + roh;
+    if (/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(roh)) return "mailto:" + roh;
+    return "";
+  }
+
+  function linkSetzen(adresse) {
+    if (!linkZiel) { linkDialog.close(); return; }
+    const { el, idx } = linkZiel;
+    const zeile = elemente.has(el.id) && el.inhalt.zeilen[idx];
+    linkDialog.close();
+    if (!zeile) return;
+    const vorher = JSON.parse(JSON.stringify(el.inhalt));
+    if (adresse) zeile.link = adresse; else delete zeile.link;
+    blockRendern(el);
+    blockGeaendert(el, true);
+    undoMerken({ typ: "aendern", id: el.id, vorher: { inhalt: vorher },
+                 nachher: { inhalt: JSON.parse(JSON.stringify(el.inhalt)) } });
+    if (mobilOffen && mobilOffen.el.id === el.id) {
+      const mobilZeile = mobilOffen.liste.children[idx];
+      if (mobilZeile) linkAnkerSetzen(mobilZeile, adresse);
+    }
+    toast(adresse ? "Verknüpft." : "Link entfernt.");
   }
 
   // =================================================================
@@ -2993,7 +4111,14 @@
     const strg = ev.ctrlKey || ev.metaKey;
     if (strg && ev.key.toLowerCase() === "z" && !ev.shiftKey) { ev.preventDefault(); undoAusfuehren(); return; }
     if (strg && (ev.key.toLowerCase() === "y" || (ev.key.toLowerCase() === "z" && ev.shiftKey))) { ev.preventDefault(); redoAusfuehren(); return; }
-    if (strg) return;
+    // Alt+Pfeil: zur Nachbar-Tafel — dieselben Wege wie die Randpfeile.
+    if (ev.altKey && /^Arrow(Left|Right|Up|Down)$/.test(ev.key)) {
+      const richtung = { ArrowLeft: "links", ArrowRight: "rechts", ArrowUp: "oben", ArrowDown: "unten" }[ev.key];
+      const p = nachbar(richtung);
+      if (p) { ev.preventDefault(); ansichtWechseln(p.id === ich.id ? "mein" : p.id); }
+      return;
+    }
+    if (strg || ev.altKey) return;
     switch (ev.key.toLowerCase()) {
       case "v": werkzeugSetzen("auswahl"); break;
       case "s": werkzeugSetzen("stift"); break;
@@ -3088,6 +4213,15 @@
     blatt.addEventListener("click", (ev) => {
       const zeile = ev.target.closest(".wb-zeile");
       if (!zeile) return;
+      if (ev.target.closest(".wb-zeile-link")) { ev.stopPropagation(); return; }
+      if (ev.target.closest(".wb-zeile-kette")) {
+        ev.preventDefault();
+        // Erst den getippten Stand ins Modell, sonst verknuepfte man eine
+        // Zeile, die es so noch gar nicht gibt.
+        mobilUebernehmen();
+        linkDialogOeffnen(el, zeilenIndex(zeile));
+        return;
+      }
       if (ev.target.closest(".wb-abhaken")) {
         zeile.classList.toggle("wb-erledigt");
         const haken = $(".wb-haken", zeile);
@@ -3121,11 +4255,17 @@
     const { el, liste } = mobilOffen;
     const zeilen = [];
     for (const zeile of liste.children) {
-      zeilen.push({
+      const neu = {
         t: $(".wb-zeile-text", zeile).textContent.slice(0, DATEN.grenzen.zeichenJeZeile),
         erledigt: zeile.classList.contains("wb-erledigt"),
         gestrichen: zeile.classList.contains("wb-gestrichen") && !zeile.classList.contains("wb-erledigt"),
-      });
+      };
+      // Der Link steht im Anker der Zeile — er ueberlebt Umsortieren und
+      // Loeschen dadurch genauso wie Haken und Streichung.
+      const anker = $(".wb-zeile-link", zeile);
+      const ziel = anker && anker.getAttribute("href");
+      if (ziel && LINK_ERLAUBT.test(ziel)) neu.link = ziel;
+      zeilen.push(neu);
     }
     el.inhalt.zeilen = zeilen.length ? zeilen.slice(0, DATEN.grenzen.zeilen)
       : [{ t: "", erledigt: false, gestrichen: false }];
@@ -3153,11 +4293,13 @@
     mobilOffen = null;
     blatt.remove();
     if (!elemente.has(el.id)) return;
-    if (el.inhalt.zeilen.every((z) => !z.t.trim())) {
+    // Wie am Schreibtisch: die leere Haftnotiz bleibt, der leere Textblock geht.
+    if (el.art !== "notiz" && el.inhalt.zeilen.every((z) => !z.t.trim())) {
       elementLoeschen([el.id], { still: true });
       inArbeit.delete(el.id);
       return;
     }
+    adressenErkennen(el);
     blockRendern(el);
     blockGeaendert(el, true);
     inArbeit.delete(el.id);
@@ -3167,10 +4309,10 @@
   // laeuft ueber die Buehne, weil die Zeilen dort ohne Zeigergeraet
   // bewusst nicht fokussierbar sind (CSS nimmt ihnen die pointer-events).
   buehne.addEventListener("click", (ev) => {
-    if (!istMobil()) return;
+    if (!istMobil() || mobilOffen) return;
     const knoten = ev.target.closest(".wb-el");
-    if (!knoten || !knoten.closest(".wb-board.wb-eigen")) return;
-    if (ev.target.closest(".wb-abhaken,.wb-zeile-tools,.wb-kasten,.wb-griff")) return;
+    if (!knoten || !knoten.classList.contains("wb-darf")) return;
+    if (ev.target.closest(".wb-abhaken,.wb-zeile-tools,.wb-zeile-link,.wb-kasten,.wb-griff,.wb-groesse-griff")) return;
     const el = elemente.get(knoten.dataset.id);
     if (el) mobilOeffnen(el);
   });
@@ -3221,21 +4363,37 @@
     aufPixelSnappen();
   }
   segmenteMarkieren();
+  flaeche.dataset.ansicht = ansichtWahl;
+  pfeileAuffrischen();
   pollPlanen();
 
   // Ablesbarer Zustand fuer Tests und Fehlersuche (Muster __gehirn).
   window.__wb = {
     get elemente() { return elemente.size; },
-    get ansicht() { return { ...ansicht }; },
+    // Nur die drei Zahlen kopieren, nicht das ganze Objekt: GSAP haengt
+    // beim Tweenen einen Cache (_gsap) daran, und der zeigt im Kreis auf
+    // sich selbst — jedes JSON.stringify daran wirft.
+    get ansicht() { return { s: ansicht.s, tx: ansicht.tx, ty: ansicht.ty }; },
+    get ansichtWahl() { return ansichtWahl; },
     get redrawZeit() { return redrawZeit; },
     get werkzeug() { return werkzeug; },
     get auswahl() { return auswahl.size; },
+    get neuGroesse() { return neuGroesse; },
     get wand() { return { breite: WAND_B, hoehe: WAND_H, reihen, jeReihe }; },
-    // Fuer Tests: kompakter Blick auf ein Board.
-    stand(besitzer) {
+    get ich() { return ich.id; },
+    // Welche Nachbar-Pfeile stehen gerade zur Verfuegung?
+    get pfeile() {
+      return RICHTUNGEN.filter((r) => !$(".wb-pfeil-" + r, pfeileEl).hidden);
+    },
+    // Fuer Tests: kompakter Blick auf ein Board (das TAFEL-Board).
+    stand(tafel) {
       return [...elemente.values()]
-        .filter((e) => e.besitzer === (besitzer || ich.id))
+        .filter((e) => tafelVon(e) === (tafel || ich.id))
         .map((e) => ({ id: e.id, art: e.art, version: e.version,
+                       besitzer: e.besitzer, tafel: tafelVon(e),
+                       x: e.x, y: e.y, breite: e.breite, hoehe: e.hoehe,
+                       punkte: e.inhalt.punkte ? e.inhalt.punkte.length : 0,
+                       links: e.inhalt.zeilen ? e.inhalt.zeilen.map((z) => z.link || "") : [],
                        zeilen: e.inhalt.zeilen ? e.inhalt.zeilen.map((z) => (z.erledigt ? "[x] " : "[ ] ") + z.t) : e.inhalt.punkte.length }));
     },
   };
