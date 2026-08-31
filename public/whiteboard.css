@@ -366,6 +366,25 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   content:"";position:absolute;right:14px;top:5px;bottom:5px;width:12px;border-radius:3px;
   background:var(--mf,#2B3036);opacity:.85;
 }
+/* Unsichtbare Trefferflaeche: Der Stift ist 118x26 Welteinheiten gross —
+   in der Tafel-Ansicht (Zoom ~0,45) sind das 53x12 Bildschirm-px. Breit
+   genug, aber viel zu flach.
+   Die Zugabe laeuft GEGEN den Zoom (--wb-anti2, wie bei den Zeilen-
+   werkzeugen): 17 px oben und unten ergeben eine Trefferhoehe von
+   26*s + 34 Bildschirm-px — ueber 40 von der Tafel-Ansicht bis 300 %.
+   Feste Welteinheiten haetten entweder bei 100 % einen halben Meter Luft
+   gelassen oder herausgezoomt zu wenig gebracht. In der Wand-Uebersicht
+   (17 %) bleibt sie kleiner: dort IST die Tafel der Knopf, man faehrt erst
+   hin und greift dann zum Stift.
+   Als eigener Knoten (whiteboard.js), weil am Stift beide Pseudos vergeben
+   sind: ::before ist die Kappe, ::after der Farbring. Das Kind traegt
+   ausserdem das data-tip — siehe ablageKind(). position:absolute muss die
+   spaetere Regel [data-tip]{position:relative} schlagen; ".wb-marker>i" hat
+   einen Selektor mehr und gewinnt. */
+.wb-marker>i{
+  position:absolute;left:0;right:0;display:block;
+  top:calc(-17px * var(--wb-anti2,1));bottom:calc(-17px * var(--wb-anti2,1));
+}
 .wb-marker:hover{transform:translateY(-7px) rotate(-1deg)}
 .wb-marker.wb-aktiv{
   transform:translateY(-15px) rotate(-2.5deg);
@@ -383,6 +402,14 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 .wb-schwammknopf::after{
   content:"";position:absolute;left:10%;right:12%;bottom:8px;height:10px;border-radius:5px;
   background:repeating-linear-gradient(92deg,rgba(43,48,54,.14) 0 9px,transparent 9px 22px);
+}
+/* Dieselbe Rechnung wie beim Marker: 44 Einheiten sind in der Tafel-Ansicht
+   knapp 20 px. 14 px gegen den Zoom oben und unten ergeben 44*s + 28 — ueber
+   40 von der Tafel-Ansicht bis 300 %. Auch hier als Kind, damit das data-tip
+   dem ::after mit den Gebrauchsspuren nicht in die Quere kommt. */
+.wb-schwammknopf>i{
+  position:absolute;left:0;right:0;display:block;
+  top:calc(-14px * var(--wb-anti2,1));bottom:calc(-14px * var(--wb-anti2,1));
 }
 .wb-schwammknopf:hover{transform:translateY(-7px) rotate(1deg)}
 .wb-schwammknopf.wb-aktiv{transform:translateY(-15px) rotate(2deg);box-shadow:0 12px 20px -6px rgba(15,23,42,.55)}
@@ -416,6 +443,13 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
      gleiches Polster verschiebt den Text um nichts. */
   margin:0 -26px;padding:0 26px;
   scrollbar-width:thin;scrollbar-color:rgba(43,48,54,.3) transparent;
+  /* BEWUSST contain, nicht auto: Was am Zettelende passiert, entscheidet
+     der Rad-Handler in whiteboard.js (er faengt ohnehin jedes Rad-Ereignis
+     mit preventDefault ab und laesst die Wand nach einer kurzen Rast
+     weiterlaufen). "contain" haelt nur die SEITE heraus — ohne die Regel
+     wanderte am Telefon die ganze Schale mit, sobald der Zettel unten
+     ankommt. "none" waere zu viel: die Rast im Handler ist der feinere
+     Riegel, weil sie nach einer Pause wieder aufmacht. */
   overscroll-behavior:contain;
 }
 .wb-el-notiz>.wb-zeilen.wb-scrollt::-webkit-scrollbar{width:9px}
@@ -472,7 +506,29 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   font:600 12.5px/1.3 'Inter','Segoe UI',system-ui,sans-serif;
   color:var(--wb-chrom-still);white-space:nowrap;
 }
-.wb-el.wb-fuermich>.wb-fahne{color:var(--wb-primaer);border-color:color-mix(in srgb,var(--wb-primaer) 40%,var(--wb-chrom-rand))}
+.wb-el.wb-fuermich>.wb-fahne,
+.wb-fahne.wb-fuermich{color:var(--wb-primaer);border-color:color-mix(in srgb,var(--wb-primaer) 40%,var(--wb-chrom-rand))}
+
+/* Derselbe Hinweis fuer eine handgeschriebene Aufgabe: ein Strich hat
+   keinen DOM-Knoten, an den sich ein Ring haengen koennte (Tinte lebt auf
+   dem Canvas) — und ein harter Rahmen um seine Bounding-Box saehe auf der
+   weissen Tafel aus wie eine Fehlermeldung, nicht wie ein Hinweis. Also
+   ein weicher blauer Hauch HINTER der Schrift: beim Ueberfliegen der Wand
+   sichtbar, beim Lesen kein Kasten. Abstand und Weichzeichnung laufen
+   gegen den Zoom (--wb-anti2), damit der Hauch nicht bei 300 % zur Wolke
+   wird. Der Knoten steht als erstes Kind der Inhaltsebene (whiteboard.js),
+   liegt also hinter Notizen und Textbloecken. */
+.wb-strichring{
+  position:absolute;pointer-events:none;z-index:0;
+  border-radius:calc(14px * var(--wb-anti2,1));
+  /* Ganz leichte Fuellung, damit die Flaeche unter der Schrift "belegt"
+     wirkt — und ein weich auslaufender Schein statt einer harten Kante.
+     Ohne den Schein waere es ein Kasten, und ein Kasten um Handschrift
+     liest sich wie eine Fehlermarkierung. */
+  background:color-mix(in srgb,var(--wb-primaer) 4%,transparent);
+  box-shadow:0 0 calc(22px * var(--wb-anti2,1)) calc(5px * var(--wb-anti2,1))
+             color-mix(in srgb,var(--wb-primaer) 9%,transparent);
+}
 
 /* Anfasser unten rechts: Notizen bekommen Breite und Hoehe, Textbloecke
    die Breite (ihre Hoehe gehoert dem Text). --wb-anti2 haelt ihn auf dem
@@ -486,7 +542,11 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   box-shadow:var(--wb-schatten1);color:var(--wb-chrom-still);
 }
 .wb-groesse-griff svg{width:13px;height:13px}
-.wb-groesse-griff::after{content:"";position:absolute;inset:-9px}
+/* Unsichtbare Trefferzone — auf ::before, NICHT auf ::after: der Anfasser
+   traegt ein data-tip ("Größe ändern"), und [data-tip]::after weiter unten
+   im Blatt haette sie ueberschrieben (dieselbe Falle wie B-1; hier war sie
+   still, weil eine unsichtbare Flaeche nicht auffaellt, wenn sie fehlt). */
+.wb-groesse-griff::before{content:"";position:absolute;inset:-9px}
 .wb-el.wb-darf:hover>.wb-groesse-griff,
 .wb-el.wb-gewaehlt>.wb-groesse-griff,
 .wb-el.wb-fokus>.wb-groesse-griff{display:grid}
@@ -571,17 +631,32 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
    rutschte der Kasten ueber das Zeilenende und fing die Klicks ab, die
    dem Text galten. So beginnt er immer 0,4em rechts der Zeile und
    waechst beim Gegen-Skalieren von ihr weg. */
+/* Die Luecke waechst genau um das, was den Knoepfen zur Trefferzone fehlt
+   (siehe ::after darunter) — so beruehren sich die unsichtbaren Flaechen
+   hoechstens, statt sich zu ueberlappen. Ein Klick auf "Durchstreichen"
+   darf nie im Papierkorb landen. */
 .wb-zeile-tools{
-  position:absolute;left:100%;margin-left:.4em;top:0;display:none;gap:2px;align-items:center;
+  position:absolute;left:100%;margin-left:.4em;top:0;display:none;align-items:center;
+  gap:max(4px,calc(42px - 1.35em));
   transform:scale(var(--wb-anti2,1));transform-origin:0 50%;
 }
 .wb-zeile:hover .wb-zeile-tools{display:inline-flex}
 .wb-zeile-tools{font-size:inherit}
 .wb-zeile-tools button{
+  position:relative;
   width:1.35em;height:1.35em;padding:0;border:0;border-radius:5px;cursor:pointer;
   display:grid;place-items:center;background:var(--wb-chrom-flaeche);
   color:var(--wb-chrom-still);border:1px solid var(--wb-chrom-rand);
   box-shadow:var(--wb-schatten1);font:inherit;font-size:inherit;
+}
+/* Unsichtbare Trefferflaeche: 1,35em sind bei der Vorwahl M (28 px) genau
+   37,8 px, bei S sogar 27 — beides unter den 40, die ein Ziel braucht.
+   Aufgefuellt wird auf 42 px, das Mass der Werkzeugknoepfe in der Leiste;
+   40 ist die Untergrenze, nicht das Ziel. --wb-anti2 haelt die Gruppe
+   bildschirmgross, px sind hier also echte Bildschirm-px. min(0px, …) sorgt
+   dafuer, dass grosse Knoepfe (L, 54 px) nicht SCHRUMPFEN. Optik bleibt. */
+.wb-zeile-tools button::after{
+  content:"";position:absolute;inset:min(0px,calc((1.35em - 42px) / 2));
 }
 .wb-zeile-tools button:hover{color:var(--wb-chrom-text)}
 .wb-zeile-tools button.wb-zeile-weg:hover{color:var(--wb-rot)}
@@ -745,14 +820,25 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   font:600 11.5px/1 'Inter','Segoe UI',system-ui,sans-serif;
   color:var(--wb-chrom-still);letter-spacing:.01em;
 }
-.wb-kontext-groessen{display:flex;align-items:center;gap:3px}
+/* Die Luecke ist genau so breit wie das, was den 30er-Knoepfen zur
+   42-px-Trefferzone fehlt — so stossen die unsichtbaren Flaechen aneinander,
+   statt sich zu ueberlappen (sonst waehlte man M und traefe L). */
+.wb-kontext-groessen{display:flex;align-items:center;gap:12px}
 .wb-neugroesse{
+  position:relative;
   min-width:30px;height:30px;border:0;border-radius:8px;cursor:pointer;padding:0 7px;
   display:inline-flex;align-items:center;justify-content:center;
   background:none;color:var(--wb-chrom-neben);
   font:650 13px/1 'Inter','Segoe UI',system-ui,sans-serif;
   transition:background var(--tempo),color var(--tempo);
 }
+/* Unsichtbare Trefferflaeche auf 42x42: die Knoepfe zeigen ihre Wirkung in
+   ihrer eigenen Schriftgroesse (11/13/15,5 px) — sie duerfen dafuer klein
+   bleiben, treffbar sein muessen sie trotzdem.
+   ::before, NICHT ::after: die Knoepfe tragen ein data-tip, und
+   [data-tip]::after (weiter unten im Blatt, gleiche Spezifitaet) wuerde
+   jedes eigene ::after ueberschreiben — dieselbe Falle wie bei B-1. */
+.wb-neugroesse::before{content:"";position:absolute;inset:-6px}
 .wb-neugroesse:hover{background:var(--wb-chrom-flaeche2);color:var(--wb-chrom-text)}
 .wb-neugroesse.wb-aktiv{background:var(--wb-primaer-weich);color:var(--wb-primaer)}
 /* S kleiner als L: der Knopf sagt seine Wirkung schon, bevor man ihn drueckt. */
@@ -837,11 +923,23 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 }
 [data-tip]:hover::after{opacity:1;transform:translateX(-50%) translateY(0)}
 
+/* MERKSATZ zur Regel darueber: Ein Element mit data-tip darf kein EIGENES
+   ::after mehr haben — der Tooltip nimmt es ihm weg (Inhalt, Lage,
+   Deckkraft; gleiche Spezifitaet, spaeter im Blatt). Dreimal war das hier
+   schon passiert und fiel erst am 31.08.2026 auf, weil es nur die EIGENE
+   Tafel traf (nur dort gibt es Tooltips): der Farbring am Stiftende und die
+   Gebrauchsspuren auf dem Schwamm waren weg, die unsichtbare Trefferzone
+   des Anfassers ebenso. Auf fremden Tafeln sah alles richtig aus.
+   Aufgeloest ohne Gegenregel: der Anfasser nutzt jetzt ::before, Stift und
+   Schwamm tragen ihr data-tip auf einem Kind-Knoten (ablageKind() in
+   whiteboard.js). Wer hier einen Knopf mit Tooltip anlegt: nimm ::before
+   oder ein Kind. */
+
 /* Hilfe-Popover mit allen Kuerzeln. right setzt hilfeUmschalten (JS)
    buendig zum ?-Knopf; die Breite + nowrap verhindern die krummen
    Umbrueche ("Shift+ / Rad", "Strg Z / Y" ueber zwei Zeilen). */
 .wb-hilfe{
-  position:absolute;bottom:76px;right:16px;z-index:12;width:368px;max-width:calc(100% - 20px);
+  position:absolute;bottom:calc(var(--wb-leiste-h,56px) + 20px);right:16px;z-index:12;width:368px;max-width:calc(100% - 20px);
   padding:16px 18px;border-radius:14px;
   background:var(--wb-chrom-flaeche);border:1px solid var(--wb-chrom-rand);box-shadow:var(--wb-schatten3);
   color:var(--wb-chrom-text);font-size:12.5px;
@@ -877,8 +975,12 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 }
 
 /* --------------------------------------------------------- Toasts */
+/* Ueber der Werkzeugleiste, und zwar ueber ihrer ECHTEN Hoehe: die misst
+   sich selbst und legt sie als --wb-leiste-h ab (whiteboard.js). Am Telefon
+   bricht die Leiste um — mit einer festen Zahl staenden die Toasts dann
+   dahinter. Der Rueckfallwert ist die Hoehe der einreihigen Leiste. */
 .wb-toasts{
-  position:absolute;left:50%;bottom:82px;transform:translateX(-50%);z-index:30;
+  position:absolute;left:50%;bottom:calc(var(--wb-leiste-h,56px) + 26px);transform:translateX(-50%);z-index:30;
   display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;
   max-width:calc(100% - 24px);
 }
@@ -1047,15 +1149,23 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   .wb-zoomgruppe{padding:3px}
   .wb-zoomgruppe .wb-zoom-rein,.wb-zoomgruppe .wb-zoom-raus,.wb-zoomgruppe .wb-zoom-stand{display:none}
   /* Unten rechts sitzt Alexandras Sprachkugel (sprache.js, fixed) — die
-     Leiste weicht ihr aus: linksbuendig statt zentriert. */
+     Leiste weicht ihr aus: linksbuendig statt zentriert.
+     Und sie BRICHT UM statt seitwaerts zu scrollen: bei 390 px lagen
+     Größe, Undo/Redo und Hilfe ausserhalb des Bildes, ohne dass irgendetwas
+     verriet, dass es dort weitergeht (31.08.2026 gemessen: x 269…395 gegen
+     Leistenkante 383). Eine zweite Reihe ist ehrlicher als ein verstecktes
+     Scrollfeld — was da ist, sieht man. Wie hoch sie dadurch wird, misst
+     whiteboard.js in --wb-leiste-h; Toasts, Hilfe und Unten-Pfeil rechnen
+     damit. */
   .wb-leiste{bottom:10px;left:10px;right:auto;transform:none;
     max-width:calc(100% - 104px);gap:5px;padding:6px;border-radius:14px;
-    overflow-x:auto;scrollbar-width:none}
-  .wb-leiste::-webkit-scrollbar{display:none}
+    flex-wrap:wrap;row-gap:5px}
   .wb-knopf{width:44px;height:44px;flex-shrink:0}
+  .wb-kontext{flex-wrap:wrap;row-gap:5px}
   .wb-kontext .wb-farbe{width:26px;height:26px}
-  .wb-hilfe{right:10px;left:10px;width:auto;bottom:72px}
-  .wb-toasts{bottom:76px}
+  /* Ein Trenner am Zeilenende waere ein Strich im Nichts. */
+  .wb-leiste-trenner{display:none}
+  .wb-hilfe{right:10px;left:10px;width:auto}
   [data-tip]::after{display:none} /* Tooltips sind Maus-Wissen. */
   /* Die Pfeile werden zu reinen Symbolknoepfen: fuer Namen ist am
      Telefon kein Platz, und ein 44er-Kreis ist ein gutes Ziel. */
@@ -1064,11 +1174,16 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   .wb-pfeile .wb-pfeil-links{left:8px}
   .wb-pfeile .wb-pfeil-rechts{right:8px;padding:0}
   .wb-pfeile .wb-pfeil-oben{top:58px}
-  .wb-pfeile .wb-pfeil-unten{bottom:190px}
+  /* Ueber Toasts und Leiste — beide haengen an --wb-leiste-h. */
+  .wb-pfeile .wb-pfeil-unten{bottom:calc(var(--wb-leiste-h,56px) + 134px)}
   .wb-fremdleiste{top:58px;font-size:12.5px;padding:8px 13px;max-width:calc(100% - 20px)}
   .wb-fremdleiste span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .wb-kontext-wort{display:none} /* Die Leiste ist schmal — S/M/L erklaeren sich */
+  /* Am Telefon sind die Knoepfe selbst schon 40 px gross; die unsichtbare
+     Zone braucht nur noch die 44 der Werkzeugknoepfe daneben. */
+  .wb-kontext-groessen{gap:5px}
   .wb-neugroesse{min-width:40px;height:40px;flex-shrink:0}
+  .wb-neugroesse::before{inset:-2px}
   /* Der Anfasser wird zum Daumenziel; der Zettel bleibt am Telefon
      ueber das Vollbild-Blatt bearbeitbar, die GROESSE aber hier. */
   .wb-groesse-griff{width:34px;height:34px;right:-6px;bottom:-6px}

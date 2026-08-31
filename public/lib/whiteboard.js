@@ -86,18 +86,33 @@
   const ADRESSE_AM_ENDE = /(?:https?:\/\/[^\s]{2,}|www\.[^\s]{2,}|[^\s@]+@[^\s@]+\.[a-z]{2,})\s*$/i;
 
   // Fuellwoerter, die als Suchwort nichts taugen: Aus "E-Mail an Krotzer
-  // schicken" soll "Krotzer" uebrig bleiben. Bewusst kurz gehalten — was
-  // hier fehlt, sucht der Nutzer eben mit einem Wort zu viel.
+  // schicken" soll "Krotzer" uebrig bleiben. Die erste Fassung war bewusst
+  // kurz — im Gebrauch ging damit "Bitte Angebot Krotzer freigeben" als
+  // "Angebot Krotzer freigeben" in die Suche (31.08.2026 gemessen). Was
+  // eine Zeile ueber die TAETIGKEIT sagt, sagt nichts ueber das GESUCHTE;
+  // uebrig bleiben soll der Name, die Firma, die Sache.
   const STOPPWORTE = new Set([
     "e-mail", "email", "mail", "mails", "an", "am", "auf", "aus", "bei", "bis", "für", "fuer",
-    "im", "in", "mit", "nach", "von", "vom", "zu", "zum", "zur", "über", "ueber",
+    "im", "in", "mit", "nach", "von", "vom", "zu", "zum", "zur", "über", "ueber", "wegen",
     "der", "die", "das", "den", "dem", "des", "ein", "eine", "einen", "einem", "einer",
-    "und", "oder", "noch", "nochmal", "bitte", "heute", "morgen", "neu", "neue", "neuen",
-    "schicken", "senden", "schreiben", "anrufen", "rufen", "melden", "nachfassen",
+    "und", "oder", "noch", "nochmal", "bitte", "heute", "morgen", "übermorgen", "uebermorgen",
+    "gestern", "neu", "neue", "neuen", "nächste", "naechste", "nächsten", "naechsten", "woche",
+    "schicken", "senden", "verschicken", "schreiben", "anrufen", "anruf", "rufen", "telefonat",
+    "telefonieren", "melden", "nachfassen", "nachhaken", "nachfrage", "nachfragen",
     "calls", "call", "cold", "webseite", "website", "seite", "bauen", "machen", "erstellen",
-    "erledigen", "prüfen", "pruefen", "checken", "klären", "klaeren", "abschließen",
-    "abschliessen", "aufräumen", "aufraeumen", "vorbereiten", "termin", "fertig", "offen",
+    "erledigen", "erledigt", "prüfen", "pruefen", "checken", "klären", "klaeren", "abschließen",
+    "abschliessen", "aufräumen", "aufraeumen", "vorbereiten", "besprechen", "abstimmen",
+    "termin", "termine", "angebot", "angebote", "rechnung", "rechnungen", "freigeben",
+    "fertig", "offen", "dringend", "asap", "kw",
+    // Wochentage: "Anruf Krotzer Dienstag" soll nach Krotzer suchen.
+    "montag", "dienstag", "mittwoch", "donnerstag", "freitag", "samstag", "sonnabend", "sonntag",
+    "mo", "di", "mi", "do", "fr", "sa", "so",
   ]);
+  // Alles ohne einen einzigen Buchstaben ist eine Zahl, ein Datum oder eine
+  // Uhrzeit ("12.05.", "14:30", "2026") — als Suchwort wertlos. Dazu die
+  // Kalenderwoche in ihren ueblichen Schreibweisen.
+  const OHNE_BUCHSTABE = /^[^a-zà-öø-ÿ]+$/i;
+  const KALENDERWOCHE = /^kw[-.\s]?\d+$/i;
 
   // Tintenfarben: EINE Palette fuer alle Themes. Die Tafel bleibt auch im
   // Dunkelmodus hell — das dunkle Haus-Blau #4B8DF8 ist fuer dunkle
@@ -420,6 +435,21 @@
 
   const boardKnoten = new Map();           // besitzerId -> {wrap, inhalt, schild:{...}, leer}
 
+  // Ein Kind fuer die Stifte und den Schwamm in der Ablage. Es traegt
+  // ZWEI Dinge, die am Knopf selbst keinen Platz mehr haben:
+  //   1. die unsichtbare Trefferflaeche — ein 118x26 grosser Stift misst in
+  //      der Tafel-Ansicht nur 53x12 Bildschirm-px (whiteboard.css),
+  //   2. das data-tip. Am Knopf haengt es in der Falle von B-1:
+  //      [data-tip]::after ueberschreibt dessen eigenes ::after — beim
+  //      Stift den Farbring, beim Schwamm die Gebrauchsspuren. Sichtbar
+  //      war das nur auf der EIGENEN Tafel, denn nur dort gibt es Tooltips.
+  // Am Kind stoert es niemanden: seine beiden Pseudos sind frei.
+  function ablageKind(eigen, tip) {
+    const i = document.createElement("i");
+    if (eigen) i.setAttribute("data-tip", tip);
+    return i;
+  }
+
   function boardBauen(person) {
     const eigen = person.id === ich.id;
     const wrap = document.createElement("div");
@@ -465,17 +495,17 @@
       m.type = "button"; m.className = "wb-marker"; m.dataset.farbe = name;
       m.style.setProperty("--mf", tinte(name));
       m.setAttribute("aria-label", "Stift " + name);
-      if (eigen) m.setAttribute("data-tip", "Stift: " + name);
       // Nicht in der Tab-Reihenfolge: fremde Ablagen sind Deko, und die
       // eigene doppelt nur die Leisten-Chips — Tastatur waehlt dort.
       m.tabIndex = -1;
+      m.appendChild(ablageKind(eigen, "Stift: " + name));
       ablage.appendChild(m);
     });
     const sw = document.createElement("button");
     sw.type = "button"; sw.className = "wb-schwammknopf";
     sw.setAttribute("aria-label", "Schwamm");
-    if (eigen) sw.setAttribute("data-tip", "Schwamm (E)");
     sw.tabIndex = -1;
+    sw.appendChild(ablageKind(eigen, "Schwamm (E)"));
     ablage.appendChild(sw);
 
     if (eigen) {
@@ -550,6 +580,16 @@
   const schnapp = { s: 1, tx: 0, ty: 0, breit: 0, hoch: 0 };
   let scharfTimer = 0;
 
+  // EIGENER Schnappschuss fuer die Wischgeste (siehe "Schwamm-Schnappschuss"
+  // weiter unten). Getrennt vom Pan/Zoom-Puffer, weil beides gleichzeitig
+  // laufen kann: wer beim Radieren am Rad dreht, haette sonst den einen
+  // Puffer mit dem anderen ueberschrieben.
+  const schwammPuffer = document.createElement("canvas");
+  const schwammPufferCtx = schwammPuffer.getContext("2d");
+  let schwammBlit = false;                 // Wischgeste laeuft: blitten statt voll zeichnen
+  let schwammSchnappOk = false;            // Haelt das gesicherte Bild noch?
+  const schwammNachtragen = [];            // frisch markierte Striche: aus dem Bild nehmen
+
   let tintenDirty = true;                  // Canvas neu zeichnen?
   let buehneDirty = true;                  // CSS-Transform neu schreiben?
   let rafId = 0;
@@ -559,7 +599,18 @@
     rafId = requestAnimationFrame(tick);
   }
 
-  function anwenden() { buehneDirty = true; tintenDirty = true; zeichnenAnfordern(); zoomAnzeigen(); }
+  // "An der Tinte hat sich etwas geaendert": Voll-Redraw anfordern UND
+  // einen laufenden Schwamm-Schnappschuss fuer ungueltig erklaeren — er
+  // zeigt sonst eine Wand, die es so nicht mehr gibt. Der Schwamm selbst
+  // ist der EINZIGE, der tintenDirty ohne diese Entwertung setzen darf:
+  // seine Vorschau lebt ja gerade davon, dass das Bild darunter steht.
+  function tinteNeu() {
+    tintenDirty = true;
+    schwammSchnappOk = false;
+    zeichnenAnfordern();
+  }
+
+  function anwenden() { buehneDirty = true; schwammSchnappOk = false; tintenDirty = true; zeichnenAnfordern(); zoomAnzeigen(); }
 
   // Gegen-Skalierung der Schilder (Uebersicht) und des Block-Kastens
   // (immer bildschirmgross). Als CSS-Variablen einmal pro Frame gesetzt.
@@ -593,6 +644,7 @@
     if (tintenDirty) {
       tintenDirty = false;
       if (gesteAktiv) schnappschussZeichnen();
+      else if (schwammBlit) schwammFrameZeichnen();
       else vollZeichnen();
     }
   }
@@ -814,7 +866,66 @@
   // Der gerade entstehende Strich (Werkzeug Stift).
   let liveStrich = null; // {punkte:[welt-boardrelativ], farbe, dicke, tafel, ...}
 
-  function vollZeichnen() {
+  // Die Striche aller Tafeln in EINEN (bereits auf Welt-Koordinaten
+  // gestellten) Kontext malen. Herausgeloest aus vollZeichnen, weil der
+  // Schwamm-Schnappschuss denselben Code fuer einen KLEINEN Ausschnitt
+  // braucht — und zwar auf einer anderen Leinwand.
+  //   sicht        Weltfenster {x0,y0,x1,y1}; alles ausserhalb faellt weg
+  //   ueberspringen Map/Set von Element-Ids, die NICHT gemalt werden
+  function stricheZeichnen(z, sicht, ueberspringen) {
+    for (const p of team) {
+      const striche = stricheJeBoard.get(p.id);
+      if (!striche || !striche.length) continue;
+      const bx = versatz.get(p.id), by = versatzY.get(p.id);
+      if (bx > sicht.x1 || bx + BOARD_B < sicht.x0 || by > sicht.y1 || by + BOARD_H < sicht.y0) continue;
+
+      // Tinte endet an der Tafelkante — ein Marker schreibt nicht auf die
+      // Wand. Der Clip macht auch halb ueber den Rand gewischte Striche
+      // glaubwuerdig.
+      z.save();
+      z.beginPath();
+      z.rect(bx, by, BOARD_B, BOARD_H);
+      z.clip();
+
+      for (const el of striche) {
+        try {
+          if (ueberspringen && ueberspringen.has(el.id)) continue;
+          const b = el; // bbox liegt am Element (x,y,breite,hoehe, board-relativ)
+          const ex0 = b.x + bx, ey0 = b.y + by, ex1 = ex0 + b.breite, ey1 = ey0 + b.hoehe;
+          if (ex0 > sicht.x1 || ex1 < sicht.x0 || ey0 > sicht.y1 || ey1 < sicht.y0) continue;
+          const weg = schwammStriche.get(el.id);
+          const gezogen = ziehVersatz.aktiv && auswahl.has(el.id);
+          z.strokeStyle = tinte(el.inhalt.farbe);
+          z.lineWidth = el.inhalt.dicke;
+          z.globalAlpha = 1;
+          if (gezogen) { z.save(); z.translate(ziehVersatz.dx, ziehVersatz.dy); }
+          // Angeknabberter Strich: die uebrigen Stuecke voll, die vom
+          // Schwamm beruehrten blass — man sieht schon beim Wischen, wo
+          // die Luecke entstehen wird.
+          if (weg && weg.size) strichStueckeZeichnen(z, el, bx, by, weg);
+          else z.stroke(grobModus ? (el._pfadGrob || (el._pfadGrob = strichPfadBauen(el, true))) : pfadVon(el));
+          if (gezogen) z.restore();
+          if (auswahl.has(el.id)) auswahlRahmen(z, el, bx, by, gezogen);
+        } catch (fehler) {
+          // Ein kaputtes Element reisst nie die Wand: ueberspringen, melden.
+          console.error("Whiteboard: Strich uebersprungen:", el && el.id, fehler);
+        }
+      }
+      z.globalAlpha = 1;
+      z.restore();
+    }
+  }
+
+  // Das ganze Sichtfeld in Weltkoordinaten (mit 40 px Rand fuers Culling).
+  function sichtfenster() {
+    const w0 = schirmZuWelt(0, 0), w1 = schirmZuWelt(breite, hoehe);
+    return { x0: w0.x - 40, y0: w0.y - 40, x1: w1.x + 40, y1: w1.y + 40 };
+  }
+
+  // ueberspringen: nur der Schwamm-Schnappschuss setzt das (die gerade
+  // markierten Striche kommen dort NICHT ins Bild, sie werden je Frame
+  // frisch darueber gemalt).
+  function vollZeichnen(ueberspringen) {
     const t0 = performance.now();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, leinwand.width, leinwand.height);
@@ -822,51 +933,7 @@
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    // Sichtfenster in Weltkoordinaten — alles ausserhalb wird gar nicht
-    // erst angefasst (Culling ueber die Bounding-Box).
-    const w0 = schirmZuWelt(0, 0), w1 = schirmZuWelt(breite, hoehe);
-    const sichtX0 = w0.x - 40, sichtY0 = w0.y - 40, sichtX1 = w1.x + 40, sichtY1 = w1.y + 40;
-
-    for (const p of team) {
-      const striche = stricheJeBoard.get(p.id);
-      if (!striche || !striche.length) continue;
-      const bx = versatz.get(p.id), by = versatzY.get(p.id);
-      if (bx > sichtX1 || bx + BOARD_B < sichtX0 || by > sichtY1 || by + BOARD_H < sichtY0) continue;
-
-      // Tinte endet an der Tafelkante — ein Marker schreibt nicht auf die
-      // Wand. Der Clip macht auch halb ueber den Rand gewischte Striche
-      // glaubwuerdig.
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(bx, by, BOARD_B, BOARD_H);
-      ctx.clip();
-
-      for (const el of striche) {
-        try {
-          const b = el; // bbox liegt am Element (x,y,breite,hoehe, board-relativ)
-          const ex0 = b.x + bx, ey0 = b.y + by, ex1 = ex0 + b.breite, ey1 = ey0 + b.hoehe;
-          if (ex0 > sichtX1 || ex1 < sichtX0 || ey0 > sichtY1 || ey1 < sichtY0) continue;
-          const weg = schwammStriche.get(el.id);
-          const gezogen = ziehVersatz.aktiv && auswahl.has(el.id);
-          ctx.strokeStyle = tinte(el.inhalt.farbe);
-          ctx.lineWidth = el.inhalt.dicke;
-          ctx.globalAlpha = 1;
-          if (gezogen) { ctx.save(); ctx.translate(ziehVersatz.dx, ziehVersatz.dy); }
-          // Angeknabberter Strich: die uebrigen Stuecke voll, die vom
-          // Schwamm beruehrten blass — man sieht schon beim Wischen, wo
-          // die Luecke entstehen wird.
-          if (weg && weg.size) strichStueckeZeichnen(el, bx, by, weg);
-          else ctx.stroke(grobModus ? (el._pfadGrob || (el._pfadGrob = strichPfadBauen(el, true))) : pfadVon(el));
-          if (gezogen) ctx.restore();
-          if (auswahl.has(el.id)) auswahlRahmen(el, bx, by, gezogen);
-        } catch (fehler) {
-          // Ein kaputtes Element reisst nie die Wand: ueberspringen, melden.
-          console.error("Whiteboard: Strich uebersprungen:", el && el.id, fehler);
-        }
-      }
-      ctx.globalAlpha = 1;
-      ctx.restore();
-    }
+    stricheZeichnen(ctx, sichtfenster(), ueberspringen);
 
     // Der Strich unterm Stift, immer scharf und zuoberst.
     if (liveStrich) {
@@ -902,7 +969,7 @@
   // gleichen Zustands werden als eigener Pfad gezogen, die weggewischten
   // blass. Ein Uebergangspunkt gehoert BEIDEN Laeufen, sonst klaffte schon
   // in der Vorschau eine zu grosse Luecke.
-  function strichStueckeZeichnen(el, bx, by, weg) {
+  function strichStueckeZeichnen(z, el, bx, by, weg) {
     const p = el.inhalt.punkte;
     const n = p.length / 2;
     let i = 0;
@@ -912,15 +979,15 @@
       while (j + 1 < n && weg.has(j + 1) === raus) j++;
       const von = Math.max(0, i - 1), bis = Math.min(n - 1, j + 1);
       if (bis > von) {
-        ctx.globalAlpha = raus ? 0.18 : 1;
-        ctx.beginPath();
-        ctx.moveTo(p[von * 2] + bx, p[von * 2 + 1] + by);
-        for (let k = von + 1; k <= bis; k++) ctx.lineTo(p[k * 2] + bx, p[k * 2 + 1] + by);
-        ctx.stroke();
+        z.globalAlpha = raus ? 0.18 : 1;
+        z.beginPath();
+        z.moveTo(p[von * 2] + bx, p[von * 2 + 1] + by);
+        for (let k = von + 1; k <= bis; k++) z.lineTo(p[k * 2] + bx, p[k * 2 + 1] + by);
+        z.stroke();
       }
       i = j + 1;
     }
-    ctx.globalAlpha = 1;
+    z.globalAlpha = 1;
   }
 
   // Vorschau fuer radierte ZEICHEN: halbtransparente Rechtecke ueber den
@@ -956,15 +1023,132 @@
     } catch { /* Standard bleibt */ }
   }
 
-  function auswahlRahmen(el, bx, by, gezogen) {
+  function auswahlRahmen(z, el, bx, by, gezogen) {
     const dx = gezogen ? ziehVersatz.dx : 0, dy = gezogen ? ziehVersatz.dy : 0;
-    ctx.save();
+    z.save();
+    z.globalAlpha = 1;
+    z.strokeStyle = auswahlFarbe;
+    z.lineWidth = 1.5 / ansicht.s;
+    z.setLineDash([6 / ansicht.s, 5 / ansicht.s]);
+    z.strokeRect(el.x + bx + dx - 4, el.y + by + dy - 4, el.breite + 8, el.hoehe + 8);
+    z.restore();
+  }
+
+  // =================================================================
+  // Schwamm-Schnappschuss: die Wischgeste malt nicht die ganze Wand
+  // =================================================================
+  //
+  // Gemessen am 31.08.2026 (1237 Elemente, ein pointermove je Frame):
+  // Stift p50/p95 16,7/16,9 ms — Schwamm 33,3/50,1 ms, 62 % der Frames
+  // ueber 20 ms. Die Rechenzeit des Treffer-Handlers war es NICHT
+  // (p95 0,9 ms selbst ueber 1322 Zeichen): jede Bewegung setzte
+  // tintenDirty, und tintenDirty hiess Voll-Redraw ueber ALLE Striche.
+  //
+  // Also derselbe Trick wie bei Pan/Zoom, nur andersherum: dort steht die
+  // Tinte still und die Kamera faehrt, hier steht die Kamera still und ein
+  // paar Striche aendern sich. Der Schnappschuss haelt die Wand OHNE die
+  // gerade angeknabberten Striche; je Frame wird er einmal geblittet und
+  // nur diese wenigen Striche darueber gemalt.
+  //
+  // Beim Aufsetzen ist der Schnappschuss GRATIS: auf der Leinwand steht
+  // in dem Moment genau das gewuenschte Bild (noch ist nichts markiert).
+  // Kommt spaeter ein Strich dazu, wird nur SEIN Kasten im Schnappschuss
+  // geleert und mit seinen Nachbarn neu gefuellt — nicht die Wand.
+
+  function schwammSchnappSichern() {
+    if (schwammPuffer.width !== leinwand.width || schwammPuffer.height !== leinwand.height) {
+      schwammPuffer.width = leinwand.width;
+      schwammPuffer.height = leinwand.height;
+    }
+    schwammPufferCtx.setTransform(1, 0, 0, 1, 0, 0);
+    schwammPufferCtx.clearRect(0, 0, schwammPuffer.width, schwammPuffer.height);
+    schwammPufferCtx.drawImage(leinwand, 0, 0);
+    schwammSchnappOk = true;
+    schwammNachtragen.length = 0;
+  }
+
+  // Einen frisch markierten Strich aus dem Schnappschuss herausrechnen:
+  // seinen Kasten leeren und nur die Nachbarn darin neu ziehen. Ohne das
+  // schiene der unversehrte Strich unter seiner eigenen blassen Vorschau
+  // durch — sichtbar waere gar nichts.
+  function schwammSchnappFlicken(el) {
+    if (!el || el.art !== "strich") return;
+    const bx = versatz.get(tafelVon(el)) || 0, by = versatzY.get(tafelVon(el)) || 0;
+    const luft = el.inhalt.dicke + 4;      // Rundkappen ragen ueber die Bbox
+    const welt = { x0: el.x + bx - luft, y0: el.y + by - luft,
+                   x1: el.x + bx + el.breite + luft, y1: el.y + by + el.hoehe + luft };
+    // Weltkasten -> Geraetepixel (dieselbe Kette wie in setTransform).
+    const gx = Math.floor((welt.x0 * ansicht.s + ansicht.tx) * dpr) - 1;
+    const gy = Math.floor((welt.y0 * ansicht.s + ansicht.ty) * dpr) - 1;
+    const gb = Math.ceil((welt.x1 - welt.x0) * ansicht.s * dpr) + 3;
+    const gh = Math.ceil((welt.y1 - welt.y0) * ansicht.s * dpr) + 3;
+    if (gx > schwammPuffer.width || gy > schwammPuffer.height || gx + gb < 0 || gy + gh < 0) return;
+    const z = schwammPufferCtx;
+    z.save();
+    z.setTransform(1, 0, 0, 1, 0, 0);
+    z.beginPath(); z.rect(gx, gy, gb, gh); z.clip();
+    z.clearRect(gx, gy, gb, gh);
+    z.setTransform(dpr * ansicht.s, 0, 0, dpr * ansicht.s, dpr * ansicht.tx, dpr * ansicht.ty);
+    z.lineCap = "round"; z.lineJoin = "round";
+    stricheZeichnen(z, welt, schwammStriche);
+    z.restore();
+  }
+
+  // Ein Frame waehrend der Wischgeste.
+  function schwammFrameZeichnen() {
+    if (!schwammSchnappOk) {
+      // Von aussen hat etwas an der Tinte geruettelt (Poll, Theme, Zoom):
+      // einmal die Wand OHNE die Markierten zeichnen und neu sichern.
+      vollZeichnen(schwammStriche);
+      schwammSchnappSichern();
+    } else if (schwammNachtragen.length) {
+      for (const el of schwammNachtragen) schwammSchnappFlicken(el);
+      schwammNachtragen.length = 0;
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, leinwand.width, leinwand.height);
+    ctx.drawImage(schwammPuffer, 0, 0);
+    schwammVorschauZeichnen();
+    schwammTextVorschau();
+  }
+
+  // Die angeknabberten Striche ueber den Schnappschuss: uebrige Stuecke
+  // voll, beruehrte blass. Das sind waehrend einer Geste eine Handvoll —
+  // nicht zwoelfhundert.
+  function schwammVorschauZeichnen() {
+    if (!schwammStriche.size) return;
+    ctx.setTransform(dpr * ansicht.s, 0, 0, dpr * ansicht.s, dpr * ansicht.tx, dpr * ansicht.ty);
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    for (const [id, weg] of schwammStriche) {
+      const el = elemente.get(id);
+      if (!el || el.art !== "strich") continue;
+      const bx = versatz.get(tafelVon(el)) || 0, by = versatzY.get(tafelVon(el)) || 0;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(bx, by, BOARD_B, BOARD_H); ctx.clip();
+      ctx.strokeStyle = tinte(el.inhalt.farbe);
+      ctx.lineWidth = el.inhalt.dicke;
+      ctx.globalAlpha = 1;
+      if (weg.size) strichStueckeZeichnen(ctx, el, bx, by, weg);
+      else ctx.stroke(pfadVon(el));
+      if (auswahl.has(id)) auswahlRahmen(ctx, el, bx, by, false);
+      ctx.restore();
+    }
     ctx.globalAlpha = 1;
-    ctx.strokeStyle = auswahlFarbe;
-    ctx.lineWidth = 1.5 / ansicht.s;
-    ctx.setLineDash([6 / ansicht.s, 5 / ansicht.s]);
-    ctx.strokeRect(el.x + bx + dx - 4, el.y + by + dy - 4, el.breite + 8, el.hoehe + 8);
-    ctx.restore();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  function schwammBlitBeginnen() {
+    // Steht noch eine Aenderung aus, ist das Bild auf der Leinwand alt —
+    // dann erst einmal sauber zeichnen, sonst friert der alte Stand ein.
+    if (tintenDirty) { tintenDirty = false; vollZeichnen(); }
+    schwammBlit = true;
+    schwammSchnappSichern();
+  }
+
+  function schwammBlitBeenden() {
+    schwammBlit = false;
+    schwammSchnappOk = false;
+    schwammNachtragen.length = 0;
   }
 
   // Nur den Live-Strich nachziehen: waehrend des Zeichnens gibt es keinen
@@ -1008,6 +1192,7 @@
 
   const elementKnoten = new Map();         // id -> DOM-Knoten (nur text/notiz)
   const strichFahnen = new Map();          // id -> DOM-Fahne "von X" eines Strichs
+  const strichRinge = new Map();           // id -> Schimmer um eine fremde Aufgabe
 
   // "von Lukas" — die Herkunftsfahne. Bei Bloecken haengt sie IM Knoten
   // (folgt jedem Verschieben von selbst), bei Strichen als eigener Knoten
@@ -1019,21 +1204,60 @@
       + besitzform(vorname(tafelVon(el))) + " Tafel geschrieben";
   }
 
-  function strichFahne(el) {
-    const noetig = istFremdeHand(el);
-    let fahne = strichFahnen.get(el.id);
-    if (!noetig) { if (fahne) { fahne.remove(); strichFahnen.delete(el.id); } return; }
+  // Fahne UND Schimmer eines Strichs auf den Stand bringen.
+  //
+  // Ein Block von fremder Hand traegt auf der eigenen Tafel einen zarten
+  // Ring (.wb-fuermich::after) — ein Strich bekam bisher nur die graue
+  // Fahne: dasselbe Signal in zwei Staerken, und die eigene Handschrift
+  // war von einer hingeschriebenen Aufgabe kaum zu unterscheiden. Ein
+  // harter Rahmen um die Bounding-Box waere auf der weissen Tafel aber ein
+  // Fehlerkasten, kein Hinweis. Also ein weicher Schimmer HINTER der
+  // Schrift (die Tinte liegt auf dem Canvas ueber der Buehne) plus die
+  // blaue Fahne, die Bloecke schon haben.
+  //
+  // dx/dy: waehrend ein Strich gezogen wird, verschiebt sich nur die OPTIK
+  // (ziehVersatz) — Fahne und Schimmer laufen live mit, statt bis zum
+  // Loslassen an der alten Stelle stehen zu bleiben.
+  function strichSchmuck(el, dx, dy) {
+    const fremd = istFremdeHand(el);
+    const fuerMich = fremd && tafelVon(el) === ich.id;
     const ebene = boardKnoten.get(tafelVon(el));
-    if (!ebene) return;
-    if (!fahne) {
-      fahne = document.createElement("div");
-      fahne.className = "wb-fahne wb-fahne-strich";
-      strichFahnen.set(el.id, fahne);
+    const x = el.x + (dx || 0), y = el.y + (dy || 0);
+
+    let fahne = strichFahnen.get(el.id);
+    if (!fremd || !ebene) {
+      if (fahne) { fahne.remove(); strichFahnen.delete(el.id); }
+    } else {
+      if (!fahne) {
+        fahne = document.createElement("div");
+        strichFahnen.set(el.id, fahne);
+      }
+      fahne.className = "wb-fahne wb-fahne-strich" + (fuerMich ? " wb-fuermich" : "");
+      if (fahne.parentElement !== ebene.inhalt) ebene.inhalt.appendChild(fahne);
+      fahne.style.left = x + "px";
+      fahne.style.top = y + "px";
+      fahneFuellen(fahne, el);
     }
-    if (fahne.parentElement !== ebene.inhalt) ebene.inhalt.appendChild(fahne);
-    fahne.style.left = el.x + "px";
-    fahne.style.top = el.y + "px";
-    fahneFuellen(fahne, el);
+
+    let ring = strichRinge.get(el.id);
+    if (!fuerMich || !ebene) {
+      if (ring) { ring.remove(); strichRinge.delete(el.id); }
+      return;
+    }
+    if (!ring) {
+      ring = document.createElement("div");
+      ring.className = "wb-strichring";
+      ring.setAttribute("aria-hidden", "true");
+      strichRinge.set(el.id, ring);
+    }
+    // prepend, nicht append: der Schimmer liegt HINTER allem, was auf der
+    // Tafel steht — sonst legte er sich als blauer Schleier ueber Notizen,
+    // die zufaellig unter dem Strich haengen.
+    if (ring.parentElement !== ebene.inhalt) ebene.inhalt.prepend(ring);
+    ring.style.left = x + "px";
+    ring.style.top = y + "px";
+    ring.style.width = el.breite + "px";
+    ring.style.height = el.hoehe + "px";
   }
 
   // Ein Element vollstaendig uebernehmen (Erstaufbau UND Poll-Delta).
@@ -1059,8 +1283,8 @@
           const i = liste.indexOf(alt);
           if (i >= 0) liste[i] = el; else liste.push(el);
         } else liste.push(el);
-        strichFahne(el);
-        tintenDirty = true; zeichnenAnfordern();
+        strichSchmuck(el);
+        tinteNeu();
       } else {
         blockRendern(el, alt);
       }
@@ -1076,7 +1300,9 @@
       if (liste) { const i = liste.indexOf(el); if (i >= 0) liste.splice(i, 1); }
       const f = strichFahnen.get(el.id);
       if (f) { f.remove(); strichFahnen.delete(el.id); }
-      tintenDirty = true; zeichnenAnfordern();
+      const r = strichRinge.get(el.id);
+      if (r) { r.remove(); strichRinge.delete(el.id); }
+      tinteNeu();
     } else {
       const k = elementKnoten.get(el.id);
       if (k) { k.remove(); elementKnoten.delete(el.id); }
@@ -2115,7 +2341,13 @@
         const k = knotenVon(e);
         if (k) { k.style.left = (lage.x + dx) + "px"; k.style.top = (lage.y + dy) + "px"; }
       }
-      if (strichIds.length) { ziehVersatz.dx = dx; ziehVersatz.dy = dy; tintenDirty = true; zeichnenAnfordern(); }
+      if (strichIds.length) {
+        ziehVersatz.dx = dx; ziehVersatz.dy = dy;
+        // Fahne und Schimmer kleben am Strich, nicht an seiner alten Lage —
+        // sonst blieben sie bis zum Loslassen liegen (31.08.2026 gemeldet).
+        for (const id of strichIds) { const e = elemente.get(id); if (e) strichSchmuck(e, dx, dy); }
+        tinteNeu();
+      }
     };
     const ende = () => {
       ziel.removeEventListener("pointermove", move);
@@ -2140,12 +2372,14 @@
           for (const id of strichIds) strichVerschieben(id, rdx, rdy);
         } finally { sammelnAbschliessen(); }
       } else {
-        // Nichts bewegt: Positionen zuruecksetzen (falls geklemmt gerundet).
+        // Nichts bewegt: Positionen zuruecksetzen (falls geklemmt gerundet)
+        // — auch Fahne und Schimmer, die live mitgelaufen sind.
         for (const e of betroffen) blockRendern(e);
+        for (const id of strichIds) { const e = elemente.get(id); if (e) strichSchmuck(e); }
       }
       betroffen.forEach((e) => { if (!elementKnoten.get(e.id) || !elementKnoten.get(e.id).contains(document.activeElement)) inArbeit.delete(e.id); });
       strichIds.forEach((id) => inArbeit.delete(id));
-      tintenDirty = true; zeichnenAnfordern();
+      tinteNeu();
     };
     ziel.addEventListener("pointermove", move);
     ziel.addEventListener("pointerup", ende);
@@ -2162,7 +2396,7 @@
     el.x += dx; el.y += dy;
     el._pfad = null; el._pfadGrob = null;
     undoMerken({ typ: "aendern", id, vorher, nachher: { x: el.x, y: el.y, inhalt: { punkte: p.slice(), farbe: el.inhalt.farbe, dicke: el.inhalt.dicke } } });
-    strichFahne(el);
+    strichSchmuck(el);
     aenderungEinreihen(el, true);
   }
 
@@ -2441,6 +2675,18 @@
     if (ev.target.closest(".wb-hilfe-knopf")) { hilfeUmschalten(); }
   });
 
+  // Die Werkzeugleiste darf am Telefon UMBRECHEN (sonst rutschen Größe,
+  // Undo/Redo und Hilfe bei 390 px aus dem Bild). Dann ist sie zwei Reihen
+  // hoch — und Toasts wie Hilfe-Popover muessten raten, wie hoch. Also
+  // misst sie sich selbst; CSS rechnet mit der Zahl.
+  (function leisteMessen() {
+    const leiste = $(".wb-leiste");
+    const setzen = () => raum.style.setProperty("--wb-leiste-h",
+      Math.round(leiste.getBoundingClientRect().height) + "px");
+    new ResizeObserver(setzen).observe(leiste);
+    setzen();
+  })();
+
   // Das Hilfe-Popover gehoert optisch zu seinem ?-Knopf: beim Oeffnen
   // die rechten Kanten buendig stellen statt es in die Raumecke zu
   // setzen. Am Telefon regelt die Media-Query die Lage (volle Breite).
@@ -2491,22 +2737,51 @@
   // deltaMode 1 (Zeilen). Ein Touchpad schiebt stufenlos: gebrochene
   // Werte, kleine Betraege und sehr wohl ein deltaX.
   //
-  // Die Entscheidung wird kurz gepuffert: ein Geraet wechselt nicht
-  // mitten in einer Geste, und am Ende eines Wischschwungs faellt beim
-  // Touchpad gern einmal ein runder ganzer Wert an. Erst nach 400 ms
-  // Ruhe wird neu entschieden.
+  // Die Entscheidung wird gepuffert, weil am Ende eines Wischschwungs beim
+  // Touchpad gern einmal ein runder ganzer Wert anfaellt — mitten in der
+  // Geste darf das nicht auf "Rad" umschlagen (die Wand zoomte sonst zum
+  // Abschluss jedes Wischens einmal kurz).
+  //
+  // Der Merker hielt dafuer 400 ms ab dem LETZTEN Ereignis — auch dann
+  // noch, wenn laengst ein anderes Geraet in der Hand lag. An einer
+  // Dockingstation (Maus NEBEN Touchpad) war das spuerbar falsch. Zwei
+  // Aenderungen, die beides zusammenbringen:
+  //   1. Was ein Geraet EINDEUTIG verraet, gilt sofort — auch mitten im
+  //      Nachlauf. Ein deltaX oder ein gebrochenes deltaY kann kein
+  //      Rasterrad erzeugen: das ist ein Touchpad, Punkt.
+  //   2. Der Merker haelt nur, solange die Ereignisse wirklich aneinander
+  //      haengen (RAD_PAUSE). Ein Wischschwung feuert alle 8-16 ms; eine
+  //      Pause heisst neue Geste, und die wird neu entschieden.
+  // Uebrig bleibt der mehrdeutige Fall (kleiner GANZER Schritt ohne X) —
+  // und genau der ist der Nachhall, fuer den der Merker gebaut wurde.
+  const RAD_PAUSE = 150;                   // ms; darueber gilt die Geste als beendet
   const radMerk = { touchpad: false, zeit: -1e9 };
+  function radMerkmal(ev) {
+    if (ev.deltaMode !== 0) return false;                 // Zeilen/Seiten = nur Raeder
+    if (ev.deltaX !== 0) return true;                     // Raeder kennen kein X
+    if (!Number.isInteger(ev.deltaY)) return true;        // stufenlos = Touchpad
+    return null;                                          // mehrdeutig
+  }
   function istTouchpad(ev) {
     const jetzt = performance.now();
-    if (jetzt - radMerk.zeit < 400) { radMerk.zeit = jetzt; return radMerk.touchpad; }
-    let touchpad;
-    if (ev.deltaMode !== 0) touchpad = false;                       // Zeilen/Seiten = Rad
-    else if (ev.deltaX !== 0) touchpad = true;                      // Raeder kennen kein X
-    else if (!Number.isInteger(ev.deltaY)) touchpad = true;         // stufenlos = Touchpad
-    else touchpad = Math.abs(ev.deltaY) > 0 && Math.abs(ev.deltaY) < 50;
-    radMerk.touchpad = touchpad; radMerk.zeit = jetzt;
-    return touchpad;
+    const laeuft = jetzt - radMerk.zeit < RAD_PAUSE;
+    const klar = radMerkmal(ev);
+    if (klar !== null) { radMerk.touchpad = klar; radMerk.zeit = jetzt; return klar; }
+    if (laeuft) { radMerk.zeit = jetzt; return radMerk.touchpad; }
+    // Frische Geste, nur ein ganzer Schritt: 100/120/150 ist ein Rasterrad,
+    // ein kleiner Betrag ein Touchpad.
+    radMerk.touchpad = Math.abs(ev.deltaY) > 0 && Math.abs(ev.deltaY) < 50;
+    radMerk.zeit = jetzt;
+    return radMerk.touchpad;
   }
+
+  // Rast am Zettelende: welcher Scroll-Kasten hat zuletzt wirklich
+  // geblaettert, und wann. 350 ms — lang genug, dass ein Wischschwung
+  // (Ereignisse alle 8-16 ms) und ein zweiter Radstoss derselben Hand noch
+  // im Zettel landen, kurz genug, dass man nach dem Absetzen sofort wieder
+  // an der Wand ist, ohne zu warten.
+  const ZETTEL_RAST = 350;
+  const zettelRast = { kasten: null, zeit: -1e9 };
 
   // Rad: Strg/Pinch zoomt auf den Zeiger, Zweifinger-Wischen verschiebt die
   // Wand, das klassische Mausrad zoomt weiter (daran sind Mausnutzer
@@ -2519,12 +2794,31 @@
     // Ueber einer zu vollen Haftnotiz blaettert das Rad IM Zettel. Die
     // Wand nimmt den Rad-Ereignissen sonst alles weg (preventDefault) —
     // das interne Scrollen kaeme nie zustande.
+    //
+    // Am Zettelende greift das Rad bewusst auf die Wand ueber (Scroll-
+    // Chaining, wie in jedem Browser) — aber erst nach einer Rast: sonst
+    // kippte derselbe Schwung, mit dem man bis ans Ende gelesen hat, die
+    // Wand aus dem Zoom (1,000 -> 0,768 gemessen). Die Rast ist die
+    // Gestengrenze: solange die Ereignisse aneinanderhaengen, bleibt das
+    // Rad im Zettel; nach einer Pause gehoert der naechste Schub der Wand.
+    // (Das overscroll-behavior:contain im CSS haelt die SEITE heraus —
+    // ueber die Wand entscheidet hier der Code, weil er ohnehin jedes
+    // Rad-Ereignis abfaengt.)
     if (!ev.ctrlKey && ev.deltaY) {
       const kasten = ev.target.closest && ev.target.closest(".wb-zeilen.wb-scrollt");
       if (kasten) {
         const vorher = kasten.scrollTop;
         kasten.scrollTop += ev.deltaY * zeilen;
-        if (kasten.scrollTop !== vorher) return;
+        if (kasten.scrollTop !== vorher) {
+          zettelRast.kasten = kasten; zettelRast.zeit = performance.now();
+          return;
+        }
+        // Nichts mehr zu scrollen: Ende erreicht. Innerhalb der Rast den
+        // Schub schlucken, statt die Wand zu bewegen.
+        if (zettelRast.kasten === kasten && performance.now() - zettelRast.zeit < ZETTEL_RAST) {
+          zettelRast.zeit = performance.now();
+          return;
+        }
       }
     }
     const p = ereignisZuSchirm(ev);
@@ -2685,7 +2979,7 @@
 
   function auswahlAnzeigen() {
     for (const [id, knoten] of elementKnoten) knoten.classList.toggle("wb-gewaehlt", auswahl.has(id));
-    tintenDirty = true; zeichnenAnfordern();
+    tinteNeu();
   }
   function auswahlLeeren() {
     if (!auswahl.size) return;
@@ -2803,7 +3097,10 @@
         const k = elementKnoten.get(e.id);
         if (k) { k.style.left = (lage.x + dx) + "px"; k.style.top = (lage.y + dy) + "px"; }
       }
-      tintenDirty = true; zeichnenAnfordern();
+      // Fahne und Schimmer kleben am Strich, nicht an seiner alten Lage —
+      // sonst blieben sie bis zum Loslassen liegen (31.08.2026 gemeldet).
+      for (const e of striche) strichSchmuck(e, dx, dy);
+      tinteNeu();
     };
     const ende = (ev) => {
       if (ev.pointerId !== startEv.pointerId) return;
@@ -2826,9 +3123,12 @@
             blockRendern(e);
           }
         } finally { sammelnAbschliessen(); }
+      } else {
+        // Nichts bewegt: Fahne und Schimmer zuruecksetzen.
+        for (const e of striche) strichSchmuck(e);
       }
       ids.forEach((id) => inArbeit.delete(id));
-      tintenDirty = true; zeichnenAnfordern();
+      tinteNeu();
     };
     flaeche.addEventListener("pointermove", move);
     flaeche.addEventListener("pointerup", ende);
@@ -3166,7 +3466,7 @@
     zeichnung = null;
     liveStrich = null;
     if (!zuWenig) aufgabeGemeldet(tafel);
-    tintenDirty = true; zeichnenAnfordern();
+    tinteNeu();
   }
 
   // Den aktuellen Live-Strich als Element festschreiben und speichern.
@@ -3195,7 +3495,7 @@
     };
     elemente.set(el.id, el);
     stricheJeBoard.get(tafel).push(el);
-    strichFahne(el);
+    strichSchmuck(el);
     anlegenEinreihen(el);
     undoMerken({ typ: "anlegen", id: el.id });
     schilderAuffrischen();
@@ -3239,6 +3539,9 @@
     try { leinwand.setPointerCapture(ev.pointerId); } catch { /* egal */ }
     schwammZug = { pointerId: ev.pointerId, letzte: w };
     schwammKreisSetzen(ev);
+    // VOR dem ersten Treffer sichern: da steht die unversehrte Wand noch
+    // auf der Leinwand, der Schnappschuss kostet dann nur ein drawImage.
+    schwammBlitBeginnen();
     schwammTreffen(w, ev);
   }
 
@@ -3277,7 +3580,11 @@
       if (!strichAbstandOk(el, x, y, r)) continue;
       if (!darfBearbeiten(el)) { fremdHinweis(el); continue; }
       let weg = schwammStriche.get(el.id);
-      if (!weg) { weg = new Set(); schwammStriche.set(el.id, weg); }
+      if (!weg) {
+        weg = new Set(); schwammStriche.set(el.id, weg);
+        // Neu markiert: im naechsten Frame aus dem Schnappschuss nehmen.
+        if (schwammBlit) schwammNachtragen.push(el);
+      }
       const p = el.inhalt.punkte, r2 = r * r;
       for (let i = 0; i < p.length; i += 2) {
         const ddx = p[i] - x, ddy = p[i + 1] - y;
@@ -3319,6 +3626,10 @@
       }
     }
 
+    // ABSICHTLICH tintenDirty statt tinteNeu(): der Schnappschuss unter
+    // dieser Vorschau soll genau stehen bleiben — er ist die Wand, wie sie
+    // vor dem Wischen war. Ihn hier zu entwerten hiesse Voll-Redraw je
+    // Frame, also wieder 30 fps.
     if (neu) { tintenDirty = true; zeichnenAnfordern(); }
   }
 
@@ -3365,12 +3676,16 @@
   function schwammVerwerfen() {
     schwammStriche.clear();
     schwammTexte.clear();
-    tintenDirty = true; zeichnenAnfordern();
+    // Nach der Geste einmal sauber und vollstaendig zeichnen: der
+    // Schnappschuss war ein Bild, jetzt gilt wieder das Modell.
+    schwammBlitBeenden();
+    tinteNeu();
   }
 
   function schwammLoslassen(abgebrochen) {
     schwammZug = null;
     if (abgebrochen || (!schwammStriche.size && !schwammTexte.size)) { schwammVerwerfen(); return; }
+    schwammBlitBeenden();
 
     const striche = [...schwammStriche.entries()];
     const texte = [...schwammTexte.values()];
@@ -3387,21 +3702,42 @@
       }
       for (const eintrag of texte) zeichenSchneiden(eintrag);
     } finally { sammelnAbschliessen(); }
-    tintenDirty = true; zeichnenAnfordern();
+    tinteNeu();
+  }
+
+  // Wie lang ist ein Stueck insgesamt (Summe seiner Segmente, Welt-px)?
+  function stueckLaenge(p) {
+    let l = 0;
+    for (let i = 2; i < p.length; i += 2) l += Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]);
+    return l;
   }
 
   // Einen Strich durch seine Reststuecke ersetzen. Stuecke unter zwei
   // Punkten fallen weg — ein einzelner Punkt waere ein Tupfer, den
   // niemand stehen lassen wollte, wenn er ihn gerade wegwischt.
+  //
+  // Dieselbe Ueberlegung, eine Stufe weiter (F10): Auch ein Rest von drei
+  // Punkten auf zwei Pixeln ist kein Strich mehr, sondern Krümel. Der
+  // Schwamm hat einen Durchmesser von 36 Bildschirm-px — was daneben an
+  // Fussel liegen bleibt, wollte niemand behalten, und jeder Krümel ist ein
+  // eigenes Element mit eigener Zeile in der Datenbank. Die Grenze steht
+  // bei 6 Welt-px, weil das gerade die breiteste Strichstaerke (11) ist:
+  // kuerzer als der Stift dick ist, kann nichts mehr wie ein Strich
+  // aussehen — und breiter darf die Grenze nicht werden, sonst frisst der
+  // Schwamm mehr, als er beruehrt hat.
+  const REST_MIN_LAENGE = 6;
   function strichZerteilen(el, weg) {
     if (!el || el.art !== "strich") return;
     const p = el.inhalt.punkte;
     const n = p.length / 2;
     const stuecke = [];
     let lauf = [];
+    const stueckMerken = () => {
+      if (lauf.length >= 4 && stueckLaenge(lauf) >= REST_MIN_LAENGE) stuecke.push(lauf);
+    };
     for (let i = 0; i < n; i++) {
       if (weg.has(i)) {
-        if (lauf.length >= 4) stuecke.push(lauf);
+        stueckMerken();
         lauf = [];
       } else {
         lauf.push(p[i * 2], p[i * 2 + 1]);
@@ -3412,9 +3748,32 @@
         }
       }
     }
-    if (lauf.length >= 4) stuecke.push(lauf);
+    stueckMerken();
     const tafel = tafelVon(el);
     const { farbe, dicke } = el.inhalt;
+
+    // Bleibt GENAU EIN Stueck uebrig, wird der Strich umgeschrieben statt
+    // ersetzt. Das spart nicht nur zwei Server-Runden (loeschen + anlegen)
+    // — es haelt vor allem die Identitaet: derselbe Strich behaelt seine id,
+    // seine Herkunftsfahne und seine Stelle im Undo-Stapel. Wer an einem
+    // Strichende immer wieder korrigiert, hatte sonst nach zehn Zuegen zehn
+    // frische Elemente, jedes mit eigener Historie.
+    if (stuecke.length === 1) {
+      const punkte = stuecke[0];
+      const bbox = strichBbox(punkte, dicke);
+      const vorher = { x: el.x, y: el.y, breite: el.breite, hoehe: el.hoehe,
+                       inhalt: { punkte: p.slice(), farbe, dicke } };
+      el.inhalt.punkte = punkte;
+      el.x = bbox.x; el.y = bbox.y; el.breite = bbox.breite; el.hoehe = bbox.hoehe;
+      el._pfad = null; el._pfadGrob = null;
+      undoMerken({ typ: "aendern", id: el.id, vorher,
+                   nachher: { x: el.x, y: el.y, breite: el.breite, hoehe: el.hoehe,
+                              inhalt: { punkte: punkte.slice(), farbe, dicke } } });
+      strichSchmuck(el);
+      aenderungEinreihen(el, true);
+      return;
+    }
+
     elementLoeschen([el.id]);
     for (const stueck of stuecke) strichAnlegen(stueck, farbe, dicke, tafel);
   }
@@ -3745,8 +4104,8 @@
     }
     if (el.art === "strich") {
       el._pfad = null; el._pfadGrob = null;
-      strichFahne(el);
-      tintenDirty = true; zeichnenAnfordern();
+      strichSchmuck(el);
+      tinteNeu();
     } else {
       blockRendern(el);
     }
@@ -3834,11 +4193,25 @@
 
   function wischenFragen() {
     let n = 0;
-    for (const el of elemente.values()) if (tafelVon(el) === ich.id) n++;
+    // Fremde Hand mitzaehlen, je Autor: gewischt wird das BOARD, also
+    // faellt auch, was jemand anderes einem hier hingeschrieben hat. Wer
+    // nur "12 Elemente" liest, ahnt nicht, dass Janniks Aufgabe dabei ist —
+    // und der Undo-Toast hilft nur dem, der den Fehler bemerkt.
+    const fremd = new Map();
+    for (const el of elemente.values()) {
+      if (tafelVon(el) !== ich.id) continue;
+      n++;
+      if (el.besitzer !== ich.id) fremd.set(el.besitzer, (fremd.get(el.besitzer) || 0) + 1);
+    }
     if (!n) { toast("Deine Tafel ist schon leer."); return; }
-    $(".wb-wischen-text").textContent = n === 1
-      ? "Damit verschwindet 1 Element von deiner Tafel."
-      : "Damit verschwinden " + n + " Elemente von deiner Tafel.";
+    const satz = n === 1
+      ? "Damit verschwindet 1 Element von deiner Tafel"
+      : "Damit verschwinden " + n + " Elemente von deiner Tafel";
+    const teile = [...fremd.entries()].sort((a, b) => b[1] - a[1])
+      .map(([id, k]) => k + " von " + vorname(id));
+    $(".wb-wischen-text").textContent = teile.length
+      ? satz + ", darunter " + teile.join(" und ") + "."
+      : satz + ".";
     wischenDialog.showModal();
   }
   $(".wb-wischen-nein").addEventListener("click", () => wischenDialog.close());
@@ -3914,7 +4287,10 @@
     const worte = String(text || "")
       .split(/[\s,;:!?"'()\[\]/]+/)
       .map((w) => w.replace(/^[.\-–—]+|[.\-–—]+$/g, ""))
-      .filter((w) => w.length > 1 && !/^\d+$/.test(w) && !STOPPWORTE.has(w.toLowerCase()));
+      .filter((w) => w.length > 1
+        && !OHNE_BUCHSTABE.test(w)
+        && !KALENDERWOCHE.test(w)
+        && !STOPPWORTE.has(w.toLowerCase()));
     return worte.slice(0, 4).join(" ").slice(0, 60);
   }
 
@@ -4370,7 +4746,7 @@
       if (k) k.style.setProperty("--ef", tinte(el.inhalt.farbe));
     }
     cursorSetzen();
-    tintenDirty = true; zeichnenAnfordern();
+    tinteNeu();
   }
   new MutationObserver(farbenNachziehen)
     .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-weiss"] });
