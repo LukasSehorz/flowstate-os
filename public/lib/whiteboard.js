@@ -3646,12 +3646,45 @@
         .catch((f) => { if (f.message !== "anmeldung") speicherfehlerZaehlen(); }));
   }
 
+  // Loeschen UND Wiederherstellen zaehlen serverseitig die Version hoch —
+  // der Trigger bumpt bei jedem Update, damit auch Tombstones ueber den
+  // Delta-Cursor zu den anderen Browsern reisen. Ein zurueckgeholtes Element
+  // traegt hier also eine zu alte Nummer, und die naechste Aenderung daran
+  // liefe in einen 409: Die Verschiebung ginge verloren, und der Hinweis
+  // "In anderer Sitzung geaendert" waere schlicht gelogen — es war niemand
+  // sonst beteiligt (31.08.2026 gemessen: anlegen, verschieben, zweimal
+  // Strg+Z, zweimal Strg+Y -> die Lage fiel zurueck, auch nach dem Neuladen).
+  //
+  // Also nach dem Zurueckholen die echten Nummern nachziehen. Nur die
+  // Nummern: Der Inhalt in der Datenbank ist genau der, den wir eben wieder
+  // eingehaengt haben — waehrend ein Element geloescht war, hat ihn niemand
+  // angefasst. Ueber den Delta-Cursor, weil das gerade Beruehrte darin
+  // ohnehin steht; ein eigener Endpunkt waere dafuer zu viel Apparat.
+  function versionenNachziehen(ids) {
+    const seit = new Date(Date.now() - 30000).toISOString();
+    fetch(`/api/whiteboard/elemente?seit=${encodeURIComponent(seit)}`)
+      .then((a) => (a.ok ? a.json() : null))
+      .then((daten) => {
+        if (!daten || !daten.ok) return;
+        const gesucht = new Set(ids);
+        for (const frisch of daten.elemente || []) {
+          if (!gesucht.has(frisch.id)) continue;
+          const hier = elemente.get(frisch.id);
+          if (hier && frisch.version > (hier.version || 0)) hier.version = frisch.version;
+        }
+      })
+      .catch(() => { /* der naechste Poll richtet es sonst */ });
+  }
+
   function wiederherstellen(kopien) {
     if (!kopien.length) return;
     if (!sitzungWeg) {
-      nachKetten(kopien.map((e) => e.id), () =>
-        senden("/api/whiteboard/wiederherstellen", { ids: kopien.map((e) => e.id) })
-          .then(({ daten }) => { if (daten.ok) speicherFehler = 0; })
+      const ids = kopien.map((e) => e.id);
+      nachKetten(ids, () =>
+        senden("/api/whiteboard/wiederherstellen", { ids })
+          .then(({ daten }) => {
+            if (daten.ok) { speicherFehler = 0; versionenNachziehen(ids); }
+          })
           .catch(() => {}));
     }
     for (const el of kopien) elementUebernehmen(el, "lokal");

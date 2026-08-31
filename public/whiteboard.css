@@ -815,6 +815,19 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 
 /* Tooltips: kleine Schilder ueber den Knoepfen, mit Tastenkuerzel. */
 [data-tip]{position:relative}
+/* ACHTUNG, wer hier etwas anhaengt: Die Zeile darueber trifft JEDES Element
+   mit data-tip — auch solche, die weiter oben schon absolut liegen. Gleiche
+   Spezifitaet, spaeter im Blatt gewinnt, also kippt sie deren Lage.
+   Beide Blockgriffe tragen data-tip und sind genau darueber gestolpert
+   (31.08.2026 gemessen): Der Anfasser sass 250 px neben der Ecke, der Griff
+   lag auf dem Zettel — und weil der Block dadurch hoeher wurde, rutschten
+   seine Zeilen um 20 px nach unten. Die Tinte auf dem Canvas macht das nicht
+   mit; sobald man einen Block anfasste, stand die Schrift nicht mehr ueber
+   ihren Strichen. Darum hier zurueckgeholt statt oben umgeschrieben — die
+   Falle sitzt in dieser Regel, und hier sieht sie der Naechste.
+   (Bei .wb-pfeile ist dieselbe Falle weiter oben schon umgangen.) */
+.wb-el>.wb-griff,
+.wb-el>.wb-groesse-griff{position:absolute}
 [data-tip]::after{
   content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 9px);transform:translateX(-50%) translateY(3px);
   padding:5px 9px;border-radius:7px;white-space:nowrap;pointer-events:none;
