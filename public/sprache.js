@@ -24,10 +24,18 @@
   let zustand = "ruhe";
   const AGENT_IM_HTML =
     (document.getElementById("kugel-wort")?.textContent || "Alexandra").trim();
-  // Standardmaessig AN: "Hey Alexandra" soll ohne Vorbereitung funktionieren,
-  // auf jeder Seite. Nur wer es ausdruecklich abschaltet, bekommt Ruhe —
-  // deshalb Vergleich auf "aus" statt auf "an".
-  let wakeAn = localStorage.getItem(WAKE_SPEICHER) !== "aus";
+  // Standardmaessig AUS (31.08.2026, von Lukas gemeldet).
+  //
+  // Vorher war es an, und zwar auf JEDER Seite des OS — diese Datei laedt
+  // ueberall mit. Die Dauererkennung haelt das Mikrofon offen, also stand im
+  // Browser den ganzen Arbeitstag "Mikrofon wird verwendet", auf dem
+  // Whiteboard wie in der Buchhaltung, ohne dass jemand mit ihr sprechen
+  // wollte. Ein Assistent, der ungefragt mithoert, ist kein Komfort mehr.
+  //
+  // Zuhoeren beginnt jetzt mit einem Klick auf die Kugel. Wer "Hey Alexandra"
+  // will, schaltet es auf der Sprachbuehne mit dem Wake-Knopf ein — der Punkt
+  // daneben zeigt, dass es laeuft, und die Wahl bleibt gespeichert.
+  let wakeAn = localStorage.getItem(WAKE_SPEICHER) === "an";
   let erkennung = null, wakeErkennung = null, wakeLaeuft = false;
   let audio = null, audioCtx = null, analyser = null, mikroStrom = null;
   let playbackAnalyser = null;    // analysiert ALEXANDRAS Stimme (fuer die Kugel beim Sprechen)
@@ -1054,12 +1062,31 @@
   // Mitschreiben, was das Mikrofon liefert — sichtbar mit ?klatschtest=1.
   // Ohne diese Anzeige raet man am Set an der Schwelle herum.
   const KLATSCH_TEST = /^(1|an|ja)$/i.test(klatschFrage.get("klatschtest") || "");
+  // Ausdruecklich anschalten, ohne Dreh: ?klatsch=1 (zum Pruefen).
+  const KLATSCH_WUNSCH = /^(1|an|ja)$/i.test(klatschFrage.get("klatsch") || "");
+
+  // Die Klatsch-Wache haelt das Mikrofon DAUERHAFT offen — sie horcht ja auf
+  // einen Knall, und dafuer muss sie hoeren. Fuer den Werbedreh war das genau
+  // richtig (20.08.: reinkommen, zweimal klatschen, sie faehrt auf). Im
+  // Alltag ist es das Gegenteil: Die Datei laedt auf jeder Seite des OS, also
+  // lag ueber jedem Bereich eine offene Leitung ans Mikrofon, den ganzen Tag
+  // (31.08.2026 von Lukas gemeldet).
+  //
+  // Darum laeuft sie nur noch, wo sie gebraucht wird: im Dreh (dort setzt der
+  // Server DREH_CREATIVE, und ohne Klatschen stuende vor der Kamera niemand
+  // mehr auf) oder wenn jemand sie mit ?klatsch=1 ausdruecklich anfordert.
+  // Sonst beginnt Zuhoeren mit einem Klick auf die Kugel.
+  //
+  // Die Pruefung steht IN dieser Funktion, nicht bei den Aufrufern: Nach jedem
+  // Gespraech startet sie sich sonst wieder (gespraechBeenden), und genau so
+  // eine zweite Tuer uebersieht man beim naechsten Umbau.
+  const klatschErlaubt = () => KLATSCH_WUNSCH || DREHBUCH_NR !== null;
   let klatschStrom = null, klatschKnoten = null, klatschStumm = null;
   let letzterKnall = 0, letztesAusloesen = 0, warLaut = false;
   let klatschHoch = 0, klatschAnzeige = null;
 
   async function klatschWacheStarten() {
-    if (klatschKnoten || konfig.klatsch === false) return;
+    if (klatschKnoten || konfig.klatsch === false || !klatschErlaubt()) return;
     try {
       const ctx = audioKontext();
       try { if (ctx.state === "suspended") await ctx.resume(); } catch {}
@@ -2129,9 +2156,17 @@
       console.log("Sprachsteuerung auf dieser Seite aus (drehbuch=aus).");
       return;
     }
-    if (wakeAn && DREHBUCH_NR === null) wakeStarten();
-    // Zweimal klatschen weckt sie — ohne Knopf, ohne Wake-Wort. Braucht die
-    // Mikrofonfreigabe; ohne sie tut klatschWacheStarten() still nichts.
+    // Das Wake-Wort nur auf der Sprachbuehne, nie auf den Arbeitsseiten.
+    //
+    // WARUM (31.08.2026): wakeAn liegt im localStorage und gilt damit fuer die
+    // ganze Domain. Wer es einmal auf /sprache einschaltet, haette sonst auch
+    // im CRM, in der Buchhaltung und auf dem Whiteboard eine offene
+    // Mikrofonleitung — dort will niemand mit ihr reden, dort wird gearbeitet.
+    // Auf der Buehne steht der Wake-Knopf mit seinem Punkt daneben; da sieht
+    // man, dass sie horcht, und kann es abstellen.
+    if (wakeAn && istGrosseSeite && DREHBUCH_NR === null) wakeStarten();
+    // Zweimal klatschen weckt sie — ohne Knopf, ohne Wake-Wort. Laeuft nur im
+    // Dreh oder mit ?klatsch=1; die Regel steht in klatschWacheStarten().
     klatschWacheStarten();
     drehbuchLaden();
   }).catch(() => {});
