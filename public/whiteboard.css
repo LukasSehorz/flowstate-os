@@ -764,6 +764,28 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   text-decoration-color:color-mix(in srgb,var(--wb-tinte-gruen) 65%,transparent);opacity:.5}
 .wb-zeile.wb-gestrichen .wb-zeile-text{text-decoration:line-through;text-decoration-thickness:2px;opacity:.6}
 
+/* TEILSTRICH: nur ein Stueck der Zeile ist erledigt ("Matten beantworten und
+   Anpassung umsetzen" — geantwortet ist schon, die Anpassung nicht). Bewusst
+   EXAKT dieselbe Optik wie beim Durchstreichen der ganzen Zeile darueber:
+   gleiche Linienstaerke, gleiche Farbe (currentColor), gleiche Deckkraft.
+   "Halb erledigt" und "ganz erledigt" sind dasselbe Werkzeug, nur enger
+   gezielt — zwei verschiedene Striche waeren zwei Bedeutungen, wo es nur eine
+   gibt. Das Element steht IM Textfluss, verschiebt also nichts: die Zeile
+   bleibt beim Streichen genau da, wo sie stand. */
+.wb-teilstrich{text-decoration:line-through;text-decoration-thickness:2px;opacity:.6}
+/* Die Auswahlfarbe gilt auch im gestrichenen Stueck — sonst faerbte der
+   Browser dort mit seiner eigenen, und eine Markierung ueber die Kante hinweg
+   saehe zweifarbig aus. */
+.wb-teilstrich::selection{background:color-mix(in srgb,var(--wb-primaer) 26%,transparent)}
+/* Ist die GANZE Zeile gestrichen oder erledigt, schlaegt das den Teilstrich:
+   die Zeile traegt ihre Linie bereits ueber alles. Der Teilstrich bleibt im
+   DOM (nur so ueberlebt er das Zurueckschreiben und taucht wieder auf, wenn
+   man den Ganz-Strich loest), zeichnet hier aber nichts — sonst laege bei
+   "erledigt" eine dunkle Linie in der gruenen und die Deckkraft multiplizierte
+   sich zu einem blassen Fleck. */
+.wb-zeile.wb-erledigt .wb-teilstrich,
+.wb-zeile.wb-gestrichen .wb-teilstrich{text-decoration:none;opacity:1}
+
 /* Die wartende Zeile TRITT ZURUECK — sie wird nicht durchgestrichen, sie ist
    nicht erledigt, sie ruht. Runde 7 machte das ueber opacity:.7; beim
    Ueberfliegen einer Tafel war der Unterschied schlicht zu klein (und bei
@@ -1706,8 +1728,14 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   /* Am Telefon ist die Blase ein DAUMENZIEL, kein Mauszeigerziel: 46 px hoch
      und breiter gepolstert. Sie weicht dort ausserdem nach unten aus (JS),
      damit sie die native Auswahl-Leiste des Browsers nicht verdeckt. */
-  .wb-markierblase{font-size:14.5px}
-  .wb-blase-knopf{height:44px;padding:0 18px;gap:9px}
+  /* Mit dem zweiten Knopf ("Durchstreichen") wird die Leiste laenger. Bei
+     390 px passen beide nebeneinander — aber nur mit knapperer Polsterung,
+     und die Leiste bekommt eine Obergrenze, damit sie im schlimmsten Fall
+     ("Antwort bearbeiten" + "Durchstreichen") nicht aus dem Bild laeuft.
+     Die 44 px Hoehe bleiben unangetastet: das ist die Trefferflaeche. */
+  .wb-markierblase{font-size:14.5px;max-width:calc(100vw - 12px)}
+  .wb-blase-knopf{height:44px;padding:0 14px;gap:8px;min-width:0}
+  .wb-blase-knopf span{overflow:hidden;text-overflow:ellipsis}
   .wb-blase-knopf i{width:17px;height:17px}
   .wb-link-dialog{width:calc(100vw - 24px)}
   .wb-antwort-dialog{width:calc(100vw - 24px)}

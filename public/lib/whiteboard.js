@@ -393,6 +393,11 @@
                 nicht. */""}
           <dt>Auf die Zeile antworten</dt><dd><kbd>Alt</kbd>+<kbd>A</kbd></dd>
           <dt>Wort markieren → antworten</dt><dd>Doppelklick im Text</dd>
+          ${/* Der Teilstrich hat bewusst KEIN Tastenkuerzel: er braucht immer
+                erst eine Markierung, und wer markiert hat, hat die Blase schon
+                vor Augen. Hier steht er trotzdem — sonst erfaehrt nie jemand,
+                dass man auch nur ein Wort streichen kann. */""}
+          <dt>Nur ein Wort durchstreichen</dt><dd>Markieren → <b>Durchstreichen</b></dd>
           <dt>Antwort bearbeiten</dt><dd>Doppelklick auf die Antwort</dd>
         </dl>
         ${/* Die Rangfolge steht hier, weil sie nirgends sonst als Ganzes zu
@@ -1687,6 +1692,253 @@
     k.classList.toggle("wb-blockleer", el.inhalt.zeilen.every((z) => !z.t));
   }
 
+  // =================================================================
+  // Teilstriche — EIN Stueck einer Zeile durchstreichen
+  // =================================================================
+  //
+  // "Matten beantworten und Anpassung umsetzen" ist zwei Dinge: geantwortet
+  // ist schon, die Anpassung steht noch aus (Originalton 31.08.2026). Darum
+  // darf nicht nur die GANZE Zeile durchgestrichen werden, sondern auch ein
+  // Stueck davon.
+  //
+  // Gespeichert wird das als ZEICHENBEREICHE im Zeilentext:
+  // zeilen[].striche = [[von, bis], …], halb offen — t.slice(von,bis) ist das
+  // Gestrichene. Dasselbe Format nimmt der Server an (siehe pruefeElement in
+  // lib/whiteboard-routes.js), und er raeumt es genauso auf, wie es hier
+  // aufgeraeumt wird: sortiert, verschmolzen, im Text liegend. Der Client
+  // MUSS das selbst tun — sonst saehe die Zeile nach dem naechsten Laden
+  // anders aus als in dem Moment, in dem man geklickt hat.
+  //
+  // Zwei Schalter, nicht einer: `gestrichen` (die GANZE Zeile, Knopf in den
+  // Zeilenwerkzeugen) bleibt genau, wie er war, und schlaegt die Teilstriche
+  // optisch. Deckt ein Teilstrich die ganze Zeile ab, wird daraus `gestrichen`
+  // — dann sind beide Wege am selben Ziel und die Anzeige wechselt nach einem
+  // Neuladen nicht ihr Aussehen.
+
+  const TEILSTRICH_MAX = 20;   // derselbe Deckel wie GRENZEN.striche im Server
+
+  // Sortieren, klemmen, Leere wegwerfen, Ueberlappende UND Angrenzende
+  // verschmelzen. Angrenzende auch: sonst waechst die Liste bei jedem
+  // Streichen weiter, ohne dass man am Bild etwas davon saehe.
+  function stricheNormalisieren(roh, laenge) {
+    if (!Array.isArray(roh) || !roh.length || laenge <= 0) return [];
+    const sauber = [];
+    for (const paar of roh) {
+      if (!Array.isArray(paar) || paar.length !== 2) continue;
+      const von = klemm(Math.round(Number(paar[0])), 0, laenge);
+      const bis = klemm(Math.round(Number(paar[1])), 0, laenge);
+      if (!Number.isFinite(von) || !Number.isFinite(bis) || bis <= von) continue;
+      sauber.push([von, bis]);
+    }
+    sauber.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const raus = [];
+    for (const [von, bis] of sauber) {
+      const letzter = raus[raus.length - 1];
+      if (letzter && von <= letzter[1]) letzter[1] = Math.max(letzter[1], bis);
+      else raus.push([von, bis]);
+    }
+    // Ueber dem Deckel: der Server SCHNEIDET ab (striche.slice(0,20)) — dabei
+    // fielen die hinteren Bereiche ersatzlos weg. Hier werden stattdessen die
+    // engsten Nachbarn zusammengefasst, bis 20 uebrig sind. Das streicht dann
+    // etwas mehr als gewollt, aber es verschwindet nichts stillschweigend.
+    while (raus.length > TEILSTRICH_MAX) {
+      let stelle = 0, engste = Infinity;
+      for (let i = 0; i < raus.length - 1; i++) {
+        const luecke = raus[i + 1][0] - raus[i][1];
+        if (luecke < engste) { engste = luecke; stelle = i; }
+      }
+      raus[stelle][1] = raus[stelle + 1][1];
+      raus.splice(stelle + 1, 1);
+    }
+    return raus;
+  }
+
+  const stricheGleich = (a, b) => a.length === b.length
+    && a.every((p, i) => p[0] === b[i][0] && p[1] === b[i][1]);
+
+  // Die Teilstriche EINER Zeile, sauber. `gestrichen` bleibt hier bewusst
+  // aussen vor — das ist der andere Schalter.
+  const teilstriche = (zeile) => stricheNormalisieren(zeile && zeile.striche,
+    zeile ? String(zeile.t || "").length : 0);
+
+  // Alles, was an dieser Zeile gestrichen IST — die ganze Zeile zaehlt dabei
+  // als ein Bereich ueber den ganzen Text. Nur der Knopf in der Markier-Leiste
+  // rechnet so: fuer ihn gibt es nur "gestrichen" und "nicht gestrichen", und
+  // wer bei einer ganz gestrichenen Zeile ein Wort freistellt, bekommt genau
+  // das. (Etwaige Bereiche, die unter dem Ganz-Strich schlummerten, gehen
+  // dabei verloren — sichtbar war ohnehin nur der Ganz-Strich, und ein
+  // Ergebnis, das man nicht gesehen hat, waere eine Ueberraschung.)
+  const stricheMitGanz = (zeile) => (zeile && zeile.gestrichen && String(zeile.t || "").length
+    ? [[0, String(zeile.t).length]] : teilstriche(zeile));
+
+  // Bereiche an einer Zeile ablegen. Deckt ein Bereich den GANZEN Text, wird
+  // daraus das bestehende `gestrichen` — genau wie es der Server tut.
+  // `gestrichen` wird hier nie auf false gesetzt: wer den Ganz-Strich loesen
+  // will, tut das ausdruecklich (Zeilenwerkzeug oder Markier-Leiste).
+  function stricheAblegen(zeile, roh) {
+    const laenge = String(zeile.t || "").length;
+    const s = stricheNormalisieren(roh, laenge);
+    if (s.length === 1 && s[0][0] === 0 && s[0][1] === laenge && laenge > 0) {
+      zeile.gestrichen = true;
+      delete zeile.striche;
+      return;
+    }
+    if (s.length) zeile.striche = s; else delete zeile.striche;
+  }
+
+  const stricheDecken = (striche, von, bis) =>
+    bis > von && striche.some(([a, b]) => a <= von && b >= bis);
+
+  // [von,bis) aus allen Bereichen herausschneiden — das ist "Strich weg".
+  function stricheAbziehen(striche, von, bis) {
+    const raus = [];
+    for (const [a, b] of striche) {
+      if (a < von) raus.push([a, Math.min(b, von)]);
+      if (b > bis) raus.push([Math.max(a, bis), b]);
+    }
+    return raus;
+  }
+
+  // Das Stueck [von,bis) des Textes herausschneiden und die Bereiche darin auf
+  // 0 zurueckrechnen — gebraucht, wenn Enter eine Zeile teilt.
+  function stricheSchneiden(striche, von, bis) {
+    const raus = [];
+    for (const [a, b] of striche) {
+      const s = Math.max(a, von), e = Math.min(b, bis);
+      if (e > s) raus.push([s - von, e - von]);
+    }
+    return raus;
+  }
+
+  // Bereiche durch EINE Textaenderung schieben: an Stelle `pos` fallen `weg`
+  // Zeichen heraus und `dazu` kommen hinein.
+  //
+  // DIE ENTSCHEIDUNG AN DER KANTE: Tippen am ENDE eines Strichs setzt ihn
+  // NICHT fort (`nb > pos`, nicht `>=`), und Tippen am ANFANG faellt ebenfalls
+  // davor (`na >= pos`). Begruendung: ein Strich ist eine Aussage ueber
+  // bestimmte WORTE ("beantworten ist erledigt"). Wer hinter dieses Wort
+  // weiterschreibt, schreibt etwas Neues — und Neues ist nie schon erledigt.
+  // Der Browser macht es von sich aus umgekehrt (er setzt Auszeichnungen am
+  // Ende fort, wie bei fett); genau deshalb wird nach jeder Eingabe
+  // nachgezogen statt sich auf ihn zu verlassen.
+  function stricheVerschieben(striche, pos, weg, dazu) {
+    const nachLoeschen = (x) => (x <= pos ? x : x >= pos + weg ? x - weg : pos);
+    const raus = [];
+    for (const [a, b] of striche) {
+      const na = nachLoeschen(a), nb = nachLoeschen(b);
+      const va = na >= pos ? na + dazu : na;
+      const vb = nb > pos ? nb + dazu : nb;
+      if (vb > va) raus.push([va, vb]);
+    }
+    return raus;
+  }
+
+  // Aus altem und neuem Zeilentext die eine geaenderte Stelle bestimmen und
+  // die Bereiche hindurchschieben. Gemeinsamen Anfang und gemeinsames Ende
+  // abziehen — was dazwischen bleibt, IST die Aenderung. Eine Eingabe ist
+  // immer genau eine zusammenhaengende Stelle; mehr muss diese Rechnung nicht
+  // koennen.
+  function stricheDurchEdit(striche, alt, neu) {
+    if (alt === neu) return striche.map((p) => p.slice());
+    const kurz = Math.min(alt.length, neu.length);
+    let vorn = 0;
+    while (vorn < kurz && alt[vorn] === neu[vorn]) vorn++;
+    let hinten = 0;
+    while (hinten < kurz - vorn && alt[alt.length - 1 - hinten] === neu[neu.length - 1 - hinten]) hinten++;
+    return stricheVerschieben(striche, vorn, alt.length - vorn - hinten, neu.length - vorn - hinten);
+  }
+
+  // DER SPRINGENDE PUNKT: die Bereiche aus dem DOM ABLESEN, statt gemerkte
+  // Zahlen mitzuschleppen. Die Zeile ist ein contenteditable — tippt jemand
+  // mitten hinein, stimmen gemerkte Zahlen nicht mehr, die KNOTEN aber schon:
+  // das gestrichene Stueck ist ein eigenes Element und waechst und schrumpft
+  // mit dem, was darin steht. Gezaehlt wird ueber dieselben Textknoten wie in
+  // caretOffset, damit beide Rechnungen dieselbe Vorstellung von "Zeichen im
+  // Zeilentext" haben.
+  function stricheAusDom(span) {
+    const raus = [];
+    let pos = 0;
+    const lauf = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
+    let knoten;
+    while ((knoten = lauf.nextNode())) {
+      const laenge = knoten.textContent.length;
+      const eltern = knoten.parentElement;
+      const strich = eltern && eltern.closest(".wb-teilstrich");
+      if (laenge && strich && span.contains(strich)) {
+        const letzter = raus[raus.length - 1];
+        if (letzter && letzter[1] === pos) letzter[1] = pos + laenge;
+        else raus.push([pos, pos + laenge]);
+      }
+      pos += laenge;
+    }
+    return raus;
+  }
+
+  // Steht das Caret wirklich in DIESEM Span? caretOffset liefert sonst 0 —
+  // und der Caret spraenge beim Neuaufbau an den Zeilenanfang.
+  function caretHier(span) {
+    if (document.activeElement !== span) return false;
+    const sel = window.getSelection();
+    return !!(sel && sel.rangeCount && span.contains(sel.getRangeAt(0).startContainer));
+  }
+
+  // Den Zeilentext in den Span schreiben — mit den gestrichenen Stuecken als
+  // eigene Elemente. Ohne Teilstriche bleibt es bei EINEM Textknoten: das ist
+  // der haeufige Fall, und er soll nichts kosten.
+  //
+  // Steht schon genau das da, wird nichts angefasst (der alte Waechter aus
+  // zeileFuellen, nur um die Bereiche erweitert) — sonst risse jedes Rendern
+  // die Textknoten weg, an denen Caret und Auswahl haengen.
+  function zeilenTextSetzen(span, text, striche) {
+    const daStriche = stricheAusDom(span);
+    if (span.textContent === text && stricheGleich(daStriche, striche)) {
+      span.__strichStand = { text, striche };
+      return;
+    }
+    // Caret-Rettung, Muster aus blockRendern: Offset merken, neu bauen,
+    // Offset wieder setzen.
+    const retten = caretHier(span);
+    const pos = retten ? caretOffset(span) : -1;
+    if (!striche.length) {
+      span.textContent = text;
+    } else {
+      const stueck = document.createDocumentFragment();
+      let ab = 0;
+      for (const [von, bis] of striche) {
+        if (von > ab) stueck.appendChild(document.createTextNode(text.slice(ab, von)));
+        const s = document.createElement("span");
+        s.className = "wb-teilstrich";
+        s.textContent = text.slice(von, bis);
+        stueck.appendChild(s);
+        ab = bis;
+      }
+      if (ab < text.length) stueck.appendChild(document.createTextNode(text.slice(ab)));
+      span.textContent = "";
+      span.appendChild(stueck);
+    }
+    span.__strichStand = { text, striche };
+    if (retten) caretSetzen(span, pos);
+  }
+
+  // Nach einer Eingabe die Bereiche geradeziehen. Was der Browser aus den
+  // Strich-Elementen gemacht hat, wird mit dem verglichen, was aus dem
+  // gemerkten Vorzustand FOLGEN muesste (siehe stricheDurchEdit) — und nur
+  // wenn beides auseinandergeht, wird die Zeile neu gebaut. So kostet Tippen
+  // fern vom Strich gar nichts, und an der Kante gilt unsere Regel statt der
+  // des Browsers.
+  function teilstricheNachfuehren(span) {
+    const stand = span.__strichStand;
+    const text = span.textContent;
+    const daStriche = stricheAusDom(span);
+    if (!stand || (!stand.striche.length && !daStriche.length)) {
+      span.__strichStand = { text, striche: daStriche };
+      return;
+    }
+    const soll = stricheNormalisieren(stricheDurchEdit(stand.striche, stand.text, text), text.length);
+    if (stricheGleich(soll, daStriche)) span.__strichStand = { text, striche: daStriche };
+    else zeilenTextSetzen(span, text, soll);
+  }
+
   function zeileBauen(eigen) {
     const z = document.createElement("div");
     z.className = "wb-zeile";
@@ -1764,7 +2016,12 @@
 
   function zeileFuellen(z, daten, eigen) {
     const t = $(".wb-zeile-text", z);
-    if (t.textContent !== daten.t) t.textContent = daten.t;
+    // Der Text UND die gestrichenen Stuecke in einem Zug: die Teilstriche sind
+    // Teil des Zeilenaufbaus, nicht eine Verzierung darueber (siehe
+    // zeilenTextSetzen). Sie werden auch dann in den DOM gebaut, wenn die
+    // GANZE Zeile gestrichen ist — sichtbar ist dann nur der Ganz-Strich (CSS),
+    // aber die Bereiche ueberleben so das Zurueckschreiben aus dem DOM.
+    zeilenTextSetzen(t, daten.t, teilstriche(daten));
     const antwort = String(daten.antwort || "").trim();
     z.classList.toggle("wb-erledigt", !!daten.erledigt);
     z.classList.toggle("wb-gestrichen", !!daten.gestrichen && !daten.erledigt);
@@ -1963,6 +2220,11 @@
       // gehen — sonst loeschte jeder Tastendruck die Antwort der Zeile.
       if (alt.link) zeile.link = alt.link;
       if (alt.antwort) zeile.antwort = alt.antwort;
+      // Die TEILSTRICHE dagegen kommen sehr wohl aus dem DOM: sie sind keine
+      // reinen Metadaten, sondern haengen an bestimmten ZEICHEN. Wer ein Wort
+      // davor einfuegt, verschiebt sie — gemerkte Zahlen wanderten dann ueber
+      // den Text, die Knoten wandern mit ihm (siehe stricheAusDom).
+      stricheAblegen(zeile, stricheAusDom(spans[i]));
       neu.push(zeile);
     }
     el.inhalt.zeilen = neu.length ? neu : [{ t: "", erledigt: false, gestrichen: false }];
@@ -2182,8 +2444,16 @@
         blockSerialisieren(el);
         const pos = caretOffset(span);
         const text = el.inhalt.zeilen[idx].t;
+        // Die Teilstriche werden MITGETEILT: was vor dem Caret gestrichen war,
+        // bleibt oben gestrichen, was dahinter lag, wandert mit in die neue
+        // Zeile. Der Ganz-Strich (gestrichen) bleibt dagegen bei der oberen
+        // Zeile — das ist das gewohnte Verhalten und bleibt unangetastet.
+        const geteilt = teilstriche(el.inhalt.zeilen[idx]);
         el.inhalt.zeilen[idx].t = text.slice(0, pos);
-        el.inhalt.zeilen.splice(idx + 1, 0, { t: text.slice(pos), erledigt: false, gestrichen: false });
+        stricheAblegen(el.inhalt.zeilen[idx], stricheSchneiden(geteilt, 0, pos));
+        const neueZeile = { t: text.slice(pos), erledigt: false, gestrichen: false };
+        stricheAblegen(neueZeile, stricheSchneiden(geteilt, pos, text.length));
+        el.inhalt.zeilen.splice(idx + 1, 0, neueZeile);
         blockRendern(el);
         const neue = $$(".wb-zeile-text", knoten)[idx + 1];
         if (neue) caretSetzen(neue, 0);
@@ -2198,7 +2468,14 @@
         const vorherText = el.inhalt.zeilen[idx - 1].t;
         // Metadaten der VORZEILE ueberleben den Merge — wer eine erledigte
         // Zeile hochzieht, will ihren Haken nicht verlieren.
+        // Die Teilstriche BEIDER Zeilen ueberleben: die der unteren wandern um
+        // die Laenge der oberen nach hinten. Sonst streichen sie nach dem
+        // Zusammenziehen ploetzlich Woerter am Zeilenanfang.
+        const obenStriche = teilstriche(el.inhalt.zeilen[idx - 1]);
+        const untenStriche = teilstriche(el.inhalt.zeilen[idx])
+          .map(([a, b]) => [a + vorherText.length, b + vorherText.length]);
         el.inhalt.zeilen[idx - 1].t = vorherText + el.inhalt.zeilen[idx].t;
+        stricheAblegen(el.inhalt.zeilen[idx - 1], obenStriche.concat(untenStriche));
         el.inhalt.zeilen.splice(idx, 1);
         blockRendern(el);
         const ziel = $$(".wb-zeile-text", knoten)[idx - 1];
@@ -2212,7 +2489,13 @@
         ev.preventDefault();
         blockSerialisieren(el);
         const eigenerText = el.inhalt.zeilen[idx].t;
+        // Wie beim Backspace-Merge: die Bereiche der unteren Zeile wandern um
+        // die Laenge der oberen nach hinten.
+        const eigenStriche = teilstriche(el.inhalt.zeilen[idx]);
+        const holStriche = teilstriche(el.inhalt.zeilen[idx + 1])
+          .map(([a, b]) => [a + eigenerText.length, b + eigenerText.length]);
         el.inhalt.zeilen[idx].t = eigenerText + el.inhalt.zeilen[idx + 1].t;
+        stricheAblegen(el.inhalt.zeilen[idx], eigenStriche.concat(holStriche));
         el.inhalt.zeilen.splice(idx + 1, 1);
         blockRendern(el);
         const ziel = $$(".wb-zeile-text", knoten)[idx];
@@ -2243,6 +2526,11 @@
       if (!span || ev.isComposing) return;
       const el = elVonKnoten(knoten);
       if (!el) return;
+      // ERST die Teilstriche geradeziehen, DANN ablesen: der Browser setzt
+      // eine Auszeichnung am Ende gern fort (wie bei fett) — hier soll ein
+      // frisch getipptes Wort hinter einem Strich NICHT mitgestrichen sein.
+      // Passiert nichts an einer Kante, kostet der Aufruf nur einen Vergleich.
+      teilstricheNachfuehren(span);
       // historyUndo/historyRedo: der Browser hat den Zeileninhalt selbst
       // veraendert — einfach neu ablesen, unser Modell folgt dem DOM.
       blockSerialisieren(el);
@@ -2252,9 +2540,13 @@
       // Der Chip haengt am ENDE des Textes — der wandert bei jedem Zeichen.
       chipNachziehen();
     });
-    knoten.addEventListener("compositionend", () => {
+    knoten.addEventListener("compositionend", (ev) => {
       const el = elVonKnoten(knoten);
       if (!el) return;
+      // Waehrend der Komposition wird nichts umgebaut (bestehende Regel) —
+      // jetzt ist sie zu Ende, jetzt darf einmal sauber nachgezogen werden.
+      const span = ev.target.closest && ev.target.closest(".wb-zeile-text");
+      if (span) teilstricheNachfuehren(span);
       blockSerialisieren(el);
       blockGeaendert(el, false);
     });
@@ -2273,15 +2565,27 @@
       const idx = zeilenIndex(zeile);
       const pos = caretOffset(span);
       const text = el.inhalt.zeilen[idx].t;
+      // Eingefuegter Text ist eine Textaenderung wie jede andere: die Bereiche
+      // werden hindurchgeschoben, statt auf ihren alten Zahlen sitzen zu
+      // bleiben (dieselbe Regel an der Kante wie beim Tippen).
+      const altStriche = teilstriche(el.inhalt.zeilen[idx]);
       if (teile.length === 1) {
         el.inhalt.zeilen[idx].t = (text.slice(0, pos) + teile[0] + text.slice(pos)).slice(0, DATEN.grenzen.zeichenJeZeile);
+        stricheAblegen(el.inhalt.zeilen[idx], stricheVerschieben(altStriche, pos, 0, teile[0].length));
         blockRendern(el);
         caretSetzen($$(".wb-zeile-text", knoten)[idx], pos + teile[0].length);
       } else {
         const rest = text.slice(pos);
         el.inhalt.zeilen[idx].t = (text.slice(0, pos) + teile[0]).slice(0, DATEN.grenzen.zeichenJeZeile);
+        stricheAblegen(el.inhalt.zeilen[idx], stricheSchneiden(altStriche, 0, pos));
         const neue = teile.slice(1).map((t) => ({ t: t.slice(0, DATEN.grenzen.zeichenJeZeile), erledigt: false, gestrichen: false }));
-        neue[neue.length - 1].t = (neue[neue.length - 1].t + rest).slice(0, DATEN.grenzen.zeichenJeZeile);
+        const letzte = neue[neue.length - 1];
+        // Der Rest der alten Zeile haengt sich an die LETZTE eingefuegte Zeile
+        // — seine Bereiche wandern um deren Laenge mit.
+        const restStriche = stricheSchneiden(altStriche, pos, text.length)
+          .map(([a, b]) => [a + letzte.t.length, b + letzte.t.length]);
+        letzte.t = (letzte.t + rest).slice(0, DATEN.grenzen.zeichenJeZeile);
+        stricheAblegen(letzte, restStriche);
         el.inhalt.zeilen.splice(idx + 1, 0, ...neue.slice(0, DATEN.grenzen.zeilen - el.inhalt.zeilen.length));
         blockRendern(el);
         const ziel = $$(".wb-zeile-text", knoten)[Math.min(idx + teile.length - 1, el.inhalt.zeilen.length - 1)];
@@ -4386,7 +4690,22 @@
     if (el.art === "text" && kuenftig.every((t) => !t.trim())) { elementLoeschen([el.id]); return; }
 
     const vorher = JSON.parse(JSON.stringify(el.inhalt));
-    el.inhalt.zeilen.forEach((z, i) => { if (neueZeilen[i] != null) z.t = neueZeilen[i]; });
+    el.inhalt.zeilen.forEach((z, i) => {
+      if (neueZeilen[i] == null) return;
+      // Auch die Teilstriche wandern mit: der Schwamm nimmt einzelne ZEICHEN
+      // aus dem Text, danach muessen die Bereiche noch dieselben Woerter
+      // streichen. Gerechnet wird ueber eine Tabelle "wie viele Zeichen vor
+      // Stelle i bleiben stehen" — dieselbe Vorstellung wie beim Tippen.
+      const alt = teilstriche(z);
+      z.t = neueZeilen[i];
+      if (!alt.length) return;
+      const weg = eintrag.zeilen[i].weg;
+      const roh = eintrag.zeilen[i].text;
+      const bleibt = new Array(roh.length + 1);
+      let n = 0;
+      for (let k = 0; k <= roh.length; k++) { bleibt[k] = n; if (k < roh.length && !weg.has(k)) n++; }
+      stricheAblegen(z, alt.map(([a, b]) => [bleibt[klemm(a, 0, roh.length)], bleibt[klemm(b, 0, roh.length)]]));
+    });
     blockRendern(el);
     blockGeaendert(el, true);
     undoMerken({ typ: "aendern", id: el.id, vorher: { inhalt: vorher },
@@ -5167,6 +5486,64 @@
     return true;
   }
 
+  // Den markierten TEIL der Zeile durchstreichen — oder den Strich dort
+  // wieder aufheben, wenn das Markierte schon ganz darunter liegt. Der
+  // Hauptweg der Funktion: markieren, klicken, fertig.
+  //
+  // Die Bereiche werden VOR der Aktion aus dem DOM ins Modell geschrieben
+  // (blockSerialisieren bzw. mobilUebernehmen) — sonst striche man in einer
+  // Zeile herum, die das Modell so noch gar nicht kennt (dieselbe Falle wie
+  // beim Antworten und beim Verknuepfen aus dem Blatt heraus).
+  function teilstrichSchalten(merk) {
+    const b = strichBereich(merk);
+    if (!b) return false;
+    const ziel = zeileAufloesen(merk.zeile);
+    if (!ziel) return false;
+    if (ziel.mobil) mobilUebernehmen();
+    else blockSerialisieren(ziel.el);
+    const el = ziel.el;
+    const zeile = el.inhalt.zeilen[ziel.idx];
+    if (!zeile) return false;
+    // Nach dem Serialisieren gilt der Text des MODELLS. Weicht er von dem ab,
+    // was beim Markieren dastand (jemand hat dazwischen getippt), waeren die
+    // Offsets ein Griff ins Leere — dann lieber nichts tun als das Falsche.
+    // Das geschuetzte Leerzeichen wird beim Serialisieren zum gewoehnlichen
+    // (1:1, die Offsets bleiben gueltig) — hier also auf beiden Seiten gleich
+    // behandeln, sonst schluege der Vergleich grundlos fehl.
+    if (zeile.t !== b.text.replace(/ /g, " ")) return false;
+
+    const vorher = JSON.parse(JSON.stringify(el.inhalt));
+    const aktuell = stricheMitGanz(zeile);
+    const weg = stricheDecken(aktuell, b.von, b.bis);
+    const neu = weg ? stricheAbziehen(aktuell, b.von, b.bis) : aktuell.concat([[b.von, b.bis]]);
+    // Beide Schalter frisch setzen: ein Ganz-Strich, aus dem ein Stueck
+    // herausgenommen wird, ist kein Ganz-Strich mehr — und deckt das Ergebnis
+    // wieder die ganze Zeile, macht stricheAblegen von selbst wieder einen
+    // daraus (so wie es der Server ohnehin taete).
+    zeile.gestrichen = false;
+    delete zeile.striche;
+    stricheAblegen(zeile, neu);
+
+    blockRendern(el);
+    blockGeaendert(el, true);
+    // EIN Undo-Schritt fuer Setzen wie fuer Aufheben — Muster wie beim
+    // Abhaken und beim Antworten: Vorzustand und Nachzustand als ganzer Inhalt.
+    undoMerken({ typ: "aendern", id: el.id, vorher: { inhalt: vorher },
+                 nachher: { inhalt: JSON.parse(JSON.stringify(el.inhalt)) } });
+    // Steht das mobile Blatt offen, ist ES die sichtbare Wahrheit (wie bei
+    // antwortSetzen) — dieselbe Zeile dort nachziehen.
+    if (mobilOffen && mobilOffen.el.id === el.id) {
+      const mobilZeile = mobilOffen.liste.children[ziel.idx];
+      if (mobilZeile) zeileFuellen(mobilZeile, zeile, true);
+    }
+    const wort = b.text.slice(b.von, b.bis);
+    const kurz = wort.length > 28 ? wort.slice(0, 27).trimEnd() + "…" : wort;
+    toast(weg ? "„" + kurz + "“ steht wieder offen."
+              : (zeile.gestrichen ? "Die ganze Zeile ist durchgestrichen."
+                                  : "„" + kurz + "“ ist durchgestrichen — der Rest bleibt offen."));
+    return true;
+  }
+
   // ------------------------------------------------- (d) Der Fokus-Chip
   // EIN Knoten fuer die ganze Wand, der zur jeweils fokussierten Zeile
   // umzieht — pro Zeile einen anzulegen waere Ballast in jedem Block, und
@@ -5294,6 +5671,12 @@
     b.innerHTML = '<div class="wb-blase-knoepfe">'
       + '<button type="button" class="wb-blase-knopf wb-blase-antwort" tabindex="-1">'
       + "<i>" + ICON.antwortPfeil + '</i><span class="wb-blase-wort">Antworten</span></button>'
+      // Der zweite Knopf: den markierten TEIL der Zeile durchstreichen. Er
+      // traegt dasselbe Zeichen wie der Knopf in den Zeilenwerkzeugen, der
+      // die GANZE Zeile streicht — es ist dieselbe Handbewegung, nur enger
+      // gezielt, und das soll man am Bild erkennen, nicht am Text lesen.
+      + '<button type="button" class="wb-blase-knopf wb-blase-strich" tabindex="-1">'
+      + "<i>" + ICON.strich + '</i><span class="wb-blase-strich-wort">Durchstreichen</span></button>'
       + "</div>";
     // DIE Falle dieser Funktion: ohne preventDefault beim Aufsetzen gibt der
     // Browser der Zeile den Fokus ab und LEERT die Markierung — die Blase
@@ -5307,8 +5690,11 @@
       ev.preventDefault();
       ev.stopPropagation();
       const zeile = blaseZeile;
+      const merk = markierung;
       blaseVerstecken();
-      if (knopf.classList.contains("wb-blase-antwort") && zeile) antwortWegOeffnen(zeile);
+      if (!zeile) return;
+      if (knopf.classList.contains("wb-blase-antwort")) antwortWegOeffnen(zeile);
+      else if (knopf.classList.contains("wb-blase-strich")) teilstrichSchalten(merk);
     });
     wurzel.appendChild(b);
     blaseEl = b;
@@ -5377,12 +5763,53 @@
     blaseZeigen(zeile, bereich.getBoundingClientRect(), !!zeile.dataset.antwort);
   }
 
+  // Was der Strich-Knopf wirklich streichen wuerde. Die Kanten werden von
+  // Leerraum befreit: ein Dreifachklick und oft auch ein Doppelklick nehmen
+  // das Leerzeichen hinter dem Wort mit — gestrichen sieht man es nicht, es
+  // liesse den Bereich aber mit dem Nachbarwort verschmelzen, sobald man dort
+  // auch streicht. Gestrichen wird, was man LIEST.
+  function strichBereich(merk) {
+    if (!merk || !merk.span || !merk.span.isConnected) return null;
+    const text = merk.span.textContent;
+    let von = klemm(merk.von, 0, text.length);
+    let bis = klemm(merk.bis, 0, text.length);
+    while (von < bis && /\s/.test(text[von])) von++;
+    while (bis > von && /\s/.test(text[bis - 1])) bis--;
+    return bis > von ? { von, bis, text } : null;
+  }
+
+  // Liegt die Markierung KOMPLETT unter einem Strich? Gelesen wird der DOM,
+  // nicht das Modell: getippte Zeichen stehen dort schon, im Modell noch
+  // nicht — und die Beschriftung des Knopfes muss zu dem passen, was man sieht.
+  function markierungSchonGestrichen(merk) {
+    const b = strichBereich(merk);
+    if (!b) return false;
+    const ganz = merk.zeile.classList.contains("wb-gestrichen") && b.text.length;
+    return stricheDecken(ganz ? [[0, b.text.length]] : stricheAusDom(merk.span), b.von, b.bis);
+  }
+
   function blaseZeigen(zeile, kasten, hatAntwort) {
     if (!kasten || (!kasten.width && !kasten.height)) return blaseVerstecken();
     const b = blaseBauen();
     const wort = hatAntwort ? "Antwort bearbeiten" : "Antworten";
     const s = $(".wb-blase-wort", b);
     if (s.textContent !== wort) s.textContent = wort;
+    // Der Strich-Knopf sagt, was der Klick TUT: liegt die Markierung schon
+    // ganz unter einem Strich, nimmt er ihn dort weg. Bleibt nach dem
+    // Beschneiden nichts uebrig (reine Leerzeichen), gibt es nichts zu
+    // streichen — dann tritt der Knopf ab, statt folgenlos dazustehen.
+    const strichKnopf = $(".wb-blase-strich", b);
+    const bereich = strichBereich(markierung);
+    strichKnopf.hidden = !bereich;
+    if (bereich) {
+      const weg = markierungSchonGestrichen(markierung);
+      const sw = $(".wb-blase-strich-wort", strichKnopf);
+      const strichWort = weg ? "Strich weg" : "Durchstreichen";
+      if (sw.textContent !== strichWort) sw.textContent = strichWort;
+      strichKnopf.title = weg ? "Den Strich für dieses Stück wieder aufheben"
+                              : "Nur das Markierte durchstreichen — der Rest der Zeile bleibt";
+      strichKnopf.setAttribute("aria-label", strichKnopf.title);
+    }
     b.hidden = false;
     blaseZeile = zeile;
     // Solange die Blase steht, tritt der Fokus-Chip ab: zwei Bernstein-Knoepfe
@@ -5658,10 +6085,25 @@
         ev.preventDefault();
         const davor = $(".wb-zeile-text", zeile.previousElementSibling);
         const lang = davor.textContent.length;
-        davor.textContent += span.textContent;
+        // Die KNOTEN umhaengen, nicht den Text kopieren: ein
+        // "davor.textContent += …" plaettete beide Zeilen zu einem einzigen
+        // Textknoten — die gestrichenen Stuecke waeren dabei stillschweigend
+        // verschwunden, auf beiden Seiten.
+        while (span.firstChild) davor.appendChild(span.firstChild);
         zeile.remove();
         caretSetzen(davor, lang);
       }
+    });
+    // Auch im Blatt gilt die Kanten-Regel: hinter einem gestrichenen Wort
+    // weitergetippt wird NICHT mitgestrichen (siehe teilstricheNachfuehren).
+    // Waehrend einer Komposition bleibt alles, wie es ist.
+    blatt.addEventListener("input", (ev) => {
+      const span = ev.target.closest(".wb-zeile-text");
+      if (span && !ev.isComposing) teilstricheNachfuehren(span);
+    });
+    blatt.addEventListener("compositionend", (ev) => {
+      const span = ev.target.closest && ev.target.closest(".wb-zeile-text");
+      if (span) teilstricheNachfuehren(span);
     });
     blatt.addEventListener("click", (ev) => {
       const zeile = ev.target.closest(".wb-zeile");
@@ -5741,11 +6183,16 @@
     const { el, liste } = mobilOffen;
     const zeilen = [];
     for (const zeile of liste.children) {
+      const span = $(".wb-zeile-text", zeile);
       const neu = {
-        t: $(".wb-zeile-text", zeile).textContent.slice(0, DATEN.grenzen.zeichenJeZeile),
+        t: span.textContent.slice(0, DATEN.grenzen.zeichenJeZeile),
         erledigt: zeile.classList.contains("wb-erledigt"),
         gestrichen: zeile.classList.contains("wb-gestrichen") && !zeile.classList.contains("wb-erledigt"),
       };
+      // Die Teilstriche stehen als eigene Knoten IM Zeilentext und werden von
+      // dort abgelesen — genau wie am Board (blockSerialisieren). Aus dem
+      // Blatt heraus getippt bleiben sie damit an denselben Woertern.
+      stricheAblegen(neu, stricheAusDom(span));
       // Der Link steht im Anker der Zeile — er ueberlebt Umsortieren und
       // Loeschen dadurch genauso wie Haken und Streichung.
       const anker = $(".wb-zeile-link", zeile);
@@ -5910,6 +6357,11 @@
                        // Die Antwort steht neben dem Link, weil sie dasselbe
                        // ist: ein Metadatum je Zeile, das nicht im Text steht.
                        antworten: e.inhalt.zeilen ? e.inhalt.zeilen.map((z) => z.antwort || "") : [],
+                       // Teilstriche je Zeile. Die GANZ gestrichene Zeile
+                       // meldet sich als "ganz" — sie ist derselbe Zustand,
+                       // nur ueber den ganzen Text.
+                       striche: e.inhalt.zeilen
+                         ? e.inhalt.zeilen.map((z) => (z.gestrichen ? "ganz" : (z.striche || []))) : [],
                        zeilen: e.inhalt.zeilen ? e.inhalt.zeilen.map((z) => (z.erledigt ? "[x] " : "[ ] ") + z.t) : e.inhalt.punkte.length }));
     },
   };
