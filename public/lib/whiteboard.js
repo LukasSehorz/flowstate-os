@@ -284,6 +284,11 @@
     listePunkt: S('<path d="M10 7h9M10 12h9M10 17h9"/><circle cx="5.5" cy="7" r="1.4" fill="currentColor" stroke="none"/><circle cx="5.5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="5.5" cy="17" r="1.4" fill="currentColor" stroke="none"/>'),
     listeCheck: S('<path d="M11 7h8M11 12h8M11 17h8"/><path d="m4 6.5 1.4 1.4L8 5.4M4 11.5l1.4 1.4L8 10.4M4 16.5l1.4 1.4L8 15.4"/>'),
     kette: S('<path d="M10.6 13.4a3.6 3.6 0 0 0 5.2 0l2.6-2.6a3.7 3.7 0 0 0-5.2-5.2l-1.5 1.5"/><path d="M13.4 10.6a3.6 3.6 0 0 0-5.2 0l-2.6 2.6a3.7 3.7 0 0 0 5.2 5.2l1.5-1.5"/>'),
+    // Antworten: Sprechblase mit drei Punkten — "hier steht noch etwas aus".
+    antwort: S('<path d="M20.5 12.4a7.6 7.6 0 0 1-8.2 7.6L7 21.5l1.3-3.7A7.6 7.6 0 1 1 20.5 12.4Z"/><path d="M9.4 12.3h.01M12.6 12.3h.01M15.8 12.3h.01"/>'),
+    // Der kleine Pfeil VOR der Antwort: Ecke nach unten und rechts — das
+    // gelernte Bild fuer "das gehoert zur Zeile darueber".
+    antwortPfeil: S('<path d="M6 5v6a3 3 0 0 0 3 3h9"/><path d="m14.5 10.5 4 3.5-4 3.5"/>'),
     pfeil: S('<path d="m14.5 5.5-6 6.5 6 6.5"/>'),
     ecke: S('<path d="M20 10v10H10"/><path d="M20 20 12.5 12.5"/>'),
     // Ordnen: von lang nach kurz, daneben der Pfeil nach unten — das
@@ -419,6 +424,32 @@
           <span class="wb-link-luft"></span>
           <button type="button" class="sekundaer wb-link-abbrechen">Abbrechen</button>
           <button type="button" class="wb-link-ok">Übernehmen</button>
+        </div>
+      </dialog>
+      ${/* Auf eine Zeile antworten: "Partnerzuweisung angefragt". Die Antwort
+            sagt NICHT "erledigt", sondern "hier ist gerade nichts zu tun" —
+            die Zeile wird danach ruhig gestellt (siehe .wb-wartet). Derselbe
+            Dialog-Bauplan wie beim Verknuepfen: hier wird getippt, und die
+            Wand darf dafuer einen Moment stillstehen. Ein Textfeld statt
+            einer Zeile, weil man beim Tippen umbricht — gespeichert wird
+            trotzdem EIN Text (antwortNormalisieren macht Leerzeichen daraus,
+            denn das Datenmodell kennt je Zeile genau eine Antwort). */""}
+      <dialog class="wb-dialog wb-antwort-dialog">
+        <h2>Antwort hinterlegen</h2>
+        <div class="sub wb-antwort-zeile"></div>
+        <label class="wb-antwort-feld">
+          <span>Antwort</span>
+          <textarea class="wb-antwort-eingabe" rows="3" maxlength="400"
+                    placeholder="z. B. Partnerzuweisung angefragt — warte auf Rückmeldung"
+                    autocomplete="off" spellcheck="false"></textarea>
+        </label>
+        <p class="wb-antwort-hinweis">Die Aufgabe bleibt offen — sie bekommt nur
+          ein Warte-Zeichen statt eines leeren Kästchens.</p>
+        <div class="dialog-fuss">
+          <button type="button" class="sekundaer wb-antwort-weg" hidden>Antwort löschen</button>
+          <span class="wb-antwort-luft"></span>
+          <button type="button" class="sekundaer wb-antwort-abbrechen">Abbrechen</button>
+          <button type="button" class="wb-antwort-ok">Übernehmen</button>
         </div>
       </dialog>
       <div class="wb-anmelden" hidden>
@@ -624,15 +655,26 @@
     for (const person of team) {
       const k = boardKnoten.get(person.id);
       if (!k) continue;
-      let gesamt = 0, erledigt = 0, anzahl = 0, ordenbar = 0;
+      let gesamt = 0, erledigt = 0, anzahl = 0, ordenbar = 0, wartend = 0;
       for (const el of elemente.values()) {
         // Gezaehlt wird, was auf der TAFEL liegt — eine Aufgabe, die jemand
         // hier hingeschrieben hat, gehoert zum Fortschritt dieser Person.
         if (tafelVon(el) !== person.id) continue;
         anzahl++;
         if (el.art !== "strich" && kategorieRang(el) >= 0 && darfBearbeiten(el)) ordenbar++;
-        if ((el.art === "text" || el.art === "notiz") && el.inhalt.liste === "check") {
-          for (const z of el.inhalt.zeilen) { gesamt++; if (z.erledigt) erledigt++; }
+        if (el.art === "text" || el.art === "notiz") {
+          if (el.inhalt.liste === "check") {
+            for (const z of el.inhalt.zeilen) { gesamt++; if (z.erledigt) erledigt++; }
+          }
+          // Wartende Zeilen werden ueber ALLE Bloecke gezaehlt, nicht nur
+          // ueber die ☐-Listen wie der Fortschritt. Grund: eine Antwort
+          // legt jemand nur dort hin, wo er wirklich haengt — auch auf einer
+          // Haftnotiz oder in einer Punktliste. Die Zahl im Schild soll
+          // sagen "so viel liegt gerade bei anderen", und dafuer waere die
+          // engere Menge die falsche.
+          for (const z of el.inhalt.zeilen) {
+            if (z.antwort && !z.erledigt && !z.gestrichen) wartend++;
+          }
         }
       }
       // Auf einer fremden Tafel nur, wenn dort etwas Eingeordnetes von einem
@@ -648,6 +690,16 @@
         const b = document.createElement("b");
         b.textContent = erledigt + " von " + gesamt + " erledigt";
         k.unter.append(b);
+      }
+      // "… · 2 warten" nur, wenn es welche gibt: eine Null waere Rauschen —
+      // sie stuende auf jedem Schild jeden Tag und saehe man nach der ersten
+      // Woche nicht mehr.
+      if (wartend) {
+        k.unter.append(" · ");
+        const w = document.createElement("b");
+        w.className = "wb-schild-warten";
+        w.textContent = wartend === 1 ? "1 wartet" : wartend + " warten";
+        k.unter.append(w);
       }
       k.unter.append(" · " + (da ? "gerade aktiv" : relativeZeit(aktivitaet.get(person.id))));
       k.leer.hidden = anzahl > 0;
@@ -1623,8 +1675,21 @@
     const ab = document.createElement("button");
     ab.type = "button"; ab.className = "wb-abhaken"; ab.tabIndex = -1;
     ab.setAttribute("aria-label", "Abhaken");
+    // DREI Zustaende in EINEM Kaestchen — das ist das wichtigste optische
+    // Merkmal der ganzen Antwort-Funktion: beim Ueberfliegen einer Liste
+    // muss man ohne Nachdenken sehen, wo man anfangen kann.
+    //   leer            = offen, kann ich anfangen
+    //   Bernstein-Pause = offen, aber blockiert (eine Antwort steht)
+    //   gruener Haken   = erledigt
+    // Das Warte-Zeichen sind ZWEI BALKEN (Pause), nicht Sanduhr oder Uhr:
+    // auf ~20 px Bildschirmkante ist das die einzige Form, die noch als
+    // Form liest — eine Sanduhr wird dort zu einem Fleck. Die Flaeche
+    // darunter (wb-warte-feld) traegt den Kontrast: so haengt die
+    // Lesbarkeit nicht an der Tafelfarbe unter dem Kaestchen.
     ab.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke-linecap="round" stroke-linejoin="round">'
+      + '<rect class="wb-warte-feld" x="3.3" y="3.3" width="13.4" height="13.4" rx="3.6"/>'
       + '<rect class="wb-kasten-rand" x="2.5" y="2.5" width="15" height="15" rx="4.5" stroke-width="1.6"/>'
+      + '<path class="wb-warte-symbol" d="M8.1 6.7v6.6M11.9 6.7v6.6"/>'
       + '<path class="wb-haken" d="M5.5 10.5 L8.8 14 L15 5.5" pathLength="1" style="stroke-dasharray:1;stroke-dashoffset:1"/></svg>';
     z.appendChild(ab);
     const t = document.createElement("span");
@@ -1649,6 +1714,18 @@
     if (eigen) {
       const tools = document.createElement("span");
       tools.className = "wb-zeile-tools";
+      // Reihenfolge: erst was der Zeile etwas HINZUFUEGT (Antwort, Link),
+      // dann die Form (durchstreichen), zuletzt das Zerstoerende (Papierkorb).
+      // Der Papierkorb bleibt damit der aeusserste Knopf — die Stelle, an der
+      // er seit jeher sitzt und an der man ihn am wenigsten aus Versehen
+      // trifft. Der Titel steht als title-Attribut da und nicht als data-tip:
+      // [data-tip]::after wuerde das ::after des Knopfes ueberschreiben, und
+      // das ist hier seine unsichtbare Trefferflaeche (siehe whiteboard.css).
+      const antwort = document.createElement("button");
+      antwort.type = "button"; antwort.className = "wb-zeile-antwort"; antwort.tabIndex = -1;
+      antwort.setAttribute("aria-label", "Antworten");
+      antwort.title = "Antwort hinterlegen — die Zeile wird dann ruhig gestellt";
+      antwort.innerHTML = ICON.antwort;
       const kette = document.createElement("button");
       kette.type = "button"; kette.className = "wb-zeile-kette"; kette.tabIndex = -1;
       kette.setAttribute("aria-label", "Verknüpfen");
@@ -1661,7 +1738,7 @@
       weg.type = "button"; weg.className = "wb-zeile-weg"; weg.tabIndex = -1;
       weg.setAttribute("aria-label", "Zeile löschen");
       weg.innerHTML = ICON.weg;
-      tools.append(kette, streich, weg);
+      tools.append(antwort, kette, streich, weg);
       z.appendChild(tools);
     }
     return z;
@@ -1670,13 +1747,62 @@
   function zeileFuellen(z, daten, eigen) {
     const t = $(".wb-zeile-text", z);
     if (t.textContent !== daten.t) t.textContent = daten.t;
+    const antwort = String(daten.antwort || "").trim();
     z.classList.toggle("wb-erledigt", !!daten.erledigt);
     z.classList.toggle("wb-gestrichen", !!daten.gestrichen && !daten.erledigt);
+    // Rangfolge der Zustaende: erledigt schlaegt gestrichen schlaegt wartend.
+    // Der Grund ist jedes Mal derselbe — der spaetere Zustand hat den
+    // frueheren aufgehoben: Abgehakt ist abgehakt, da wartet niemand mehr;
+    // und was durchgestrichen ist, ist vom Tisch, dann ist die Antwort nur
+    // noch eine Notiz dazu. Die Antwort BLEIBT in allen drei Faellen sichtbar
+    // (wb-hat-antwort) — sie ist der Grund, warum die Zeile so aussieht, wie
+    // sie aussieht, und den darf man nicht wegnehmen. Ruhig gestellt
+    // (wb-wartet: blasse Zeile + Bernstein-Pause im Kaestchen) wird nur die
+    // Zeile, auf die man wirklich gerade wartet.
+    z.classList.toggle("wb-hat-antwort", !!antwort);
+    const wartet = !!antwort && !daten.erledigt && !daten.gestrichen;
+    z.classList.toggle("wb-wartet", wartet);
+    // Das mobile Blatt liest seinen Stand aus dem DOM zurueck (siehe
+    // mobilUebernehmen) — wie Haken, Streichung und Link muss die Antwort
+    // deshalb AM KNOTEN haengen, sonst faellt sie beim "Fertig" heraus.
+    if (antwort) z.dataset.antwort = antwort; else delete z.dataset.antwort;
+    antwortAnzeigen(z, antwort);
     // Der Haken steht, wo er hingehoert — ohne Animation, die gibt es nur
     // beim Klick selbst (hakenZiehen).
     const haken = $(".wb-haken", z);
     if (haken) haken.style.strokeDashoffset = daten.erledigt ? "0" : "1";
+    // Warum title und nicht data-tip: siehe zeileBauen — das ::after des
+    // Kaestchens ist seine Trefferflaeche und darf nicht ueberschrieben
+    // werden. Der Satz erklaert das gelbe Zeichen dem, der es zum ersten
+    // Mal sieht, und sagt zugleich, dass Abhaken weiterhin geht.
+    const ab = $(".wb-abhaken", z);
+    if (ab) {
+      if (wartet) ab.title = "Wartet: " + antwort + " — Klick hakt trotzdem ab";
+      else ab.removeAttribute("title");
+    }
     linkAnkerSetzen(z, daten.link);
+  }
+
+  // Die Antwort steht als eigene, eingerueckte Zeile UNTER der Aufgabe —
+  // nicht dahinter: sie ist ein zweiter Gedanke ("worauf warte ich"), kein
+  // Zusatz zum Aufgabentext. Der Knoten wird nur angelegt, wenn es etwas zu
+  // zeigen gibt, und beim Loeschen der Antwort restlos entfernt — dann steht
+  // die Zeile SOFORT wieder normal da, ohne Rest und ohne Luecke.
+  function antwortAnzeigen(z, text) {
+    let a = $(".wb-antwort", z);
+    if (!text) { if (a) a.remove(); return; }
+    if (!a) {
+      a = document.createElement("div");
+      a.className = "wb-antwort";
+      a.innerHTML = '<i class="wb-antwort-pfeil">' + ICON.antwortPfeil + "</i>"
+        + '<span class="wb-antwort-text"></span>';
+      // Ans Ende der Zeile: die Zeilenwerkzeuge liegen absolut, also ist die
+      // Antwort das letzte Kind IM FLUSS und faellt mit flex-wrap von selbst
+      // in die zweite Reihe.
+      z.appendChild(a);
+    }
+    const s = $(".wb-antwort-text", a);
+    if (s.textContent !== text) s.textContent = text;
   }
 
   // Den Link-Anker einer Zeile auf den Stand bringen. Die Adresse wird HIER
@@ -1814,9 +1940,11 @@
       const alt = el.inhalt.zeilen[i] || { erledigt: false, gestrichen: false };
       const zeile = { t: spans[i].textContent.replace(/\u00A0/g, " ").slice(0, DATEN.grenzen.zeichenJeZeile),
                       erledigt: !!alt.erledigt, gestrichen: !!alt.gestrichen };
-      // Der Link ist Metadatum wie erledigt/gestrichen: er steht nicht im
-      // DOM-Text und darf beim Zurueckschreiben nicht verloren gehen.
+      // Link und Antwort sind Metadaten wie erledigt/gestrichen: sie stehen
+      // nicht im DOM-Text und duerfen beim Zurueckschreiben nicht verloren
+      // gehen — sonst loeschte jeder Tastendruck die Antwort der Zeile.
       if (alt.link) zeile.link = alt.link;
+      if (alt.antwort) zeile.antwort = alt.antwort;
       neu.push(zeile);
     }
     el.inhalt.zeilen = neu.length ? neu : [{ t: "", erledigt: false, gestrichen: false }];
@@ -2141,6 +2269,12 @@
       // hier nur dafuer sorgen, dass der Klick nicht zusaetzlich als
       // Block-Klick gewertet wird.
       if (ev.target.closest(".wb-zeile-link")) { ev.stopPropagation(); return; }
+
+      if (ev.target.closest(".wb-zeile-antwort")) {
+        ev.preventDefault();
+        antwortDialogOeffnen(el, idx);
+        return;
+      }
 
       if (ev.target.closest(".wb-zeile-kette")) {
         ev.preventDefault();
@@ -4831,6 +4965,102 @@
   }
 
   // =================================================================
+  // Auf eine Zeile antworten — "hier geht es gerade nicht weiter"
+  // =================================================================
+  //
+  // "Ladenhauf: Ads live stellen" — dazu steht "Partnerzuweisung angefragt".
+  // Die Aufgabe ist nicht erledigt, aber man kann nichts tun, bis der andere
+  // antwortet. Genau das soll man beim Ueberfliegen der Tafel sehen, ohne es
+  // sich jedes Mal neu zusammenzureimen: Kaestchen mit Bernstein-Pause,
+  // Zeile abgeblendet, Antwort darunter. Nimmt man die Antwort weg, ist die
+  // Aufgabe sofort wieder eine ganz normale offene Aufgabe.
+
+  const antwortDialog = $(".wb-antwort-dialog");
+  const antwortEingabe = $(".wb-antwort-eingabe");
+  // Gemerkt wird die ID, nicht das Element. Warum: waehrend der Dialog offen
+  // steht, kann der Poll dasselbe Element als NEUES Objekt in die Karte
+  // legen (elementUebernehmen ersetzt es). Ein festgehaltenes Objekt waere
+  // dann eine Karteileiche — gemessen am 31.08.: der Server bekam die neue
+  // Antwort, das Modell im Browser nicht, und das naechste Speichern lief in
+  // einen 409. Der Poll wird zusaetzlich per inArbeit ausgesperrt, solange
+  // der Dialog steht (dasselbe Mittel wie beim Tippen im Block); die
+  // ID-Aufloesung ist der Guertel dazu.
+  let antwortZiel = null;          // {id, idx}
+
+  // Aus dem Textfeld wird EIN Text. Umbrueche werden zu Leerzeichen, weil das
+  // Datenmodell je Zeile genau eine Antwort kennt — und weil der Server
+  // (textSaeubern in whiteboard-routes.js) zwar Steuerzeichen wegnimmt, das
+  // \n aber stehen laesst: die Normalisierung muss also hier passieren, sonst
+  // stuende der Umbruch spaeter als harte Kante im Block.
+  const antwortNormalisieren = (roh) => String(roh || "")
+    .replace(/\s+/g, " ").trim().slice(0, DATEN.grenzen.zeichenJeZeile);
+
+  function antwortDialogOeffnen(el, idx) {
+    const zeile = el.inhalt.zeilen[idx];
+    if (!zeile) return;
+    antwortZiel = { id: el.id, idx };
+    inArbeit.add(el.id);
+    // Der Zeilentext steht oben als Kontext: im Dialog sieht man die Tafel
+    // nicht mehr, und "worauf antworte ich hier" darf man nicht raten muessen.
+    $(".wb-antwort-zeile").textContent = zeile.t.trim() || "Leere Zeile";
+    antwortEingabe.value = zeile.antwort || "";
+    $(".wb-antwort-weg").hidden = !zeile.antwort;
+    antwortDialog.showModal();
+    antwortEingabe.focus();
+    antwortEingabe.select();
+  }
+
+  // Die Sperre faellt beim SCHLIESSEN, egal wie geschlossen wurde: Knopf,
+  // Escape oder Uebernehmen. Ein Listener am Dialog trifft alle drei Wege —
+  // ein vergessenes inArbeit hielte den Poll fuer diesen Block fuer immer an,
+  // und fremde Aenderungen kaemen bei dieser Sitzung nie mehr an.
+  antwortDialog.addEventListener("close", () => {
+    if (antwortZiel) inArbeit.delete(antwortZiel.id);
+    antwortZiel = null;
+  });
+  $(".wb-antwort-abbrechen").addEventListener("click", () => antwortDialog.close());
+  $(".wb-antwort-ok").addEventListener("click", () => antwortSetzen(antwortNormalisieren(antwortEingabe.value)));
+  $(".wb-antwort-weg").addEventListener("click", () => antwortSetzen(""));
+  antwortEingabe.addEventListener("keydown", (ev) => {
+    // Enter uebernimmt (wie im Link-Dialog); wer im Feld doch umbrechen will,
+    // nimmt Shift+Enter — der Umbruch wird beim Uebernehmen zum Leerzeichen.
+    // Escape schliesst der <dialog> von selbst.
+    if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); antwortSetzen(antwortNormalisieren(antwortEingabe.value)); }
+  });
+
+  function antwortSetzen(text) {
+    if (!antwortZiel) { antwortDialog.close(); return; }
+    const { id, idx } = antwortZiel;
+    // Erst schliessen (das raeumt antwortZiel und die inArbeit-Sperre ab),
+    // dann mit den KOPIERTEN Werten weiterarbeiten — und das Element frisch
+    // aus der Karte holen, nie aus dem Dialog-Gedaechtnis.
+    antwortDialog.close();
+    const el = elemente.get(id);
+    const zeile = el && el.inhalt.zeilen[idx];
+    if (!zeile) return;
+    // Nichts geaendert heisst: kein Speichern und vor allem KEIN Undo-Schritt.
+    // Sonst naehme das naechste Strg+Z scheinbar folgenlos "nichts" zurueck.
+    if ((zeile.antwort || "") === text) return;
+    const vorher = JSON.parse(JSON.stringify(el.inhalt));
+    if (text) zeile.antwort = text; else delete zeile.antwort;
+    blockRendern(el);
+    blockGeaendert(el, true);
+    // EIN Undo-Schritt fuer Setzen, Aendern und Loeschen — Muster wie beim
+    // Abhaken und beim Link: Vorzustand und Nachzustand als ganzer Inhalt.
+    undoMerken({ typ: "aendern", id: el.id, vorher: { inhalt: vorher },
+                 nachher: { inhalt: JSON.parse(JSON.stringify(el.inhalt)) } });
+    // Steht das mobile Blatt offen, ist ES die sichtbare Wahrheit — der
+    // frisch gerenderte Block liegt dahinter. Also dort dieselbe Zeile
+    // nachziehen (wie linkSetzen es tut).
+    if (mobilOffen && mobilOffen.el.id === el.id) {
+      const mobilZeile = mobilOffen.liste.children[idx];
+      if (mobilZeile) zeileFuellen(mobilZeile, zeile, true);
+    }
+    toast(text ? "Antwort steht — die Zeile ist ruhig gestellt."
+               : "Antwort gelöscht — die Aufgabe steht wieder offen.");
+  }
+
+  // =================================================================
   // Sync: Poll alle 5 s, idempotenter Upsert, Backoff bei Fehlern
   // =================================================================
 
@@ -5023,6 +5253,14 @@
       const zeile = ev.target.closest(".wb-zeile");
       if (!zeile) return;
       if (ev.target.closest(".wb-zeile-link")) { ev.stopPropagation(); return; }
+      if (ev.target.closest(".wb-zeile-antwort")) {
+        ev.preventDefault();
+        // Wie beim Verknuepfen: erst den getippten Stand ins Modell, sonst
+        // antwortete man auf eine Zeile, die es so noch gar nicht gibt.
+        mobilUebernehmen();
+        antwortDialogOeffnen(el, zeilenIndex(zeile));
+        return;
+      }
       if (ev.target.closest(".wb-zeile-kette")) {
         ev.preventDefault();
         // Erst den getippten Stand ins Modell, sonst verknuepfte man eine
@@ -5031,15 +5269,31 @@
         linkDialogOeffnen(el, zeilenIndex(zeile));
         return;
       }
+      // Im Blatt lebt der Zustand in den Klassen, nicht im Modell — "wartend"
+      // ist aber abgeleitet (Antwort da UND weder abgehakt noch gestrichen).
+      // Also nach jedem Umschalten neu bestimmen, sonst bliebe die
+      // Bernstein-Pause im Kaestchen einer gerade abgehakten Zeile stehen.
+      const wartenNachziehen = () => zeile.classList.toggle("wb-wartet",
+        !!zeile.dataset.antwort
+        && !zeile.classList.contains("wb-erledigt")
+        && !zeile.classList.contains("wb-gestrichen"));
       if (ev.target.closest(".wb-abhaken")) {
         zeile.classList.toggle("wb-erledigt");
         const haken = $(".wb-haken", zeile);
         if (haken) haken.style.strokeDashoffset = zeile.classList.contains("wb-erledigt") ? "0" : "1";
+        wartenNachziehen();
       } else if (ev.target.closest(".wb-zeile-streichen")) {
         zeile.classList.toggle("wb-gestrichen");
+        wartenNachziehen();
       } else if (ev.target.closest(".wb-zeile-weg")) {
         if (liste.children.length > 1) zeile.remove();
-        else $(".wb-zeile-text", zeile).textContent = "";
+        else {
+          // Letzte Zeile: sie bleibt, wird aber wirklich LEER — mit der
+          // Aufgabe geht auch ihre Antwort, sonst haenge die Antwort an
+          // einer Zeile, die es nicht mehr gibt.
+          $(".wb-zeile-text", zeile).textContent = "";
+          zeileFuellen(zeile, { t: "", erledigt: false, gestrichen: false }, true);
+        }
       }
     });
     $(".wb-mobil-fertig", blatt).addEventListener("click", mobilSchliessen);
@@ -5074,6 +5328,9 @@
       const anker = $(".wb-zeile-link", zeile);
       const ziel = anker && anker.getAttribute("href");
       if (ziel && LINK_ERLAUBT.test(ziel)) neu.link = ziel;
+      // Die Antwort haengt am Zeilenknoten (zeileFuellen setzt sie dort) und
+      // ueberlebt Umsortieren und Loeschen damit genauso wie Haken und Link.
+      if (zeile.dataset.antwort) neu.antwort = zeile.dataset.antwort;
       zeilen.push(neu);
     }
     el.inhalt.zeilen = zeilen.length ? zeilen.slice(0, DATEN.grenzen.zeilen)
@@ -5205,6 +5462,9 @@
                        x: e.x, y: e.y, breite: e.breite, hoehe: e.hoehe,
                        punkte: e.inhalt.punkte ? e.inhalt.punkte.length : 0,
                        links: e.inhalt.zeilen ? e.inhalt.zeilen.map((z) => z.link || "") : [],
+                       // Die Antwort steht neben dem Link, weil sie dasselbe
+                       // ist: ein Metadatum je Zeile, das nicht im Text steht.
+                       antworten: e.inhalt.zeilen ? e.inhalt.zeilen.map((z) => z.antwort || "") : [],
                        zeilen: e.inhalt.zeilen ? e.inhalt.zeilen.map((z) => (z.erledigt ? "[x] " : "[ ] ") + z.t) : e.inhalt.punkte.length }));
     },
   };

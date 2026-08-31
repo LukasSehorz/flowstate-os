@@ -123,6 +123,19 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   --wb-tinte-schwarz:#2B3036;--wb-tinte-blau:#2563EB;--wb-tinte-rot:#C03B3B;
   --wb-tinte-gruen:#2E8555;--wb-tinte-orange:#C26E1E;--wb-tinte-lila:#7A4FB6;
 
+  /* Bernstein — die Farbe von "wartet". Sie ist der Hausbernstein aus
+     crm.css (--warning / --warning-flaeche im Hellen) und steht wie die
+     Tinte in ALLEN Themes gleich: sie liegt immer auf der Tafel, und die
+     ist ueberall hell. Zwei Werte, weil die Flaeche den Kontrast traegt —
+     das Warte-Zeichen sitzt auf --wb-warte-flaeche und ist damit auch dann
+     noch 3,6:1 stark, wenn darunter eine gelbe Haftnotiz liegt.
+     --wb-warte-chrom ist derselbe Gedanke fuer alles AUSSERHALB der Tafel
+     (Namensschild, Zeilenknopf, Dialog): dort wechselt der Untergrund mit
+     dem Theme, also wechselt auch der Ton mit. */
+  --wb-warte:#AE7413;
+  --wb-warte-flaeche:#FDF4E3;
+  --wb-warte-chrom:#8A5210;
+
   /* Haftnotizen: Papier, kein Plastik — leicht warm, unten minimal dunkler. */
   --wb-zettel-gelb:linear-gradient(178deg,#FDF3A4 0%,#F7E77E 100%);
   --wb-zettel-rosa:linear-gradient(178deg,#FBDCE4 0%,#F5C6D3 100%);
@@ -163,6 +176,9 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
      faellt auf ihr auf 2,5:1 ab — das Dunkel-Blau gehoert dem Chrom
      (--wb-primaer), nicht dem Marker. */
   --wb-chip:#E8EEF6;--wb-chip-text:#0C1420;--wb-ring:#121C2B;--wb-flaeche-fest:#121C2B;
+  /* Nur der CHROM-Bernstein dreht mit: #8A5210 kaeme auf #121C2B auf 1,9:1.
+     Das Zeichen auf der Tafel bleibt, wie es ist — die Tafel bleibt hell. */
+  --wb-warte-chrom:#E0A33C;
   /* Auf dunklem Grund reicht die Tinte allein nicht: Rot (#C03B3B) und
      Lila (#7A4FB6) sind fuer die HELLE Tafel gemischt und kommen auf
      #121C2B nur auf gut 4:1 (gemessen). Also mehr helle Textfarbe
@@ -196,6 +212,10 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   --wb-alu:linear-gradient(180deg,#E8EBEF 0%,#CBD1D8 100%);
   --wb-alu-rand:#AEB6BF;
   --wb-tinte-blau:#2563EB;
+  /* Zurueck auf den dunklen Bernstein: Weiss kann auch UEBER Dunkel stehen,
+     dann haette sonst der helle #E0A33C von dort ueberlebt — auf weissem
+     Chrom waeren das 2,2:1. */
+  --wb-warte-chrom:#8A5210;
   --wb-chip:#0F1B2D;--wb-chip-text:#FFFFFF;--wb-ring:#FFFFFF;--wb-flaeche-fest:#FFFFFF;
   --wb-zettel-gelb:#FBF0A0;--wb-zettel-rosa:#F9D9E2;--wb-zettel-mint:#D2EEDE;--wb-zettel-blau:#D8E7F9;
   --wb-board-schatten:0 14px 34px -14px rgba(15,27,45,.25),0 4px 10px -4px rgba(15,27,45,.12);
@@ -317,6 +337,9 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 .wb-schild-name{font-size:21px;font-weight:650;letter-spacing:-.01em;line-height:1.2}
 .wb-schild-unter{font-size:14.5px;color:var(--wb-chrom-neben);line-height:1.35}
 .wb-schild-unter b{color:var(--wb-gruen);font-weight:650}
+/* "… · 2 warten" im Bernstein des Hauses — dieselbe Farbe, die am Kaestchen
+   der Zeile steht, damit Schild und Zeile ohne Umweg zusammengehoeren. */
+.wb-schild-unter b.wb-schild-warten{color:var(--wb-warte-chrom)}
 
 /* Die zwei Tafel-Knoepfe oben rechts am Rahmen: "Nach Priorität ordnen"
    und "Tafel wischen". Sie stehen in EINER Reihe, und die Reihe traegt
@@ -680,11 +703,34 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 .wb-abhaken .wb-kasten-rand{stroke:currentColor;opacity:.55;transition:opacity var(--tempo)}
 .wb-abhaken .wb-haken{stroke:var(--wb-tinte-gruen);stroke-width:2.6}
 .wb-abhaken:hover .wb-kasten-rand{opacity:1}
+
+/* Der DRITTE Zustand des Kaestchens: wartend.
+   leer = offen · Bernstein-Pause = offen, aber blockiert · gruener Haken =
+   erledigt. Das ist das Merkmal, an dem man beim Ueberfliegen der Liste ohne
+   Nachdenken sieht, welche Zeile man ueberspringen kann.
+   Die Flaeche liegt UNTER dem Rand und traegt den Kontrast: das Zeichen
+   (#AE7413) steht damit immer auf #FDF4E3 und kommt auf 3,6:1 — egal ob
+   darunter weisse Tafel, entblendete Tafel oder ein gelber Zettel liegt.
+   fill/stroke stehen im CSS, nicht als Attribut: sonst gewaenne das
+   fill="none" des <svg>. */
+.wb-abhaken .wb-warte-feld{fill:var(--wb-warte-flaeche);opacity:0;transition:opacity var(--tempo)}
+.wb-abhaken .wb-warte-symbol{
+  fill:none;stroke:var(--wb-warte);stroke-width:2.7;opacity:0;
+  transition:opacity var(--tempo);
+}
+.wb-zeile.wb-wartet .wb-abhaken .wb-warte-feld,
+.wb-zeile.wb-wartet .wb-abhaken .wb-warte-symbol{opacity:1}
+.wb-zeile.wb-wartet .wb-abhaken .wb-kasten-rand{stroke:var(--wb-warte);opacity:1}
+
 .wb-zeilen:not([data-liste="check"]) .wb-abhaken{
   position:absolute;left:-1.45em;top:.1em;width:1em;height:1em;opacity:0;
   transition:opacity var(--tempo);
 }
+/* Ohne ☐-Liste taucht das Kaestchen sonst erst beim Hover auf — eine
+   wartende Zeile muss ihr Zeichen aber IMMER zeigen, sonst gibt es beim
+   Ueberfliegen nichts zu sehen. Gleiche Regel wie fuer erledigte Zeilen. */
 .wb-zeilen:not([data-liste="check"]) .wb-zeile:hover .wb-abhaken,
+.wb-zeilen:not([data-liste="check"]) .wb-zeile.wb-wartet .wb-abhaken,
 .wb-zeilen:not([data-liste="check"]) .wb-zeile.wb-erledigt .wb-abhaken{opacity:1}
 /* Was einem nicht gehoert (weder geschrieben noch auf der eigenen Tafel):
    ansehen ja, anfassen nein. Der Server antwortete sonst mit 404. */
@@ -695,6 +741,55 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 .wb-zeile.wb-erledigt .wb-zeile-text{text-decoration:line-through;text-decoration-thickness:2px;
   text-decoration-color:color-mix(in srgb,var(--wb-tinte-gruen) 65%,transparent);opacity:.5}
 .wb-zeile.wb-gestrichen .wb-zeile-text{text-decoration:line-through;text-decoration-thickness:2px;opacity:.6}
+
+/* Die wartende Zeile wird ABGEBLENDET, nicht durchgestrichen — sie ist nicht
+   erledigt, sie ruht. .7 ist bewusst zwischen "offen" (1) und "erledigt"
+   (.5) gewaehlt: mit schwarzer Tinte misst die Zeile so 5,1:1 auf der
+   weissen und 4,6:1 auf der entblendeten Tafel (Ziel war 3:1), waehrend eine
+   erledigte Zeile bei 2,9:1 liegt. Beide Zustaende bleiben also messbar
+   auseinanderzuhalten, und die wartende bleibt klar lesbar.
+   Einen zusaetzlichen Balken links braucht sie nicht: das Kaestchen sagt es
+   schon lauter, als ein Balken es koennte — und der Platz links davon
+   gehoert bei Nicht-Check-Listen bereits dem Kaestchen selbst. */
+.wb-zeile.wb-wartet .wb-zeile-text{opacity:.7}
+
+/* -------------------------------------------------- Antwort auf die Zeile
+   Sie steht UNTER der Aufgabe, eingerueckt und kleiner: ein zweiter Gedanke
+   ("worauf warte ich"), kein Zusatz zum Aufgabentext. flex-wrap steht nur an
+   Zeilen, die wirklich eine Antwort haben — die uebrigen behalten ihr
+   nowrap-Verhalten unveraendert. */
+.wb-zeile.wb-hat-antwort{flex-wrap:wrap}
+.wb-antwort{
+  flex:0 0 100%;min-width:0;
+  display:flex;align-items:flex-start;gap:.3em;
+  /* Die Einrueckung ist PADDING, nicht margin: flex-basis:100% zaehlt bei
+     border-box (crm.css, *) das Padding mit, ein margin kaeme obendrauf —
+     die Antwort ragte dann genau um ihre Einrueckung ueber die rechte
+     Blockkante hinaus (gemessen: 15 px am Board, 20 px im Blatt). */
+  margin:.1em 0 .25em;padding-left:1.5em;
+  font-size:.8em;line-height:1.4;
+  /* Ein ruhiger, leicht warmer Ton — NICHT der volle Bernstein: der gehoert
+     dem Zeichen im Kaestchen, und zwei laute Bernsteine in einer Zeile
+     schrieen um dieselbe Aufmerksamkeit. Der Ton allein ordnet die Antwort
+     aber nicht unter; das tun Einrueckung und Groesse. Gemessen 6,7:1 auf
+     der weissen Tafel — leise, aber ohne Muehe zu lesen. */
+  color:color-mix(in srgb,var(--wb-tinte-schwarz) 82%,var(--wb-warte));
+  opacity:.82;
+  overflow-wrap:anywhere;word-break:break-word;
+  transition:opacity var(--tempo);
+}
+.wb-antwort-pfeil{
+  flex:0 0 auto;display:block;width:1em;height:1em;margin-top:.12em;
+  color:var(--wb-warte);
+}
+.wb-antwort-pfeil svg{width:100%;height:100%;display:block;stroke-width:2.2}
+.wb-antwort-text{min-width:0}
+/* Erledigt und gestrichen schlagen wartend (siehe zeileFuellen): die Antwort
+   bleibt stehen, weil sie erklaert, warum die Zeile so aussieht — sie tritt
+   aber noch einen Schritt zurueck. Durchgestrichen wird sie NICHT: der Text
+   ist eine Notiz, keine Aufgabe. */
+.wb-zeile.wb-erledigt .wb-antwort,
+.wb-zeile.wb-gestrichen .wb-antwort{opacity:.62}
 
 /* Zeilenwerkzeuge rechts neben der Zeile: durchstreichen, loeschen.
    --wb-anti2 (JS) skaliert sie gegen den Zoom: auf dem Schirm bleiben
@@ -737,6 +832,40 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 .wb-zeile-tools button.wb-zeile-weg:hover{color:var(--wb-rot)}
 .wb-zeile-tools svg{width:.8em;height:.8em}
 .wb-zeile-tools button.wb-zeile-kette:hover{color:var(--wb-primaer)}
+.wb-zeile-tools button.wb-zeile-antwort:hover{color:var(--wb-warte-chrom)}
+/* Steht schon eine Antwort, ist der Knopf GEFUELLT und damit auch ohne Hover
+   zu sehen — sonst muesste man jede Zeile einzeln anfassen, um zu wissen, wo
+   man antworten kann. Sichtbar wird dann aber NUR dieser eine Knopf: die
+   ganze Werkzeugleiste dauerhaft neben jeder wartenden Zeile waere Laerm.
+   color-mix laeuft ueber --wb-flaeche-fest, weil --wb-chrom-flaeche unter
+   Graphit ein Verlauf ist und ein Verlauf als Farbe die ganze Deklaration
+   verschluckt (siehe Kopfkommentar). */
+.wb-zeile.wb-hat-antwort .wb-zeile-tools{display:inline-flex}
+.wb-zeile.wb-hat-antwort:not(:hover) .wb-zeile-tools>:not(.wb-zeile-antwort){display:none}
+.wb-zeile.wb-hat-antwort .wb-zeile-tools button.wb-zeile-antwort{
+  color:var(--wb-warte-chrom);
+  background:color-mix(in srgb,var(--wb-warte-chrom) 15%,var(--wb-flaeche-fest));
+  border-color:color-mix(in srgb,var(--wb-warte-chrom) 45%,var(--wb-chrom-rand));
+}
+/* Solange die Maus NICHT auf der Zeile steht, steht der Knopf allein auf der
+   Tafel — und die Werkzeugleiste haengt an der rechten Blockkante, bei einem
+   breiten Block also weit weg von seiner Zeile. Als vollstaendiger Knopf mit
+   Rand und Schatten schwebte dort ein Kaestchen im Leeren. Er legt seine
+   Huelle darum ab und ist nur noch die Sprechblase in Bernstein: ein Zeichen,
+   kein Bedienelement. Beim Hover kommt die ganze Leiste samt Huelle zurueck.
+   Farbe wechselt mit: ohne Huelle liegt er auf der (immer hellen) Tafel, mit
+   Huelle auf dem Chrom des Themes.
+   Er bleibt dabei an SEINEM Platz. Ihn im Ruhezustand naeher an die Zeile zu holen waere
+   huebscher, aber er spraenge beim Hover weg — genau dann, wenn die Maus auf
+   ihn zufaehrt.
+   Kleiner und etwas zurueckgenommen (0,82 / 85 %), weil er die LEISERE
+   Haelfte ist: das Kaestchen sagt "hier wartet etwas", er sagt nur "hier
+   kannst du es aendern". In der Wandansicht war er vorher das Bunteste im
+   Bild und zog den Blick vom Kaestchen weg. 3,2:1 auf der Tafel. */
+.wb-zeile.wb-hat-antwort:not(:hover) .wb-zeile-tools button.wb-zeile-antwort{
+  color:var(--wb-warte);background:none;border-color:transparent;box-shadow:none;
+  opacity:.85;transform:scale(.82);
+}
 .wb-el:not(.wb-darf) .wb-zeile-tools{display:none!important}
 
 /* Der Link HINTER dem Text: ein kleines Kettensymbol, das die Zeile
@@ -1223,6 +1352,41 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 .wb-link-dialog button.wb-link-ok:hover{background:var(--wb-primaer-hover)}
 .wb-link-dialog button.wb-link-weg{color:var(--wb-rot);border-color:var(--wb-chrom-rand-stark)}
 
+/* Antwort-Dialog — derselbe Bauplan wie "Zeile verknuepfen": Zeilentext als
+   Kontext oben, Feld, Fuss mit Loeschen links und Uebernehmen rechts. Ein
+   Textfeld statt einer Zeile, weil man beim Tippen umbricht; gespeichert
+   wird trotzdem EIN Text. */
+.wb-antwort-dialog{width:min(460px,calc(100vw - 32px));max-width:none}
+/* Der Zeilentext oben: derselbe Chip wie im Link-Dialog — ein Muster, nicht
+   zwei. Er sagt, worauf man hier gerade antwortet. */
+.wb-antwort-zeile{
+  margin:2px 0 14px;padding:8px 12px;border-radius:9px;
+  background:var(--wb-chrom-flaeche2);color:var(--wb-chrom-neben);
+  font-size:13px;line-height:1.4;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.wb-antwort-feld{display:flex;flex-direction:column;gap:6px}
+.wb-antwort-feld>span{font:600 12px/1 inherit;color:var(--wb-chrom-neben)}
+.wb-antwort-eingabe{
+  width:100%;box-sizing:border-box;resize:vertical;min-height:78px;
+  padding:10px 12px;border-radius:9px;border:1px solid var(--wb-chrom-rand-stark);
+  background:var(--wb-chrom-flaeche);color:var(--wb-chrom-text);
+  /* Einzeldeklarationen statt der font-Kurzform: "inherit" ist dort als
+     Familienname ungueltig, die ganze Zeile fiele weg — und ein <textarea>
+     stuende dann in der Schreibmaschinenschrift des Browsers. */
+  font-family:inherit;font-weight:400;font-size:14px;line-height:1.45;
+}
+.wb-antwort-eingabe:focus{outline:2px solid var(--wb-primaer);outline-offset:1px;border-color:transparent}
+.wb-antwort-eingabe::placeholder{color:var(--wb-chrom-still)}
+.wb-antwort-hinweis{margin:10px 0 0;font-size:12.5px;line-height:1.45;color:var(--wb-chrom-still)}
+.wb-antwort-luft{flex:1 1 auto}
+.wb-antwort-dialog .dialog-fuss{display:flex;align-items:center;gap:8px}
+.wb-antwort-dialog button.wb-antwort-ok{
+  background:var(--wb-primaer);color:#fff;border:0;
+}
+.wb-antwort-dialog button.wb-antwort-ok:hover{background:var(--wb-primaer-hover)}
+.wb-antwort-dialog button.wb-antwort-weg{color:var(--wb-rot);border-color:var(--wb-chrom-rand-stark)}
+
 /* Sitzung abgelaufen: Overlay ueber der ganzen Wand. */
 .wb-anmelden{
   position:absolute;inset:0;z-index:40;display:grid;place-items:center;
@@ -1272,6 +1436,23 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 }
 .wb-mobil-zeilen .wb-zeile{padding:4px 0;min-height:44px;align-items:center}
 .wb-mobil-zeilen .wb-zeile-tools{position:static;display:inline-flex;margin-left:auto}
+/* Im Blatt liegen die Werkzeuge IM Fluss (nicht absolut) — die Antwort
+   braucht deshalb ihre eigene volle Reihe, sonst quetschte sie sich neben
+   die Knoepfe. Etwas groesser als am Board (.86 statt .8), weil das Blatt
+   ohnehin auf 24 px Mindestschrift hochgeht und darunter alles klein wird. */
+.wb-mobil-zeilen .wb-zeile.wb-hat-antwort{align-items:flex-start;padding-bottom:8px}
+.wb-mobil-zeilen .wb-antwort{font-size:.86em;margin:2px 0 0;padding-left:1.5em;order:9}
+/* Der Antwort-Knopf ist auch ohne Hover da (Finger haben keinen Hover) —
+   am Telefon zeigt eine beantwortete Zeile deshalb die ganze Leiste. */
+.wb-mobil-zeilen .wb-zeile.wb-hat-antwort:not(:hover) .wb-zeile-tools>*{display:grid}
+/* Im Blatt liegt der Knopf in der Leiste, nicht auf der Tafel — dort behaelt
+   er seine Huelle (die nackte Fassung vom Board gilt nur dort). */
+.wb-mobil-zeilen .wb-zeile.wb-hat-antwort .wb-zeile-tools button.wb-zeile-antwort{
+  color:var(--wb-warte-chrom);
+  background:color-mix(in srgb,var(--wb-warte-chrom) 15%,var(--wb-flaeche-fest));
+  border-color:color-mix(in srgb,var(--wb-warte-chrom) 45%,var(--wb-chrom-rand));
+  box-shadow:var(--wb-schatten1);
+}
 .wb-mobil-zeilen .wb-zeilen:not([data-liste="check"]) .wb-abhaken{position:static;opacity:1;left:auto}
 .wb-mobil-zeilen .wb-abhaken{width:30px;height:30px;top:0}
 .wb-mobil-zeilen .wb-zeile-tools button{width:38px;height:38px;font-size:16px}
@@ -1396,7 +1577,8 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   .wb-marker,.wb-schwammknopf,.wb-farbe,.wb-zettelwahl,.wb-toast,
   [data-tip]::after,.wb-knopf,.wb-seg,.wb-dicke,.wb-zeile-text,
   .wb-pfeile .wb-pfeil,.wb-zeile-link,.wb-neugroesse,.wb-groesse-griff,
-  .wb-link-treffer-zeile,.wb-rahmen,.wb-tafelflaeche{transition:none}
+  .wb-link-treffer-zeile,.wb-rahmen,.wb-tafelflaeche,
+  .wb-abhaken .wb-warte-feld,.wb-abhaken .wb-warte-symbol,.wb-antwort{transition:none}
   /* Die Pfeile heben sich nicht mehr an; sichtbar bleiben sie ueber die
      Deckkraft, die ohnehin nicht wandert. Mit .wb-pfeile davor, sonst
      gewinnt die Grundregel (gleiche Spezifitaet, spaeter im Blatt). */
