@@ -624,10 +624,67 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   letter-spacing:.01em;white-space:nowrap;
   color:color-mix(in srgb,var(--kf,#2B3036) var(--wb-kat-anteil,78%),var(--wb-chrom-text));
 }
-/* Steht der Block direkt unter seiner eigenen Ueberschrift, faellt sein
-   Schild weg (kennzeichenPruefen in whiteboard.js): die Ueberschrift sagt
-   es schon, und beim engen 16er-Abstand laege das Schild in ihrem Text. */
-.wb-el.wb-kat-still .wb-kat{display:none}
+/* ------------------------------------------ Die Ueberschrift IM Block
+   Seit dem 01.09.2026 sind Ueberschrift und Aufgabenliste EIN Element:
+   "1 · Kunden" wird gerendert, nicht getippt. Sie steht damit im Block,
+   nicht darueber — verschieben, skalieren, auswaehlen fasst beides.
+
+   Sie spricht die Sprache der TAFEL, nicht die des Chroms: dieselbe
+   Handschrift wie die Aufgaben darunter, in der Farbe ihrer Kategorie, mit
+   einem Marker-Strich als Trennlinie. Ein graues Kapsel-Schildchen (wie
+   .wb-kat) waere hier falsch — es ist keine Beschriftung VON AUSSEN mehr,
+   sondern das, was der Nutzer bisher selbst mit dem Stift hingeschrieben hat.
+
+   --kopf ist die tiefere Stufe der Marker-Tinte (Werte in whiteboard.js,
+   gemessen): die Tinten selbst sind fuer STRICHE gemischt und kaemen als
+   Schrift auf der entblendeten Tafel des Dunkelmodus unter 3:1. Die Linie
+   darunter traegt dagegen die echte Tinte (--kf) — sie ist Flaeche, kein
+   Text, und darf leuchten. */
+.wb-blockkopf{
+  display:flex;align-items:baseline;gap:.05em;
+  /* Deutlich groesser als die Aufgaben darunter: eine Ueberschrift, die
+     genauso gross ist wie ihre Liste, ist keine. 1,3em ist derselbe Schritt,
+     den man mit dem Marker von Hand machen wuerde (28 -> 36). */
+  font:700 1.3em/1.22 inherit;
+  color:var(--kopf,#2B3036);
+  letter-spacing:.004em;
+  padding-bottom:.14em;margin-bottom:.28em;
+  border-bottom:.055em solid color-mix(in srgb,var(--kf,#2B3036) 52%,transparent);
+  /* Der Kopf ist Anzeige, kein Text zum Anfassen: keine Auswahl, kein
+     Caret, kein I-Balken. Wer ihn aendern will, aendert die Kategorie. */
+  user-select:none;-webkit-user-select:none;cursor:inherit;
+}
+.wb-kopf-rang{
+  font-weight:700;font-variant-numeric:tabular-nums;
+  /* Die Zahl traegt die Rangfolge — sie darf eine Spur groesser sein als
+     das Wort, das sie benennt. */
+  font-size:1.06em;
+}
+.wb-kopf-punkt{opacity:.42;font-weight:400;padding:0 .1em}
+.wb-kopf-wort{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Genau EIN Zeichen je Block: der Kategorie-Block traegt die Ueberschrift,
+   jeder weitere Block derselben Gruppe (eine Haftnotiz, eine hingeschriebene
+   Aufgabe neben dem Block des Gastgebers) nur das kleine Schild. Zwei
+   "1 · Kunden" auf einer Tafel waeren genau das, was dieser Umbau
+   abgeschafft hat. Welcher es ist, entscheidet kennzeichenPruefen. */
+.wb-el.wb-kopfblock .wb-kat{display:none}
+.wb-el:not(.wb-kopfblock) .wb-blockkopf{display:none}
+/* Bestand (Uebergangszeit): die alten Ueberschriften stehen noch als eigene
+   Bloecke ueber ihren Listen. Sie werden separat aus der Datenbank entfernt
+   — bis dahin waeren sie hier die zweite Ueberschrift ueber derselben Liste.
+   Ausgeblendet wird nur, wozu es einen Ersatz gibt (whiteboard.js prueft
+   das): eine Ueberschrift ohne ihre Liste bleibt sichtbar. */
+.wb-el.wb-altkopf{display:none!important}
+
+/* Frisch dazugekommen: der Block, in den gerade eine Aufgabe gewandert ist,
+   leuchtet einmal kurz auf. Ohne das verschwaende die Zeile scheinbar im
+   Nichts — man hat sie ja gerade noch woanders gesehen. */
+.wb-el.wb-zugewachsen{animation:wb-zuwachs 1.2s ease-out}
+@keyframes wb-zuwachs{
+  0%   {box-shadow:0 0 0 0 color-mix(in srgb,var(--wb-primaer) 55%,transparent)}
+  22%  {box-shadow:0 0 0 calc(9px * var(--wb-anti2,1)) color-mix(in srgb,var(--wb-primaer) 26%,transparent)}
+  100% {box-shadow:0 0 0 calc(16px * var(--wb-anti2,1)) transparent}
+}
 
 /* Derselbe Hinweis fuer eine handgeschriebene Aufgabe: ein Strich hat
    keinen DOM-Knoten, an den sich ein Ring haengen koennte (Tinte lebt auf
@@ -754,6 +811,40 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 .wb-zeilen:not([data-liste="check"]) .wb-zeile:hover .wb-abhaken,
 .wb-zeilen:not([data-liste="check"]) .wb-zeile.wb-wartet .wb-abhaken,
 .wb-zeilen:not([data-liste="check"]) .wb-zeile.wb-erledigt .wb-abhaken{opacity:1}
+/* ------------------------------------- Der Griff zum ABGEBEN einer Zeile
+   Ganz aussen in derselben Randspalte wie das Kaestchen — und einen Schritt
+   weiter links, wo das Kaestchen ebenfalls dort steht (Nicht-Checklisten).
+   Sechs Punkte, dasselbe Bild wie am Block-Griff: was so aussieht, zieht man.
+   Er erscheint beim Ueberfahren der Zeile; staende er immer da, waere jede
+   Liste eine Reihe von Knoepfen. --wb-anti2 haelt ihn ueber den ganzen
+   Editier-Zoom hinweg gleich gross, wie die Zeilenwerkzeuge gegenueber. */
+.wb-zeile-griff{
+  position:absolute;left:-1.62em;top:.05em;
+  width:1em;height:1.2em;display:grid;place-items:center;
+  color:var(--wb-chrom-still);opacity:0;cursor:grab;
+  transition:opacity var(--tempo),color var(--tempo);
+  touch-action:none;
+}
+.wb-zeilen:not([data-liste="check"]) .wb-zeile-griff{left:-2.85em}
+/* Die sechs Punkte GEFUELLT statt umrandet: als Ringe waeren sie bei der
+   Groesse, in der sie hier stehen, nur graue Flecken. */
+.wb-zeile-griff svg{width:100%;height:100%;display:block}
+.wb-zeile-griff svg circle{fill:currentColor;stroke:none}
+/* Unsichtbare Trefferflaeche — ein Griff, den man nur auf 12 px trifft,
+   ist kein Griff. */
+.wb-zeile-griff::after{content:"";position:absolute;inset:-.34em}
+.wb-zeile:hover>.wb-zeile-griff{opacity:.8}
+.wb-zeile-griff:hover{opacity:1;color:var(--wb-primaer)}
+.wb-zeile.wb-fliegt>.wb-zeile-griff{opacity:1;color:var(--wb-primaer);cursor:grabbing}
+/* Die Zeile, die gerade unterwegs ist, tritt zurueck — sie haengt ja am
+   Zeiger. Ganz verschwinden darf sie nicht: bricht man ab, soll sie wieder
+   da sein, ohne dass die Liste dazwischen gesprungen ist. */
+.wb-zeile.wb-fliegt>.wb-zeile-text{opacity:.4}
+.wb-el:not(.wb-darf) .wb-zeile-griff{display:none}
+/* Im engen Zettel (Scroll-Kasten) waere der Griff abgeschnitten — dort
+   gibt es ihn nicht; die Zeile laesst sich ueber den Block bewegen. */
+.wb-el-notiz>.wb-zeilen.wb-scrollt .wb-zeile-griff{display:none}
+
 /* Was einem nicht gehoert (weder geschrieben noch auf der eigenen Tafel):
    ansehen ja, anfassen nein. Der Server antwortete sonst mit 404. */
 .wb-el:not(.wb-darf) .wb-abhaken{pointer-events:none}
@@ -1598,6 +1689,11 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   padding:12px 14px 12px 64px;border-bottom:1px solid var(--wb-chrom-rand);flex-shrink:0;
 }
 .wb-mobil-kopf b{font-size:15px}
+/* Traegt der Block eine Kategorie, ist SIE der Titel des Blatts ("1 ·
+   Kunden") — am Telefon sieht man die Tafel dahinter nicht mehr, und
+   "Textblock" saehe auf jedem Block gleich aus. In derselben Farbe wie die
+   Ueberschrift am Board, damit beide als dasselbe gelesen werden. */
+.wb-mobil-titel-kat{color:var(--kopf,var(--wb-chrom-text))}
 .wb-mobil-fertig{
   border:0;border-radius:10px;padding:10px 18px;cursor:pointer;
   background:var(--wb-primaer);color:#fff;font:650 14px/1 inherit;
@@ -1640,6 +1736,62 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 .wb-mobil-zeilen .wb-abhaken{width:30px;height:30px;top:0}
 .wb-mobil-zeilen .wb-zeile-tools button{width:38px;height:38px;font-size:16px}
 
+/* ------------------------------------- Aufgabe abgeben: der Zug quer ueber
+   die Wand. Der Geist haengt am Zeiger und sagt ZWEI Dinge: was man in der
+   Hand hat und wo es landen wird. Ohne die zweite Zeile zoege man ins Blaue
+   — die Tafeln sehen einander aehnlich, und der Kategorie-Block drueben ist
+   beim Herausgezoomten kaum zu lesen.
+   Er lebt im Chrom (Inter, Kapsel, Schatten), nicht auf der Tafel: er ist
+   ein Werkzeug in Bewegung, keine Handschrift. */
+.wb-abgabe-geist{
+  position:absolute;z-index:30;pointer-events:none;
+  transform:translate(16px,-50%);
+  max-width:min(340px,58%);
+  padding:9px 13px;border-radius:12px 12px 12px 4px;
+  background:var(--wb-chrom-flaeche);
+  border:1px solid var(--wb-chrom-rand-stark);
+  box-shadow:var(--wb-schatten3);
+  color:var(--wb-chrom-text);
+  font:600 13.5px/1.35 'Inter','Segoe UI',system-ui,sans-serif;
+}
+/* Am rechten Rand zieht man, um zur Nachbartafel zu kommen — dort klappt
+   der Geist auf die andere Seite des Zeigers, sonst waere genau der
+   Hinweis abgeschnitten, der das Ziel nennt. Die abgeknickte Ecke wandert
+   mit: sie zeigt immer zum Zeiger. */
+.wb-abgabe-geist.wb-links{
+  transform:translate(calc(-100% - 16px),-50%);
+  border-radius:12px 12px 4px 12px;
+}
+.wb-abgabe-geist.wb-hoch{transform:translate(16px,calc(-100% - 14px))}
+.wb-abgabe-geist.wb-links.wb-hoch{transform:translate(calc(-100% - 16px),calc(-100% - 14px))}
+.wb-abgabe-zeile{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-abgabe-ziel{
+  margin-top:3px;font-size:12px;color:var(--wb-chrom-still);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.wb-abgabe-geist.wb-gueltig{
+  border-color:color-mix(in srgb,var(--wb-primaer) 55%,var(--wb-chrom-rand));
+}
+.wb-abgabe-geist.wb-gueltig .wb-abgabe-ziel{color:var(--wb-primaer)}
+.wb-raum.wb-abgabe-laeuft,
+.wb-raum.wb-abgabe-laeuft .wb-flaeche{cursor:grabbing}
+/* Die Tafel unter dem Zeiger hebt sich ab — ueber den RAHMEN, nicht ueber
+   ein transform: die Tinte liegt auf dem Canvas und wuerde nicht mitwandern
+   (dieselbe Regel wie beim Hover in der Uebersicht). */
+.wb-board.wb-zieltafel .wb-rahmen{
+  box-shadow:var(--wb-board-schatten),inset 0 2px 0 rgba(255,255,255,.55),
+             inset 0 -2px 3px var(--wb-alu-tief),
+             0 0 0 calc(5px * var(--wb-anti2,1)) color-mix(in srgb,var(--wb-primaer) 55%,transparent);
+}
+.wb-board.wb-zieltafel .wb-tafelflaeche{filter:brightness(1.035)}
+/* Und der Block, in den die Zeile faellt. Gestrichelt, nicht durchgezogen:
+   sie ist noch nicht drin. */
+.wb-el.wb-zielblock{
+  outline:calc(2px * var(--wb-anti2,1)) dashed var(--wb-primaer);
+  outline-offset:calc(6px * var(--wb-anti2,1));border-radius:4px;
+  background:color-mix(in srgb,var(--wb-primaer) 8%,transparent);
+}
+
 /* --------------------------------------------------------- Konfetti */
 .wb-konfetti{position:absolute;z-index:8;pointer-events:none;width:0;height:0}
 .wb-konfetti i{position:absolute;width:7px;height:11px;border-radius:2px;left:0;top:0}
@@ -1654,6 +1806,11 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
      einen Block oeffnet das Vollbild-Blatt (whiteboard.js). Die Spans
      der Buehne duerfen deshalb keinen Fokus fangen. */
   .wb-buehne .wb-zeile-text{pointer-events:none}
+  /* Den Zeilen-Griff gibt es am Telefon nicht: dort oeffnet ein Tipp das
+     Vollbild-Blatt, und ein Zug quer ueber die stark herausgezoomte Wand
+     (13 % — eine Zeile misst dort keine 6 px) waere mit dem Daumen nicht zu
+     treffen. Abgegeben wird am Schreibtisch. */
+  .wb-zeile-griff{display:none}
   body:has(#wb-wurzel) main{padding:10px 10px 10px 0}
   .wb-raum{border-radius:16px}
   .wb-kopf{top:10px;gap:6px}
@@ -1776,9 +1933,16 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   .wb-pfeile .wb-pfeil,.wb-zeile-link,.wb-neugroesse,.wb-groesse-griff,
   .wb-link-treffer-zeile,.wb-rahmen,.wb-tafelflaeche,
   .wb-abhaken .wb-warte-feld,.wb-abhaken .wb-warte-symbol,.wb-antwort,
-  .wb-zeile-chip,.wb-blase-knopf{transition:none}
+  .wb-zeile-chip,.wb-blase-knopf,.wb-zeile-griff{transition:none}
   /* Die Blase soll erscheinen, nicht anfliegen. */
   .wb-markierblase{animation:none}
+  /* Der Block, in den eine Aufgabe gewandert ist, PULSIERT nicht — er steht
+     einfach kurz hervorgehoben da. Ganz ohne Zeichen bliebe es dabei, dass
+     eine Zeile spurlos verschwindet; das waere schlimmer als Bewegung. */
+  .wb-el.wb-zugewachsen{
+    animation:none;
+    box-shadow:0 0 0 calc(4px * var(--wb-anti2,1)) color-mix(in srgb,var(--wb-primaer) 42%,transparent);
+  }
   /* Die Pfeile heben sich nicht mehr an; sichtbar bleiben sie ueber die
      Deckkraft, die ohnehin nicht wandert. Mit .wb-pfeile davor, sonst
      gewinnt die Grundregel (gleiche Spezifitaet, spaeter im Blatt). */

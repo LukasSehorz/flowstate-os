@@ -73,38 +73,58 @@
   // ------------------------------------------------ Einordnung nach Rang
   //
   // Ein Text- oder Notizblock darf eine Kategorie tragen. Die REIHENFOLGE
-  // dieser Liste IST die Rangfolge (so vom Haus vorgegeben, 31.08.2026):
-  // Kunden gehen vor, dann Vertrieb, dann das Interne, zuletzt Content und
-  // Wissen. Dieselben vier Namen stehen im Server (KATEGORIEN in
+  // dieser Liste IST die Rangfolge — und sie steht seit dem 01.09.2026 auf
+  // 1 Kunden · 2 Vertrieb · 3 Content & Wissen · 4 Intern & System
+  // (Content bringt Umsatz, das Interne kann warten). Dieselben vier Namen
+  // in derselben Reihenfolge stehen im Server (KATEGORIEN in
   // whiteboard-routes.js) — was hier nicht steht, wirft er weg. Ohne
   // Kategorie bleibt ein Block liegen, wo er liegt: freies Kritzeln bleibt
   // frei, und genau das ist eine Tafel wert.
   //
-  // Die Farben sind KEINE neuen Werte, sondern die vier Marker-Tinten:
-  // rot fuer Kunden, orange fuer Vertrieb, lila fuer Internes, gruen fuer
-  // Content. So traegt die Wand weiterhin EINE Palette — ein Schild ist im
-  // selben Ton gemalt wie der Stift, mit dem daneben geschrieben wird.
+  // "farbe" sind KEINE neuen Werte, sondern die vier Marker-Tinten: rot fuer
+  // Kunden, orange fuer Vertrieb, gruen fuer Content, lila fuer Internes. So
+  // traegt die Wand weiterhin EINE Palette.
+  //
+  // "kopf" ist dieselbe Farbe eine Stufe tiefer — sie traegt die Ueberschrift
+  // IM Block. Warum nicht die Tinte selbst: die Tinten sind fuer STRICHE
+  // gemischt, und Orange (#C26E1E) kommt als Schrift auf der (im Dunkelmodus
+  // entblendeten) Tafel nur auf 2,9:1. Die vier Werte hier sind gemessen und
+  // liegen auf jeder Tafelstelle in jedem Theme ueber 5:1 — die Tafel ist in
+  // allen vier Themes hell, darum reicht EIN Satz Werte.
   const KATEGORIEN = [
     { wert: "kunden",   kurz: "Kunden",   lang: "Kunden",           farbe: "rot",
-      toast: "Als Kunden-Aufgabe eingeordnet." },
+      kopf: "#A32F2F", toast: "Als Kunden-Aufgabe eingeordnet." },
     { wert: "vertrieb", kurz: "Vertrieb", lang: "Vertrieb",         farbe: "orange",
-      toast: "Als Vertriebs-Aufgabe eingeordnet." },
-    { wert: "intern",   kurz: "Intern",   lang: "Internes",         farbe: "lila",
-      toast: "Als interne Aufgabe eingeordnet." },
+      kopf: "#8A4C0C", toast: "Als Vertriebs-Aufgabe eingeordnet." },
     { wert: "content",  kurz: "Content",  lang: "Content & Wissen", farbe: "gruen",
-      toast: "Als Content-Aufgabe eingeordnet." },
+      kopf: "#1F6B42", toast: "Als Content-Aufgabe eingeordnet." },
+    { wert: "intern",   kurz: "Intern",   lang: "Intern & System",  farbe: "lila",
+      kopf: "#613C96", toast: "Als interne Aufgabe eingeordnet." },
   ];
   const kategorieVon = (wert) => KATEGORIEN.find((k) => k.wert === wert) || null;
-  // Rang eines Elements: 0 = Kunden … 3 = Content, -1 = nicht eingeordnet.
+  // Rang eines Elements: 0 = Kunden … 3 = Intern, -1 = nicht eingeordnet.
   const kategorieRang = (el) =>
     KATEGORIEN.findIndex((k) => k.wert === (el.inhalt && el.inhalt.kategorie));
+  // Die Ueberschrift, die ein Kategorie-Block selbst traegt: "1 · Kunden".
+  // Sie steht NICHT im Datenmodell — sie folgt aus der Kategorie und wird
+  // gerendert. Wer sie aendern will, aendert die Kategorie.
+  const kategorieTitel = (k) => (KATEGORIEN.indexOf(k) + 1) + " · " + k.lang;
 
-  // Masse fuers automatische Einsortieren (nachRangOrdnen). Welteinheiten.
-  const ORD_X = [130, 1400];   // Spalte 1, Spalte 2
-  const ORD_Y = 100;           // Oberkante des obersten Blocks
-  const ORD_LUFT = 60;         // Abstand unter einem gewoehnlichen Block
-  const ORD_LUFT_KOPF = 16;    // ... unter einer Ueberschrift: sie gehoert zur Liste darunter
-  const ORD_RAND = 60;         // Sicherheitsabstand zur unteren Tafelkante
+  // ------------------------------------------------ Die vier festen Plaetze
+  //
+  // Jede Kategorie hat EINEN Platz auf der Tafel (2400x1400), in Leserichtung:
+  //     1 Kunden  oben links       2 Vertrieb  oben rechts
+  //     3 Content unten links      4 Intern    unten rechts
+  // Beim Einordnen und beim Ordnen rueckt der Kategorie-Block dorthin. Von
+  // Hand darf man ihn weiterhin verschieben — er bleibt dann liegen, bis
+  // wieder geordnet wird.
+  const ORD_X = [130, 1400];    // Spalte 1, Spalte 2
+  const ORD_Y = [100, 760];     // Reihe 1, Reihe 2
+  const ORD_LUFT = 60;          // Abstand zwischen zwei Bloecken einer Spalte
+  const ORD_RAND = 60;          // Sicherheitsabstand zur unteren Tafelkante
+  // Der Platz eines Rangs (0…3). Spalte = Rang gerade/ungerade, Reihe = obere
+  // bzw. untere Haelfte.
+  const platzVon = (rang) => ({ x: ORD_X[rang % 2], y: ORD_Y[rang < 2 ? 0 : 1] });
 
   // Haftnotizen sind GEGENSTAENDE mit einer Groesse: aufziehbar, spaeter
   // skalierbar, innen scrollend. Darunter waere kein Zettel mehr zu lesen.
@@ -296,13 +316,48 @@
     ordnen: S('<path d="M4 6h11M4 12h7M4 18h4"/><path d="M18 4.5v14"/><path d="m15 15.5 3 3 3-3"/>'),
   };
 
-  // Ein Block ohne Listenform mit genau EINER Zeile ist eine UEBERSCHRIFT
-  // ("Kunden", "Vertrieb"), keine Aufgabe. Sie bekommt ihre Kategorie zwar
-  // gespeichert — nur so bleibt sie beim Ordnen bei ihrer Gruppe stehen —,
-  // traegt aber KEIN Schild: die Ueberschrift sagt schon, was darunter
-  // steht, ein Schild daneben waere dasselbe Wort ein zweites Mal.
+  // Ein Block ohne Listenform mit genau EINER Zeile hat die FORM einer
+  // Ueberschrift. Das allein sagt noch nichts — auch "Krotzer anrufen" sieht
+  // so aus. Erst zusammen mit einer passenden Kategorie wird daraus eine
+  // Alt-Ueberschrift (siehe istAltUeberschrift).
   const istUeberschrift = (el) => !!el && el.art !== "strich"
     && el.inhalt.liste === "keine" && el.inhalt.zeilen.length === 1;
+
+  // ------------------------------------------- Alt-Ueberschriften (Bestand)
+  //
+  // Bis zum 01.09.2026 schrieb man die Ueberschrift als EIGENEN Block ueber
+  // die Liste ("Kunden" mit Kategorie kunden, liste:"keine", eine Zeile).
+  // Seitdem traegt der Kategorie-Block seine Ueberschrift selbst — die alten
+  // Bloecke stehen aber noch in der Datenbank und werden dort getrennt
+  // entfernt. Bis dahin duerfen sie nicht ZUSAETZLICH zum neuen Kopf
+  // dastehen: dann stuende "1 · Kunden" ueber "Kunden" ueber der Liste.
+  //
+  // Erkannt wird streng: Kategorie gesetzt, Ueberschrift-Form UND ein Text,
+  // der genau die Kategorie benennt. Steht dort etwas anderes ("Krotzer
+  // anrufen"), ist es eine Aufgabe und bleibt sichtbar — eine Zeile
+  // wegzublenden, die jemand wirklich geschrieben hat, waere der teuerste
+  // aller Fehler.
+  const ORDNUNGSWORT = /^(erstens|zweitens|drittens|viertens|prio|priorit(?:ae|ä)t)\s+/;
+  const wortKern = (s) => String(s || "").toLowerCase()
+    .replace(/[0-9]+/g, " ")                         // "1." / "1 ·" faellt weg
+    .replace(/[^a-zà-öø-ÿ&]+/g, " ")
+    .replace(/\s+/g, " ").trim()
+    .replace(ORDNUNGSWORT, "");
+  // Was als Name DIESER Kategorie durchgeht. Absichtlich grosszuegig bei den
+  // Schreibweisen, die im Haus wirklich vorkommen — und absichtlich eng bei
+  // allem anderen.
+  const KOPFWORTE = {
+    kunden:   ["kunden", "kunde", "kundschaft"],
+    vertrieb: ["vertrieb", "sales", "akquise"],
+    content:  ["content", "content & wissen", "content wissen", "wissen"],
+    intern:   ["intern", "internes", "intern & system", "intern system", "system"],
+  };
+  function istAltUeberschrift(el) {
+    if (!el || el.art === "strich" || !istUeberschrift(el)) return false;
+    const kat = el.inhalt.kategorie;
+    if (!KOPFWORTE[kat]) return false;
+    return KOPFWORTE[kat].includes(wortKern(el.inhalt.zeilen[0] && el.inhalt.zeilen[0].t));
+  }
 
   // Escaping ist hier KEIN Thema der Vorsicht, sondern der Regel: Nutzdaten
   // landen ausschliesslich per textContent im DOM. innerHTML gibt es nur
@@ -399,14 +454,18 @@
                 dass man auch nur ein Wort streichen kann. */""}
           <dt>Nur ein Wort durchstreichen</dt><dd>Markieren → <b>Durchstreichen</b></dd>
           <dt>Antwort bearbeiten</dt><dd>Doppelklick auf die Antwort</dd>
+          ${/* Der Griff links an der Zeile ist die einzige Stelle, an der man
+                eine EINZELNE Aufgabe anfassen kann — ohne diesen Satz findet
+                ihn niemand, weil er erst beim Ueberfahren erscheint. */""}
+          <dt>Aufgabe abgeben</dt><dd>Griff links ziehen → fremde Tafel</dd>
         </dl>
         ${/* Die Rangfolge steht hier, weil sie nirgends sonst als Ganzes zu
-              sehen ist: im Werkzeugkasten waehlt man EINE Kategorie, das
-              Schild am Block zeigt EINE — welche vorgeht, sagt erst diese
-              Zeile. Die vier Punkte sind zugleich der Farbschluessel. */""}
-        <h3 class="wb-hilfe-rang-titel">Nach Priorität ordnen</h3>
-        <p class="wb-hilfe-rang">Kunden gehen vor, dann Vertrieb, dann Internes,
-          zuletzt Content&nbsp;&amp; Wissen.</p>
+              sehen ist: im Werkzeugkasten waehlt man EINE Kategorie, der Kopf
+              am Block zeigt EINE — welche vorgeht, sagt erst diese Zeile. Die
+              vier Punkte sind zugleich der Farbschluessel. */""}
+        <h3 class="wb-hilfe-rang-titel">Die vier Blöcke</h3>
+        <p class="wb-hilfe-rang">Jede Kategorie hat EINEN Block mit eigener
+          Überschrift und einen festen Platz auf der Tafel:</p>
         <ol class="wb-rangliste"></ol>
       </div>
       <div class="wb-toasts"></div>
@@ -514,7 +573,10 @@
       b.setAttribute("aria-label", "Zettelfarbe " + name);
       zettel.appendChild(b);
     });
-    // Die vier Raenge in der Hilfe — Nummer, Farbpunkt, voller Name.
+    // Die vier Raenge in der Hilfe — Nummer, Farbpunkt, voller Name. Die
+    // Liste steht als 2x2-Raster (CSS) und ist damit zugleich die KARTE der
+    // Tafel: 1 oben links, 2 oben rechts, 3 unten links, 4 unten rechts —
+    // genau dort liegen die vier Bloecke auch wirklich.
     const rang = $(".wb-rangliste");
     KATEGORIEN.forEach((k) => {
       const li = document.createElement("li");
@@ -663,6 +725,12 @@
   // Namensschilder: Rolle, Fortschritt (nur ☐-Zeilen), zuletzt aktiv,
   // Anwesenheits-Punkt. Wird nach jedem Poll und jeder Aenderung genaehrt.
   function schilderAuffrischen() {
+    // EINMAL fuer die ganze Wand: wer traegt den Kopf, welche
+    // Alt-Ueberschrift schweigt. Beides wird hier und in kennzeichenPruefen
+    // gebraucht — zweimal zu rechnen waere zweimal derselbe Rundgang.
+    const koepfe = kategorieKoepfe();
+    const stillgelegt = (el) => istAltUeberschrift(el)
+      && koepfe.has(tafelVon(el) + "|" + el.inhalt.kategorie);
     for (const person of team) {
       const k = boardKnoten.get(person.id);
       if (!k) continue;
@@ -671,6 +739,10 @@
         // Gezaehlt wird, was auf der TAFEL liegt — eine Aufgabe, die jemand
         // hier hingeschrieben hat, gehoert zum Fortschritt dieser Person.
         if (tafelVon(el) !== person.id) continue;
+        // Eine ausgeblendete Alt-Ueberschrift zaehlt nirgends mit: was man
+        // nicht sieht, darf weder den Leerhinweis verhindern noch als
+        // ordenbar gelten.
+        if (stillgelegt(el)) continue;
         anzahl++;
         if (el.art !== "strich" && kategorieRang(el) >= 0 && darfBearbeiten(el)) ordenbar++;
         if (el.art === "text" || el.art === "notiz") {
@@ -715,45 +787,61 @@
       k.unter.append(" · " + (da ? "gerade aktiv" : relativeZeit(aktivitaet.get(person.id))));
       k.leer.hidden = anzahl > 0;
     }
-    kennzeichenPruefen();
+    kennzeichenPruefen(koepfe);
   }
 
-  // Ein Kategorie-Schild direkt UNTER seiner eigenen Ueberschrift ist
-  // dasselbe Wort ein zweites Mal — und weil das Schild ueber dem Block
-  // schwebt, waehrend zwischen Ueberschrift und Liste nur 16 Einheiten
-  // liegen (nachRangOrdnen haelt sie bewusst eng zusammen), laege es ihr
-  // obendrein mitten im Text. Es faellt dort also weg, aus demselben Grund,
-  // aus dem die Ueberschrift selbst keines traegt: sie sagt es schon.
+  // ------------------------------------------------- Wer traegt den Kopf?
   //
-  // Entschieden wird das aus dem MODELL und nach jeder Aenderung neu (diese
-  // Funktion haengt an schilderAuffrischen) — zieht jemand die Ueberschrift
-  // weg, ist das Schild beim naechsten Atemzug wieder da. Nur eine Klasse,
-  // kein Neu-Rendern: sonst riefe das Rendern sich selbst.
-  function kennzeichenPruefen() {
-    // Erst alle Ueberschriften einsammeln, statt fuer jeden Block die ganze
-    // Wand abzusuchen.
-    const koepfe = new Map();                // "tafel|kategorie" -> [Element]
+  // Je Tafel und Kategorie gibt es GENAU EINEN Block mit Ueberschrift — den
+  // Kategorie-Block. Sonst stuende "1 · Kunden" zweimal auf derselben Tafel,
+  // und genau das war der Anlass fuer diesen Umbau.
+  //
+  // Normalerweise gibt es ohnehin nur einen: wer eine Aufgabe einordnet,
+  // deren Kategorie schon einen Block hat, landet IN diesem Block
+  // (inKategorieBlockLegen). Mehrere entstehen nur noch aus Bestand, aus
+  // einer Haftnotiz mit Kategorie oder aus einer abgegebenen Aufgabe, die
+  // auf einer fremden Tafel neben dem Block des Gastgebers liegt. Fuer die
+  // gilt die Rangfolge:
+  //   1. die Hand des Tafel-Besitzers vor einer fremden — ein Gast
+  //      uebernimmt nicht die Ueberschrift des Gastgebers,
+  //   2. Textblock vor Haftnotiz — Aufgabenlisten sind Textbloecke,
+  //   3. weiter oben, weiter links,
+  //   4. id, damit die Wahl bei Gleichstand ueberall dieselbe ist.
+  // Alt-Ueberschriften zaehlen nie mit: sie werden ausgeblendet.
+  function kategorieKoepfe() {
+    const beste = new Map();                 // "tafel|kategorie" -> Element
     for (const el of elemente.values()) {
-      if (el.art === "strich" || kategorieRang(el) < 0 || !istUeberschrift(el)) continue;
+      if (el.art === "strich" || kategorieRang(el) < 0) continue;
+      if (istAltUeberschrift(el)) continue;
       const schluessel = tafelVon(el) + "|" + el.inhalt.kategorie;
-      if (!koepfe.has(schluessel)) koepfe.set(schluessel, []);
-      koepfe.get(schluessel).push(el);
+      const bisher = beste.get(schluessel);
+      if (!bisher || kopfBesser(el, bisher)) beste.set(schluessel, el);
     }
+    return beste;
+  }
+  function kopfBesser(a, b) {
+    const eigen = (e) => (e.besitzer === tafelVon(e) ? 0 : 1);
+    const form = (e) => (e.art === "text" ? 0 : 1);
+    return (eigen(a) - eigen(b) || form(a) - form(b) || a.y - b.y || a.x - b.x
+            || (a.id < b.id ? -1 : 1)) < 0;
+  }
+
+  // Nach jeder Aenderung neu entscheiden, WELCHER Block den Kopf traegt und
+  // welche Alt-Ueberschrift schweigt. Nur Klassen, kein Neu-Rendern: sonst
+  // riefe das Rendern sich selbst. Das CSS zeigt am Kategorie-Block den Kopf
+  // und an allen anderen das kleine Schild.
+  function kennzeichenPruefen(vorgerechnet) {
+    const koepfe = vorgerechnet || kategorieKoepfe();
+    // Eine Alt-Ueberschrift verschwindet nur, wenn ihre Liste noch da ist —
+    // sonst naehme man dem Nutzer den einzigen Block, der von seiner Gruppe
+    // uebrig ist. Sie hat dann keinen Ersatz und bleibt sichtbar.
     for (const [id, knoten] of elementKnoten) {
       const el = elemente.get(id);
       if (!el) continue;
-      let still = false;
-      if (kategorieRang(el) >= 0 && !istUeberschrift(el)) {
-        for (const kopf of koepfe.get(tafelVon(el) + "|" + el.inhalt.kategorie) || []) {
-          // "Direkt darunter" heisst: gleiche linke Kante und hoechstens der
-          // Ueberschrift-Abstand plus etwas Luft dazwischen.
-          const luecke = el.y - (kopf.y + (kopf.hoehe || 0));
-          if (Math.abs(kopf.x - el.x) <= 24 && luecke >= -6 && luecke <= ORD_LUFT_KOPF + 24) {
-            still = true; break;
-          }
-        }
-      }
-      knoten.classList.toggle("wb-kat-still", still);
+      const schluessel = tafelVon(el) + "|" + (el.inhalt.kategorie || "");
+      const alt = istAltUeberschrift(el) && koepfe.has(schluessel);
+      knoten.classList.toggle("wb-altkopf", alt);
+      knoten.classList.toggle("wb-kopfblock", !alt && koepfe.get(schluessel) === el);
     }
   }
 
@@ -1600,14 +1688,64 @@
     }
     zeilenEl.dataset.liste = el.inhalt.liste;
 
+    // ---- Die Ueberschrift IM Block (seit 01.09.2026).
+    //
+    // Frueher waren Ueberschrift und Liste zwei Elemente: man schrieb
+    // "Kunden" in einen Block und die Aufgaben in den naechsten, und beim
+    // Verschieben blieb regelmaessig eines von beiden liegen. Jetzt ist ein
+    // Block mit Kategorie EINE Einheit — der Kopf wird GERENDERT, nicht
+    // getippt. Er steht nicht im Datenmodell, sondern folgt aus
+    // inhalt.kategorie: wer die Ueberschrift aendern will, aendert die
+    // Kategorie. Darum ist er auch nicht editierbar (kein contenteditable)
+    // und nicht markierbar — sonst tippte man in etwas hinein, das beim
+    // naechsten Rendern wieder dasteht wie zuvor.
+    //
+    // Verschieben, Skalieren, Auswaehlen und Loeschen fassen ihn mit: er ist
+    // ein Kind von .wb-el wie die Zeilen auch.
+    const kat = kategorieVon(el.inhalt.kategorie);
+    let kopf = $(".wb-blockkopf", knoten);
+    if (!kat) {
+      if (kopf) { kopf.remove(); kopf = null; }
+    } else {
+      if (!kopf) {
+        kopf = document.createElement("div");
+        kopf.className = "wb-blockkopf";
+        // Kein Fokus, keine Textauswahl, kein Caret: der Kopf ist Anzeige.
+        kopf.setAttribute("contenteditable", "false");
+        const nr = document.createElement("span");
+        nr.className = "wb-kopf-rang";
+        const punkt = document.createElement("span");
+        punkt.className = "wb-kopf-punkt";
+        punkt.textContent = " · ";
+        const wort = document.createElement("span");
+        wort.className = "wb-kopf-wort";
+        kopf.append(nr, punkt, wort);
+        knoten.insertBefore(kopf, zeilenEl);
+      }
+      const rang = KATEGORIEN.indexOf(kat) + 1;
+      $(".wb-kopf-rang", kopf).textContent = String(rang);
+      $(".wb-kopf-wort", kopf).textContent = kat.lang;
+      kopf.dataset.kategorie = kat.wert;
+      kopf.style.setProperty("--kf", tinte(kat.farbe));
+      kopf.style.setProperty("--kopf", kat.kopf);
+      kopf.title = kategorieTitel(kat) + " — Rang " + rang + " von 4. "
+        + "Die Überschrift kommt aus der Einordnung; ändern über den Werkzeugkasten.";
+    }
+
     // Oben links am Block: erst das Kategorie-Schild, dahinter die
     // Herkunftsfahne "von X". Beides kann gleichzeitig auftreten, und beides
     // haengt an derselben Ecke — also stehen sie in EINER Reihe
     // (.wb-marken), sonst laegen sie uebereinander. Die Reihe traegt die
     // Gegen-Skalierung, die vorher an der Fahne hing: so bleiben beide bei
     // jedem Zoom gleich gross und gleich weit voneinander entfernt.
-    const kat = kategorieVon(el.inhalt.kategorie);
-    const zeigtSchild = !!kat && !istUeberschrift(el);
+    //
+    // Das Schild bleibt fuer die Bloecke, die NICHT der Kategorie-Block
+    // sind (eine Haftnotiz mit Kategorie, eine hingeschriebene Aufgabe neben
+    // dem Block des Gastgebers): sie gehoeren zur Gruppe, tragen aber nicht
+    // deren Ueberschrift. Welcher Block der Kopf ist, entscheidet
+    // kennzeichenPruefen ueber die Klasse .wb-kopfblock — das CSS zeigt
+    // dann genau eines von beiden.
+    const zeigtSchild = !!kat;
     const fremd = istFremdeHand(el);
     let marken = $(".wb-marken", knoten);
     if (!zeigtSchild && !fremd) {
@@ -1942,6 +2080,19 @@
   function zeileBauen(eigen) {
     const z = document.createElement("div");
     z.className = "wb-zeile";
+    // Der Griff zum ABGEBEN — ganz aussen links, vor dem Kaestchen, in
+    // derselben Randspalte. Er steht als ERSTES Kind, damit die Reihenfolge
+    // im DOM der auf dem Schirm entspricht (Tastatur und Vorlesen lesen ihn
+    // nicht: er ist ein Zeigerwerkzeug und traegt darum aria-hidden).
+    if (eigen) {
+      const griff = document.createElement("span");
+      griff.className = "wb-zeile-griff";
+      griff.setAttribute("aria-hidden", "true");
+      griff.title = "Ziehen: die Aufgabe an eine andere Tafel abgeben";
+      griff.innerHTML = ICON.griff;
+      z.appendChild(griff);
+      zeileGriffAnbinden(griff);
+    }
     const ab = document.createElement("button");
     ab.type = "button"; ab.className = "wb-abhaken"; ab.tabIndex = -1;
     ab.setAttribute("aria-label", "Abhaken");
@@ -2308,8 +2459,9 @@
       // duerfen der Zeile nicht den Fokus nehmen (der Doppelklick auf die
       // Antwort soll den Dialog oeffnen, nicht den Block umsortieren).
       if (ev.target.closest(".wb-abhaken,.wb-zeile-tools,.wb-zeile-chip,.wb-antwort")) { ev.preventDefault(); return; }
-      // Diese Kinder regeln sich selbst — Kasten, Griff, Anfasser, Link.
-      if (ev.target.closest(".wb-kasten,.wb-griff,.wb-groesse-griff,.wb-zeile-link")) return;
+      // Diese Kinder regeln sich selbst — Kasten, Griff, Zeilengriff,
+      // Anfasser, Link.
+      if (ev.target.closest(".wb-kasten,.wb-griff,.wb-zeile-griff,.wb-groesse-griff,.wb-zeile-link")) return;
       if (ev.button !== 0 && ev.pointerType === "mouse") return;
       // Mit Stift/Notiz/Schwamm in der Hand gehoert der Klick dem Werkzeug
       // (neuer Block ueber dem alten, Radieren) — nicht dem Verschieben.
@@ -2371,6 +2523,12 @@
     function klickImBlock(el, knoten, ev) {
       if (istMobil()) { if (!mobilOffen) mobilOeffnen(el); return; }
       if (ansicht.s < ZOOM_TEXT_MIN) { aufElementZoomen(el); return; }
+      // Klick auf die Ueberschrift: nur auswaehlen. Sie ist nicht
+      // editierbar, und einen Caret in die ERSTE AUFGABE zu setzen, weil
+      // jemand den Titel angetippt hat, waere die falsche Antwort auf die
+      // falsche Frage. Ausgewaehlt ist der Block an dieser Stelle schon
+      // (siehe pointerdown) — es ist also nichts zu tun.
+      if (ev.target.closest && ev.target.closest(".wb-blockkopf")) return;
       let span = ev.target.closest && ev.target.closest(".wb-zeile-text");
       if (!span) {
         // Klick auf die freie Zettelflaeche: die naechstliegende Zeile
@@ -2855,22 +3013,43 @@
         if (ziel) caretSetzen(ziel, caretMerk.pos);
       }
       if (katWechsel) {
-        // Einordnen und Einsortieren sind EIN Vorgang — sonst stuende der
-        // Block nach einem Strg+Z an der neuen Stelle mit der alten
-        // Einordnung, und man muesste raten, wie oft man noch druecken muss.
+        // Einordnen ist EIN Vorgang — Ueberschrift, Lage und (falls
+        // zusammengefuehrt) der Weg in den Zielblock. Sonst stuende der
+        // Block nach einem Strg+Z halb hier und halb dort, und man muesste
+        // raten, wie oft man noch druecken muss.
+        const neuKat = el.inhalt.kategorie || "";
+        const k = kategorieVon(neuKat);
+        // Hat diese Kategorie auf der Tafel schon einen Block, wandert der
+        // Inhalt DORTHIN — einen zweiten "1 · Kunden" soll es nie geben.
+        const ziel = el.art === "text" ? zusammenfuehrZiel(tafelVon(el), neuKat, el) : null;
         sammelnBeginnen();
-        let bewegt = new Set();
+        let vereint = null;
         try {
-          undoMerken({ typ: "aendern", id: el.id,
-                       vorher: { inhalt: katWechsel.vorher }, nachher: { inhalt: katWechsel.nachher } });
-          bewegt = nachRangOrdnen(tafelVon(el), { sammelt: true, still: true });
+          // Wird zusammengefuehrt, verschwindet dieser Block ganz — dann
+          // gehoert der alte Stand in die Loeschen-Kopie, nicht in einen
+          // eigenen aendern-Eintrag (der liefe beim Strg+Z gegen den
+          // Grabstein). Bleibt der Block bestehen, ist der Eintrag noetig:
+          // sonst nimmt Strg+Z die Lage zurueck, aber nicht die Einordnung.
+          if (!ziel) {
+            undoMerken({ typ: "aendern", id: el.id,
+                         vorher: { inhalt: katWechsel.vorher }, nachher: { inhalt: katWechsel.nachher } });
+          }
+          if (ziel) {
+            if (imBlatt) mobilVerwerfen();
+            vereint = inBlockUebernehmen(el, ziel, katWechsel.vorher);
+          } else if (!neuKat || !blockAufPlatz(el, { sammelt: true })) {
+            // Blieb der Block liegen (keine Einordnung mehr, oder er steht
+            // schon auf seinem Platz), muss die Einordnung selbst noch
+            // gespeichert werden — blockAufPlatz schickt nur, wenn er rueckt.
+            blockGeaendert(el, true);
+          }
         } finally { sammelnAbschliessen(); }
-        // Wer bewegt wurde, ist ueber nachRangOrdnen schon abgeschickt (ein
-        // aendern traegt Lage UND Einordnung). Blieb der Block liegen, muss
-        // die Einordnung noch von hier aus gespeichert werden.
-        if (!bewegt.has(el.id)) blockGeaendert(el, true);
-        else schilderAuffrischen();
-        const k = kategorieVon(el.inhalt.kategorie);
+        if (vereint) {
+          toast("Zu " + kategorieTitel(k) + " dazugestellt.");
+          zumBlockFuehren(ziel, vereint);
+          return;
+        }
+        schilderAuffrischen();
         toast(k ? k.toast : "Einordnung entfernt.");
         if (imBlatt) mobilAnsichtAuffrischen();
         return;
@@ -3119,126 +3298,582 @@
   }
 
   // =================================================================
+  // Aufgabe abgeben: EINE Zeile auf eine andere Tafel ziehen
+  // =================================================================
+  //
+  // "Das muss Jannik machen" hiess bisher: bei Jannik neu hinschreiben und
+  // bei sich wegwischen — zweimal dieselbe Arbeit, und dazwischen vergisst
+  // man die Haelfte. Jetzt greift man die Zeile und legt sie drueben ab.
+  //
+  // GEGRIFFEN wird an einem eigenen Griff links neben der Zeile (sechs
+  // Punkte, dasselbe Bild wie am Block-Griff). Warum dort und nirgends
+  // sonst:
+  //   · Das Kaestchen ist zum ABHAKEN da. Abhaken ist die haeufigere
+  //     Handlung — sie darf nie zum Ziehen werden.
+  //   · Der Zeilentext gehoert dem Caret und der Markierung; wer dort zoege,
+  //     koennte kein Wort mehr auswaehlen und die Markier-Blase nie oeffnen.
+  //   · Der BLOCK laesst sich ueberall anfassen. Ein zweites Ziehen auf
+  //     denselben Flaechen waere ein Ratespiel — zieht man jetzt die Zeile
+  //     oder den ganzen Block?
+  // Der Griff faengt sein pointerdown selbst ab, damit weder Block-Zug noch
+  // Textauswahl anspringen, und er erscheint erst beim Ueberfahren der
+  // Zeile: eine Liste voller Griffe waere eine Liste voller Knoepfe.
+  //
+  // Beim Loslassen VERSCHWINDET die Zeile bei mir (so entschieden am
+  // 01.09.2026 — abgeben heisst abgeben) und steht drueben im Block
+  // derselben Kategorie. Das neue Element traegt besitzer=ich und
+  // tafel=Zielperson; damit greift die vorhandene Fahne "von Lukas" von
+  // selbst. EIN Strg+Z macht beide Haelften zusammen rueckgaengig.
+  //
+  // Am Telefon gibt es den Griff nicht: dort oeffnet ein Tipp das
+  // Bearbeitungsblatt, und ein Zug quer ueber eine stark herausgezoomte
+  // Wand waere mit dem Daumen nicht zu treffen.
+
+  let abgabe = null;            // laufender Zug: {el, idx, ziel, …}
+  let abgabeGeist = null;       // die Zeile, die am Zeiger haengt
+  let abgabeRaf = 0;            // Randlauf (die Wand faehrt mit)
+
+  function zeileGriffAnbinden(griff) {
+    griff.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0 && ev.pointerType === "mouse") return;
+      if (werkzeug !== "auswahl" || leertaste || abgabe || istMobil()) return;
+      // Den Block erst JETZT suchen: dieselbe Zeile wird auch im mobilen
+      // Blatt gebaut, und dort steckt sie in keinem .wb-el.
+      const knoten = griff.closest(".wb-el");
+      const zeile = griff.closest(".wb-zeile");
+      if (!knoten || !zeile) return;
+      // Der Zug gehoert der Zeile, nicht dem Block darunter.
+      ev.preventDefault(); ev.stopPropagation();
+      const el = elemente.get(knoten.dataset.id);
+      if (!el || !darfBearbeiten(el)) return;
+      const idx = zeilenIndex(zeile);
+      const startX = ev.clientX, startY = ev.clientY, zeiger = ev.pointerId;
+      let los = false;
+      // Erst ab der Zieh-Schwelle wird es ein Zug: ein Klick auf den Griff
+      // soll nichts tun, statt einen Geist aufblitzen zu lassen.
+      const pruefen = (m) => {
+        if (m.pointerId !== zeiger || los) return;
+        if (Math.abs(m.clientX - startX) <= ZIEH_SCHWELLE
+            && Math.abs(m.clientY - startY) <= ZIEH_SCHWELLE) return;
+        los = true; abmelden();
+        abgabeStarten(el, idx, zeile, m);
+      };
+      const ende = (m) => { if (m.pointerId === zeiger) abmelden(); };
+      const abmelden = () => {
+        window.removeEventListener("pointermove", pruefen, true);
+        window.removeEventListener("pointerup", ende, true);
+        window.removeEventListener("pointercancel", ende, true);
+      };
+      window.addEventListener("pointermove", pruefen, true);
+      window.addEventListener("pointerup", ende, true);
+      window.addEventListener("pointercancel", ende, true);
+    });
+  }
+
+  function abgabeStarten(el, idx, zeileKnoten, ev) {
+    if (abgabe) return;
+    blockSerialisieren(el);                  // der getippte Stand zaehlt
+    const daten = el.inhalt.zeilen[idx];
+    if (!daten) return;
+    inArbeit.add(el.id);
+    abgabe = { el, idx, zeileKnoten, zeiger: ev.pointerId,
+               kat: el.inhalt.kategorie || "", von: tafelVon(el),
+               ziel: null, zielBlock: null, x: ev.clientX, y: ev.clientY };
+    zeileKnoten.classList.add("wb-fliegt");
+    raum.classList.add("wb-abgabe-laeuft");
+    if (!abgabeGeist) {
+      abgabeGeist = document.createElement("div");
+      abgabeGeist.className = "wb-abgabe-geist";
+      abgabeGeist.innerHTML = '<div class="wb-abgabe-zeile"></div>'
+        + '<div class="wb-abgabe-ziel"></div>';
+      raum.appendChild(abgabeGeist);
+    }
+    $(".wb-abgabe-zeile", abgabeGeist).textContent =
+      String(daten.t || "").trim() || "leere Zeile";
+    abgabeGeist.hidden = false;
+    abgabeNachziehen();
+    window.addEventListener("pointermove", abgabeZeiger, true);
+    window.addEventListener("pointerup", abgabeLos, true);
+    window.addEventListener("pointercancel", abgabeLos, true);
+    window.addEventListener("keydown", abgabeTaste, true);
+    // Verliert das Fenster den Fokus (Alt+Tab mitten im Zug), kommt kein
+    // pointerup mehr — der Geist bliebe stehen und der Randlauf liefe
+    // weiter. Also abbrechen: nichts passiert, die Zeile bleibt, wo sie ist.
+    window.addEventListener("blur", abgabeVerloren);
+    abgabeRaf = requestAnimationFrame(abgabeRandLauf);
+  }
+  function abgabeVerloren() { if (abgabe) abgabeBeenden(null); }
+
+  function abgabeZeiger(ev) {
+    if (!abgabe || ev.pointerId !== abgabe.zeiger) return;
+    ev.preventDefault();
+    abgabe.x = ev.clientX; abgabe.y = ev.clientY;
+    abgabeNachziehen();
+  }
+
+  // Geist an den Zeiger, Ziel bestimmen, Hervorhebungen setzen.
+  function abgabeNachziehen() {
+    const r = raum.getBoundingClientRect();
+    abgabeGeist.style.left = (abgabe.x - r.left) + "px";
+    abgabeGeist.style.top = (abgabe.y - r.top) + "px";
+    // Der Geist haengt normalerweise RECHTS am Zeiger. Genau am rechten
+    // Rand zieht man aber, um zur Nachbartafel zu kommen (der Randlauf) —
+    // dort waere er abgeschnitten und der Hinweis, der das Ziel nennt,
+    // unlesbar. Also klappt er auf die andere Seite, sobald er nicht mehr
+    // passt. Dasselbe unten fuer die Werkzeugleiste.
+    const breiteGeist = abgabeGeist.offsetWidth || 220;
+    const hoeheGeist = abgabeGeist.offsetHeight || 54;
+    abgabeGeist.classList.toggle("wb-links",
+      abgabe.x + 16 + breiteGeist > r.right - 8);
+    abgabeGeist.classList.toggle("wb-hoch",
+      abgabe.y + hoeheGeist / 2 > r.bottom - 8);
+    const tafelId = boardAnPunkt(ereignisZuWelt({ clientX: abgabe.x, clientY: abgabe.y }));
+    // Die eigene Tafel ist kein Ziel: dort liegt die Zeile schon.
+    const gueltig = !!tafelId && tafelId !== abgabe.von;
+    const zielBlock = gueltig ? abgabeZielBlock(tafelId, abgabe.kat) : null;
+    for (const p of team) {
+      const k = boardKnoten.get(p.id);
+      if (k) k.wrap.classList.toggle("wb-zieltafel", gueltig && p.id === tafelId);
+    }
+    if (abgabe.zielBlock !== zielBlock) {
+      const alt = abgabe.zielBlock && elementKnoten.get(abgabe.zielBlock.id);
+      if (alt) alt.classList.remove("wb-zielblock");
+      const neu = zielBlock && elementKnoten.get(zielBlock.id);
+      if (neu) neu.classList.add("wb-zielblock");
+      abgabe.zielBlock = zielBlock;
+    }
+    abgabe.ziel = gueltig ? tafelId : null;
+    const kat = kategorieVon(abgabe.kat);
+    $(".wb-abgabe-ziel", abgabeGeist).textContent = gueltig
+      ? "zu " + vorname(tafelId) + (kat ? " · " + kategorieTitel(kat) : "")
+      : "auf eine andere Tafel ziehen";
+    abgabeGeist.classList.toggle("wb-gueltig", gueltig);
+  }
+
+  // Am Bildrand faehrt die Wand mit. Ohne das ginge die Abgabe nur in der
+  // "Alle"-Ansicht — auf der eigenen Tafel haengt die Nachbartafel weit
+  // ausserhalb des Bildes, und man koennte nie hinziehen.
+  function abgabeRandLauf() {
+    abgabeRaf = 0;
+    if (!abgabe) return;
+    const r = raum.getBoundingClientRect();
+    const RAND = 70, TEMPO = 15;
+    let dx = 0, dy = 0;
+    if (abgabe.x < r.left + RAND) dx = ((r.left + RAND) - abgabe.x) / RAND * TEMPO;
+    else if (abgabe.x > r.right - RAND) dx = -(abgabe.x - (r.right - RAND)) / RAND * TEMPO;
+    if (abgabe.y < r.top + RAND) dy = ((r.top + RAND) - abgabe.y) / RAND * TEMPO;
+    else if (abgabe.y > r.bottom - RAND) dy = -(abgabe.y - (r.bottom - RAND)) / RAND * TEMPO;
+    if (dx || dy) {
+      ansicht.tx += klemm(dx, -TEMPO, TEMPO);
+      ansicht.ty += klemm(dy, -TEMPO, TEMPO);
+      ansichtPassend = false;
+      panKlemmen(); anwenden();
+      abgabeNachziehen();
+    }
+    abgabeRaf = requestAnimationFrame(abgabeRandLauf);
+  }
+
+  function abgabeLos(ev) {
+    if (!abgabe || ev.pointerId !== abgabe.zeiger) return;
+    abgabeBeenden(ev.type === "pointercancel" ? null : abgabe.ziel);
+  }
+  function abgabeTaste(ev) {
+    if (!abgabe || ev.key !== "Escape") return;
+    ev.preventDefault(); ev.stopPropagation();
+    abgabeBeenden(null);
+  }
+
+  function abgabeBeenden(zielTafel) {
+    const a = abgabe;
+    abgabe = null;
+    window.removeEventListener("pointermove", abgabeZeiger, true);
+    window.removeEventListener("pointerup", abgabeLos, true);
+    window.removeEventListener("pointercancel", abgabeLos, true);
+    window.removeEventListener("keydown", abgabeTaste, true);
+    window.removeEventListener("blur", abgabeVerloren);
+    if (abgabeRaf) { cancelAnimationFrame(abgabeRaf); abgabeRaf = 0; }
+    raum.classList.remove("wb-abgabe-laeuft");
+    for (const p of team) {
+      const k = boardKnoten.get(p.id);
+      if (k) k.wrap.classList.remove("wb-zieltafel");
+    }
+    if (a.zielBlock) {
+      const k = elementKnoten.get(a.zielBlock.id);
+      if (k) k.classList.remove("wb-zielblock");
+    }
+    if (a.zeileKnoten) a.zeileKnoten.classList.remove("wb-fliegt");
+    if (!istInBearbeitung(a.el.id)) inArbeit.delete(a.el.id);
+    if (zielTafel) { geistWeg(false); abgabeAusfuehren(a, zielTafel); }
+    else geistWeg(true, a);
+  }
+
+  // Kein gueltiges Ziel: der Geist springt zur Zeile zurueck — sichtbar,
+  // damit man nicht raet, ob etwas passiert ist. Gelandet: er verblasst an
+  // Ort und Stelle.
+  function geistWeg(zurueck, a) {
+    if (!abgabeGeist) return;
+    const fertig = () => { if (abgabeGeist) { abgabeGeist.hidden = true; abgabeGeist.style.opacity = ""; } };
+    if (sanft || !gsap || !zurueck || !a || !a.zeileKnoten || !a.zeileKnoten.isConnected) {
+      fertig(); return;
+    }
+    const r = raum.getBoundingClientRect();
+    const z = a.zeileKnoten.getBoundingClientRect();
+    gsap.to(abgabeGeist, {
+      left: (z.left + 14 - r.left), top: (z.top + z.height / 2 - r.top),
+      opacity: 0, duration: 0.32, ease: "power2.in", onComplete: fertig,
+    });
+  }
+
+  // Wohin drueben? Derselbe Kategorie-Block wie beim Einordnen — aber nur,
+  // wenn wir ihn anfassen duerfen. Gehoert er der Zielperson selbst, weist
+  // der Server jedes aendern mit 404 ab; dann legen wir DANEBEN einen
+  // eigenen Block an und finden ihn beim naechsten Mal wieder.
+  const abgabeZielBlock = (tafelId, kategorie) => zusammenfuehrZiel(tafelId, kategorie, null);
+
+  function abgabeAusfuehren(a, zielTafel) {
+    const el = a.el;
+    if (!elemente.has(el.id) || !el.inhalt.zeilen[a.idx]) return;
+    const zeileKopie = tiefeKopie(el.inhalt.zeilen[a.idx]);
+    const quelleKopie = Object.assign({}, el, { inhalt: tiefeKopie(el.inhalt) });
+    const ziel = abgabeZielBlock(zielTafel, a.kat);
+    let gelandet = null;
+    sammelnBeginnen();
+    try {
+      // ---- 1. Bei mir weg. War es die letzte Zeile, geht der ganze Block.
+      if (el.inhalt.zeilen.length <= 1) {
+        undoMerken({ typ: "loeschen", kopien: [quelleKopie] });
+        elementLoeschen([el.id], { ohneUndo: true });
+      } else {
+        const vorher = { inhalt: tiefeKopie(el.inhalt) };
+        el.inhalt.zeilen.splice(a.idx, 1);
+        undoMerken({ typ: "aendern", id: el.id,
+                     vorher, nachher: { inhalt: tiefeKopie(el.inhalt) } });
+        blockRendern(el);
+        blockGeaendert(el, true);
+      }
+      // ---- 2. Drueben hin.
+      if (ziel) {
+        const vorher = { inhalt: tiefeKopie(ziel.inhalt) };
+        const zielLeer = ziel.inhalt.zeilen.every((z) => !String(z.t || "").trim());
+        ziel.inhalt.zeilen = (zielLeer ? [] : ziel.inhalt.zeilen)
+          .concat([zeileKopie]).slice(0, DATEN.grenzen.zeilen);
+        undoMerken({ typ: "aendern", id: ziel.id,
+                     vorher, nachher: { inhalt: tiefeKopie(ziel.inhalt) } });
+        blockRendern(ziel);
+        blockGeaendert(ziel, true);
+        gelandet = ziel;
+      } else {
+        gelandet = abgabeBlockAnlegen(a, zielTafel, zeileKopie);
+      }
+    } finally { sammelnAbschliessen(); }
+
+    schilderAuffrischen();
+    if (gelandet) {
+      const k = elementKnoten.get(gelandet.id);
+      if (k) {
+        k.classList.remove("wb-zugewachsen");
+        void k.offsetWidth;
+        k.classList.add("wb-zugewachsen");
+        setTimeout(() => k.classList.remove("wb-zugewachsen"), 1300);
+      }
+    }
+    const kat = kategorieVon(a.kat);
+    toast("An " + vorname(zielTafel) + " abgegeben"
+          + (kat ? " — " + kategorieTitel(kat) : "") + ".",
+          { aktion: () => undoAusfuehren(), aktionText: "Rückgängig" });
+  }
+
+  // Es gibt drueben noch keinen Block, den wir beschreiben duerfen: einen
+  // eigenen anlegen. Mit Kategorie an ihrem festen Platz (und unter dem
+  // Block der Zielperson, falls dort schon ihrer steht — ihre Ueberschrift
+  // bleibt ihre); ohne Kategorie genau dort, wo losgelassen wurde.
+  function abgabeBlockAnlegen(a, tafelId, zeile) {
+    const quelle = a.el;
+    const rang = KATEGORIEN.findIndex((k) => k.wert === a.kat);
+    const breiteNeu = Math.round(klemm(quelle.breite || 560, TEXT_MIN_B, 900));
+    let x, y;
+    if (rang >= 0) {
+      const platz = platzVon(rang);
+      x = platz.x; y = platz.y;
+      for (const el of elemente.values()) {
+        if (el.art === "strich" || tafelVon(el) !== tafelId) continue;
+        if (el.inhalt.kategorie !== a.kat || istAltUeberschrift(el)) continue;
+        y = Math.max(y, el.y + (el.hoehe || 60) + ORD_LUFT);
+      }
+    } else {
+      const w = ereignisZuWelt({ clientX: a.x, clientY: a.y });
+      x = w.x - (versatz.get(tafelId) || 0) - 40;
+      y = w.y - (versatzY.get(tafelId) || 0) - 24;
+    }
+    const el = {
+      id: crypto.randomUUID(),
+      besitzer: ich.id,                       // ich habe es geschrieben
+      tafel: tafelId,                         // dort haengt es -> Fahne "von X"
+      art: "text",
+      x: Math.round(klemm(x, 0, BOARD_B - breiteNeu)),
+      y: Math.round(klemm(y, 0, BOARD_H - 120)),
+      breite: breiteNeu, hoehe: 60, version: 1,
+      inhalt: {
+        zeilen: [zeile],
+        // Eine abgegebene Aufgabe ist zum Abhaken da — darum die Checkliste,
+        // wenn die Quelle keine eigene Form vorgibt.
+        liste: quelle.inhalt.liste === "keine" ? "check" : quelle.inhalt.liste,
+        farbe: quelle.inhalt.farbe, groesse: quelle.inhalt.groesse,
+      },
+    };
+    if (a.kat) el.inhalt.kategorie = a.kat;
+    elemente.set(el.id, el);
+    blockRendern(el);
+    const k = elementKnoten.get(el.id);
+    if (k) el.hoehe = Math.round(k.offsetHeight);
+    anlegenEinreihen(el);
+    undoMerken({ typ: "anlegen", id: el.id });
+    return el;
+  }
+
+  // =================================================================
+  // Zusammenfuehren: eine Aufgabe landet IM Block ihrer Kategorie
+  // =================================================================
+  //
+  // Wunsch vom 01.09.2026, im Originalton: "Man soll nicht extra immer die
+  // Überschrift drüberschreiben müssen und zwei verschiedene Blöcke haben."
+  // Also: Wer eine Aufgabe einordnet, deren Kategorie auf dieser Tafel schon
+  // einen Block hat, schreibt sie IN diesen Block. Der frisch angelegte
+  // Block verschwindet dabei — er war nur das Eingabefeld.
+
+  const tiefeKopie = (x) => JSON.parse(JSON.stringify(x));
+
+  // Der Block, in den zusammengefuehrt wird: der Kategorie-Block dieser
+  // Tafel, sofern er ein Textblock ist und man ihn anfassen darf.
+  //
+  // Eine HAFTNOTIZ ist nie Ziel: sie ist ein Gegenstand, den man hinklebt —
+  // sie in einer Liste aufgehen zu lassen waere eine Ueberraschung, keine
+  // Ordnung. Und ein Block, den der Server uns mit 404 abwiese (fremde Hand
+  // auf fremder Tafel), kommt gar nicht erst in Frage; dort entsteht
+  // stattdessen ein eigener Block daneben (siehe Abgeben).
+  function zusammenfuehrZiel(tafelId, kategorie, ausser) {
+    if (!kategorie) return null;
+    let beste = null;
+    for (const el of elemente.values()) {
+      if (el === ausser || el.art !== "text") continue;
+      if (tafelVon(el) !== tafelId || el.inhalt.kategorie !== kategorie) continue;
+      if (istAltUeberschrift(el) || !darfBearbeiten(el)) continue;
+      if (!beste || kopfBesser(el, beste)) beste = el;
+    }
+    return beste;
+  }
+
+  // Die Zeilen von "quelle" an "ziel" anhaengen und die leere Huelle
+  // entfernen. Laeuft IMMER innerhalb eines Sammel-Schritts: Anhaengen und
+  // Wegnehmen sind EIN Vorgang, also auch EIN Strg+Z.
+  //
+  // "standVorher" ist der Inhalt, mit dem die Quelle im Undo-Stapel liegen
+  // soll. Beim Einordnen ist das der Stand VOR der neuen Kategorie: der
+  // Block verschwindet ja ganz, und Strg+Z soll ihn genau so zurueckbringen,
+  // wie er vorher aussah. Ein zusaetzlicher "aendern"-Eintrag auf denselben
+  // (dann geloeschten) Block waere die falsche Loesung — er liefe beim
+  // Zurueckspielen gegen den Grabstein.
+  //
+  // Liefert {ab, anzahl} — wo die neuen Zeilen im Ziel stehen; danach setzt
+  // sich der Cursor dorthin, damit man weitertippen kann, wo die Aufgabe
+  // gelandet ist.
+  function inBlockUebernehmen(quelle, ziel, standVorher) {
+    const quelleKopie = Object.assign({}, quelle,
+      { inhalt: tiefeKopie(standVorher || quelle.inhalt) });
+    // Leere Zeilen fallen weg — sie waeren im Zielblock eine Luecke ohne
+    // Aufgabe. Ist gar nichts uebrig (man hat den Block angelegt und SOFORT
+    // eingeordnet), kommt genau EINE leere Zeile mit: dort steht dann der
+    // Cursor, und man tippt einfach weiter.
+    let zeilen = quelle.inhalt.zeilen.filter((z) => String(z.t || "").trim());
+    if (!zeilen.length) zeilen = [{ t: "", erledigt: false, gestrichen: false }];
+    // Ein Ziel, in dem noch gar nichts steht, wird ERSETZT statt beschrieben:
+    // sonst begaenne die Liste mit einer leeren Zeile.
+    const zielLeer = ziel.inhalt.zeilen.every((z) => !String(z.t || "").trim());
+    const vorher = { inhalt: tiefeKopie(ziel.inhalt) };
+    const bestand = zielLeer ? [] : ziel.inhalt.zeilen;
+    const ab = bestand.length;
+    ziel.inhalt.zeilen = bestand.concat(tiefeKopie(zeilen)).slice(0, DATEN.grenzen.zeilen);
+    const anzahl = ziel.inhalt.zeilen.length - ab;
+    undoMerken({ typ: "aendern", id: ziel.id,
+                 vorher, nachher: { inhalt: tiefeKopie(ziel.inhalt) } });
+    blockRendern(ziel);
+    blockGeaendert(ziel, true);
+    // Erst danach die Huelle wegnehmen: so steht im Undo-Stapel "Ziel
+    // geaendert, dann Quelle geloescht" — rueckwaerts abgespielt kommt also
+    // zuerst die Quelle zurueck und danach das Ziel auf seinen alten Stand.
+    undoMerken({ typ: "loeschen", kopien: [quelleKopie] });
+    elementLoeschen([quelle.id], { ohneUndo: true });
+    return { ab, anzahl };
+  }
+
+  // Nach dem Zusammenfuehren: den Zielblock zeigen, kurz aufleuchten lassen
+  // und den Cursor ans Ende der frisch angehaengten Zeile setzen. Liegt der
+  // Block ausserhalb des Bildes, wird erst hingefahren — sonst verschwaende
+  // die Aufgabe scheinbar im Nichts.
+  function zumBlockFuehren(ziel, stelle) {
+    auswahl.clear(); auswahl.add(ziel.id); auswahlAnzeigen();
+    const knoten = elementKnoten.get(ziel.id);
+    if (knoten) {
+      knoten.classList.remove("wb-zugewachsen");
+      void knoten.offsetWidth;                 // Animation neu anstossen
+      knoten.classList.add("wb-zugewachsen");
+      setTimeout(() => knoten.classList.remove("wb-zugewachsen"), 1300);
+    }
+    const setzen = () => {
+      if (istMobil() || ansicht.s < ZOOM_TEXT_MIN || !knoten || !stelle) return;
+      const spans = $$(".wb-zeile-text", knoten);
+      const span = spans[klemm(stelle.ab + stelle.anzahl - 1, 0, spans.length - 1)];
+      if (span) caretSetzen(span, span.textContent.length);
+    };
+    if (imBild(ziel)) setzen();
+    else insBildHolen(ziel, setzen);
+  }
+
+  // =================================================================
   // Nach Rang ordnen: die Tafel sortiert sich selbst
   // =================================================================
   //
   // Der Nutzer sagt, WAS eine Aufgabe ist (Kategorie im Werkzeugkasten) —
-  // WOHIN sie gehoert, weiss die Tafel danach selbst. Kunden oben, dann
-  // Vertrieb, dann Internes, zuletzt Content & Wissen; von Hand schieben
-  // muss niemand mehr.
+  // WOHIN sie gehoert, weiss die Tafel danach selbst. Seit dem 01.09.2026
+  // hat jede Kategorie ihren FESTEN PLATZ, in Leserichtung:
+  //     1 Kunden  oben links       2 Vertrieb  oben rechts
+  //     3 Content unten links      4 Intern    unten rechts
+  // Damit sieht jede Tafel im Haus gleich aus: man weiss, wo man hinschaut,
+  // bevor man hinschaut.
   //
   // Angefasst wird ausschliesslich, was EINGEORDNET und BEARBEITBAR ist.
   // Unberuehrt bleiben nicht eingeordnete Bloecke, Haftnotizen ohne
   // Kategorie und ALLE Striche: auf einer Tafel wird auch gezeichnet, und
   // ein Pfeil, der ploetzlich woanders hinzeigt, waere schlimmer als jede
-  // Unordnung. Fremde Bloecke, die man nicht aendern darf, faellt der
-  // Server ohnehin mit 404 ab — sie kommen hier gar nicht erst vor.
+  // Unordnung. Ausgeblendete Alt-Ueberschriften bleiben ebenfalls liegen —
+  // sie sind unsichtbar, es gibt nichts zu ordnen. Fremde Bloecke, die man
+  // nicht aendern darf, faellt der Server ohnehin mit 404 ab.
   //
   // Waehrend die Bewegung laeuft, stehen die Ids in "ordnend": der Poll
   // darf ihnen nicht dazwischenfahren und sie auf die Serverlage
   // zurueckreissen (istInBearbeitung fragt den Merker mit ab).
   const ordnend = new Set();
 
+  // Die Bloecke einer Spalte stapeln. "anker" ist der feste Platz, an dem
+  // eine Gruppe beginnen SOLL; passt die Spalte damit nicht mehr auf die
+  // Tafel, wird in Stufen nachgegeben:
+  //   1. mit Ankern und vollem Abstand   (der Normalfall — feste Plaetze)
+  //   2. ohne Anker, voller Abstand      (die untere Gruppe rueckt hoch)
+  //   3. ohne Anker, Abstaende gestaucht (bis hinunter auf 0)
+  //   4. enger gestapelt                 (haesslich, aber auf der Tafel)
+  // Ausserhalb der Tafel ist weg, und weg ist schlimmer als eng.
+  function spalteStapeln(eintraege) {
+    const PLATZ = BOARD_H - ORD_RAND;
+    const legen = (mitAnker, skala, enge) => {
+      const y = [];
+      let lauf = ORD_Y[0];
+      for (let i = 0; i < eintraege.length; i++) {
+        if (i) lauf += ORD_LUFT * skala + enge;
+        if (mitAnker && eintraege[i].anker !== undefined)
+          lauf = Math.max(lauf, eintraege[i].anker);
+        y.push(lauf);
+        lauf += eintraege[i].h;
+      }
+      return { y, unten: lauf };
+    };
+    let versuch = legen(true, 1, 0);
+    if (versuch.unten <= PLATZ) return versuch.y;
+    versuch = legen(false, 1, 0);
+    if (versuch.unten <= PLATZ) return versuch.y;
+    const summeH = eintraege.reduce((s, e) => s + e.h, 0);
+    const luecken = Math.max(0, eintraege.length - 1);
+    const rest = PLATZ - ORD_Y[0] - summeH;      // was fuer Luecken uebrig ist
+    if (rest > 0 && luecken) return legen(false, rest / (luecken * ORD_LUFT), 0).y;
+    return legen(false, 0, luecken ? rest / luecken : 0).y;
+  }
+
   function nachRangOrdnen(tafelId, optionen) {
     const o = optionen || {};
     const bewegt = new Set();
 
-    // ---- 1. Sammeln und sortieren.
-    const roh = [];
+    // ---- 1. Sammeln, je Kategorie eine Gruppe.
+    const koepfe = kategorieKoepfe();
+    const gruppen = KATEGORIEN.map(() => []);
+    let anzahl = 0;
     for (const el of elemente.values()) {
       if (el.art === "strich") continue;
       if (tafelVon(el) !== tafelId) continue;
       if (!darfBearbeiten(el)) continue;
-      if (kategorieRang(el) < 0) continue;
-      roh.push({ el, i: roh.length });
+      const rang = kategorieRang(el);
+      if (rang < 0) continue;
+      if (istAltUeberschrift(el)
+          && koepfe.has(tafelId + "|" + el.inhalt.kategorie)) continue;
+      gruppen[rang].push(el);
+      anzahl++;
     }
-    if (!roh.length) {
+    if (!anzahl) {
       if (!o.still) toast("Hier ist noch nichts eingeordnet.");
       return bewegt;
     }
-    // Rang, dann die Ueberschrift ihrer Gruppe, dann die bisherige Lage
-    // (oben vor unten, links vor rechts), dann die Fundreihenfolge.
-    //
-    // Die Ueberschrift kommt VOR ihrer Liste, auch wenn sie gerade darunter
-    // liegt: eine Ueberschrift, die unter ihrer Liste steht, ist keine.
-    // Der letzte Schluessel macht die Sortierung STABIL — innerhalb einer
-    // Gruppe bleibt stehen, was der Nutzer sich dort zurechtgelegt hat.
-    // Geordnet werden die Gruppen, nicht die Gedanken darin.
-    const kopfZuerst = (el) => (istUeberschrift(el) ? 0 : 1);
-    roh.sort((a, b) => kategorieRang(a.el) - kategorieRang(b.el)
-      || kopfZuerst(a.el) - kopfZuerst(b.el)
-      || a.el.y - b.el.y || a.el.x - b.el.x || a.i - b.i);
-    const bloecke = roh.map((r) => r.el);
+    // Innerhalb einer Gruppe: der Kategorie-Block zuerst (er traegt die
+    // Ueberschrift, alles andere gehoert darunter), dann die bisherige Lage
+    // — oben vor unten, links vor rechts. Der letzte Schluessel macht die
+    // Sortierung STABIL: was sich der Nutzer innerhalb einer Gruppe
+    // zurechtgelegt hat, bleibt so stehen. Geordnet werden die Gruppen,
+    // nicht die Gedanken darin.
+    gruppen.forEach((g, rang) => {
+      const kopf = koepfe.get(tafelId + "|" + KATEGORIEN[rang].wert);
+      g.sort((a, b) => (a === kopf ? -1 : b === kopf ? 1 : 0)
+        || a.y - b.y || a.x - b.x || (a.id < b.id ? -1 : 1));
+    });
 
     // ---- 2. Hoehen MESSEN, nicht raten: wie hoch ein Textblock ist, weiss
-    // nur das Layout (Umbruch, Schriftgroesse, Zeilenzahl). Nebenbei zieht
-    // das die gespeicherte Hoehe nach — dieselbe Rechnung wie blockGeaendert.
-    const hoehen = bloecke.map((el) => {
+    // nur das Layout (Umbruch, Schriftgroesse, Zeilenzahl — und seit heute
+    // die Ueberschrift im Block). Nebenbei zieht das die gespeicherte Hoehe
+    // nach; dieselbe Rechnung wie in blockGeaendert.
+    const hoeheVon = (el) => {
       const k = elementKnoten.get(el.id);
       const h = Math.max(40, k ? Math.round(k.offsetHeight) : (el.hoehe || 60));
       if (el.art !== "notiz") el.hoehe = h;
       return h;
-    });
-    // Der Abstand UNTER einem Block: eine Ueberschrift rueckt an ihre Liste
-    // heran (16 statt 60), damit beide als ein Stueck gelesen werden.
-    const luftUnter = (i) => (istUeberschrift(bloecke[i]) ? ORD_LUFT_KOPF : ORD_LUFT);
+    };
 
-    // ---- 3. Auf Spalten verteilen.
-    const PLATZ = BOARD_H - ORD_RAND - ORD_Y;
-    const spalten = ORD_X.map(() => []);
-    let sp = 0, benutzt = 0;
-    for (let i = 0; i < bloecke.length; i++) {
-      const luft = benutzt ? luftUnter(i - 1) : 0;
-      let braucht = benutzt + luft + hoehen[i];
-      // Eine Ueberschrift zieht die erste Zeile ihrer Gruppe mit: braeche
-      // die Spalte direkt HINTER ihr um, stuende sie allein am Fuss der
-      // einen Spalte und ihre Liste am Kopf der naechsten.
-      if (istUeberschrift(bloecke[i]) && i + 1 < bloecke.length
-          && kategorieRang(bloecke[i]) === kategorieRang(bloecke[i + 1]))
-        braucht += ORD_LUFT_KOPF + hoehen[i + 1];
-      if (benutzt && braucht > PLATZ && sp < spalten.length - 1) { sp++; benutzt = 0; }
-      const luftEcht = benutzt ? luftUnter(i - 1) : 0;
-      spalten[sp].push({ el: bloecke[i], h: hoehen[i], luft: luftEcht });
-      benutzt += luftEcht + hoehen[i];
-    }
-
-    // ---- 4. Lagen rechnen. Reicht der Platz nicht, schrumpfen ERST die
-    // Abstaende und dann, falls es immer noch nicht langt, stapeln sich die
-    // Bloecke enger ineinander. Eng uebereinander ist haesslich — ausserhalb
-    // der Tafel ist weg, und weg ist schlimmer.
+    // ---- 3. Zwei Spalten, je zwei Gruppen: Spalte 0 traegt Rang 0 und 2,
+    // Spalte 1 die Raenge 1 und 3. Der erste Block einer Gruppe bekommt den
+    // festen Platz als Anker.
     const ziele = [];
-    spalten.forEach((liste, nr) => {
-      if (!liste.length) return;
-      const summeH = liste.reduce((s, e) => s + e.h, 0);
-      const summeL = liste.reduce((s, e) => s + e.luft, 0);
-      const rest = PLATZ - summeH;                 // Platz, der fuer Luecken bleibt
-      const luecken = liste.length - 1;
-      let skala = 1, enge = 0;
-      if (rest < summeL) {
-        if (rest > 0 && summeL > 0) skala = rest / summeL;
-        else { skala = 0; enge = luecken ? rest / luecken : 0; }
+    for (let spalte = 0; spalte < ORD_X.length; spalte++) {
+      const eintraege = [];
+      for (const rang of [spalte, spalte + 2]) {
+        gruppen[rang].forEach((el, i) => {
+          eintraege.push({ el, h: hoeheVon(el),
+                           anker: i === 0 ? platzVon(rang).y : undefined });
+        });
       }
-      let y = ORD_Y;
-      for (let i = 0; i < liste.length; i++) {
-        const e = liste[i];
-        if (i) y += e.luft * skala + enge;
+      if (!eintraege.length) continue;
+      const ys = spalteStapeln(eintraege);
+      eintraege.forEach((e, i) => {
         // Weder rechts noch unten ueber den Rahmen: die Tafel ist die Welt.
-        const zx = Math.round(klemm(ORD_X[nr], 0, Math.max(0, BOARD_B - e.el.breite)));
-        const zy = Math.round(klemm(y, 0, Math.max(0, BOARD_H - e.h)));
+        const zx = Math.round(klemm(ORD_X[spalte], 0, Math.max(0, BOARD_B - e.el.breite)));
+        const zy = Math.round(klemm(ys[i], 0, Math.max(0, BOARD_H - e.h)));
         if (Math.round(e.el.x) !== zx || Math.round(e.el.y) !== zy)
           ziele.push({ el: e.el, x0: e.el.x, y0: e.el.y, x1: zx, y1: zy });
-        y += e.h;
-      }
-    });
+      });
+    }
 
     if (!ziele.length) {
       if (!o.still) toast("Steht schon nach Priorität.");
       return bewegt;
     }
 
-    // ---- 5. Festschreiben: EIN Undo-Eintrag fuer den ganzen Vorgang, ein
-    // aendern je bewegtem Block. Das Modell steht sofort richtig; die
-    // Animation danach bewegt nur noch die Knoten.
+    // ---- 4. Festschreiben und hinfahren.
+    zieleBewegen(ziele, o, bewegt);
+    return bewegt;
+  }
+
+  // Eine Liste von {el,x0,y0,x1,y1} wirklich bewegen: EIN Undo-Eintrag fuer
+  // den ganzen Vorgang, ein aendern je Block, EINE Animation. Das Modell
+  // steht sofort richtig; die Animation bewegt nur noch die Knoten.
+  //
+  // Herausgeloest, weil zwei Wege hierher fuehren: das Ordnen der ganzen
+  // Tafel und das Einruecken EINES frisch eingeordneten Blocks an seinen
+  // festen Platz (blockAufPlatz).
+  function zieleBewegen(ziele, o, bewegt) {
     const eigenesSammeln = !o.sammelt;
     if (eigenesSammeln) sammelnBeginnen();
     try {
@@ -3249,7 +3884,7 @@
         ordnend.add(z.el.id);
         inArbeit.add(z.el.id);
         aenderungEinreihen(z.el, true);
-        bewegt.add(z.el.id);
+        if (bewegt) bewegt.add(z.el.id);
       }
     } finally { if (eigenesSammeln) sammelnAbschliessen(); }
 
@@ -3265,14 +3900,15 @@
         if (!istInBearbeitung(z.el.id)) inArbeit.delete(z.el.id);
       }
       schilderAuffrischen();
-      if (!o.still) toast("Nach Priorität geordnet.");
+      if (o.fertigWort) toast(o.fertigWort);
+      else if (!o.still) toast("Nach Priorität geordnet.");
     };
 
     // EINE Animation fuer den ganzen Vorgang: ein Fortschrittswert, aus dem
     // jeder Block seine Lage bekommt. n einzelne Tweens waeren n Uhren fuer
     // eine Bewegung — und die letzte entschiede, wann es vorbei ist. Unter
     // reduced-motion steht alles sofort da, wo es hingehoert.
-    if (sanft || !gsap) { fertig(); return bewegt; }
+    if (sanft || !gsap) { fertig(); return; }
     const lauf = { t: 0 };
     gsap.to(lauf, {
       t: 1, duration: 0.45, ease: "power3.inOut",
@@ -3286,7 +3922,55 @@
       },
       onComplete: fertig,
     });
-    return bewegt;
+  }
+
+  // EINEN frisch eingeordneten Block an seinen festen Platz ruecken —
+  // nicht die ganze Tafel neu ordnen. Grund: von Hand geschobene Bloecke
+  // sollen liegen bleiben, bis der Nutzer selbst "Nach Priorität ordnen"
+  // drueckt. Wer eine Aufgabe einordnet, will diese EINE Aufgabe an ihrem
+  // Platz sehen, nicht die halbe Tafel in Bewegung.
+  //
+  // Steht schon etwas anderes auf dem Platz (die Gruppe hat mehrere
+  // Bloecke), rueckt der neue darunter statt darauf.
+  function blockAufPlatz(el, optionen) {
+    const rang = kategorieRang(el);
+    if (rang < 0) return false;
+    const platz = platzVon(rang);
+    const knoten = elementKnoten.get(el.id);
+    const hoehe = Math.max(40, knoten ? Math.round(knoten.offsetHeight) : (el.hoehe || 60));
+    if (el.art !== "notiz") el.hoehe = hoehe;
+    // Unter alles ruecken, was in DIESER Spalte schon auf dem Platz liegt:
+    // die eigene Gruppe (mehrere Bloecke einer Kategorie) und, in der unteren
+    // Reihe, die Gruppe darueber. Ein langer Kunden-Block schiebt Content
+    // also nach unten, statt dass beide uebereinander liegen.
+    //
+    // Nur wer sich wirklich UEBERSCHNEIDET, schiebt: ein Block weiter unten
+    // geht niemanden etwas an. Weil jedes Ausweichen neue Ueberschneidungen
+    // erzeugen kann, laeuft die Suche in Runden — gedeckelt, damit sie in
+    // keinem Fall haengen bleibt.
+    const drueber = [KATEGORIEN[rang].wert]
+      .concat(rang >= 2 ? [KATEGORIEN[rang - 2].wert] : []);
+    let y = platz.y;
+    for (let runde = 0; runde < 6; runde++) {
+      let gewichen = false;
+      for (const anderer of elemente.values()) {
+        if (anderer === el || anderer.art === "strich") continue;
+        if (tafelVon(anderer) !== tafelVon(el)) continue;
+        if (!drueber.includes(anderer.inhalt.kategorie)) continue;
+        if (istAltUeberschrift(anderer)) continue;
+        const unten = anderer.y + (anderer.hoehe || 60);
+        if (unten <= y || anderer.y >= y + hoehe) continue;
+        y = unten + ORD_LUFT;
+        gewichen = true;
+      }
+      if (!gewichen) break;
+    }
+    const x1 = Math.round(klemm(platz.x, 0, Math.max(0, BOARD_B - el.breite)));
+    const y1 = Math.round(klemm(y, 0, Math.max(0, BOARD_H - hoehe)));
+    if (Math.round(el.x) === x1 && Math.round(el.y) === y1) return false;
+    zieleBewegen([{ el, x0: el.x, y0: el.y, x1, y1 }],
+                 Object.assign({ still: true }, optionen || {}), null);
+    return true;
   }
 
   // =================================================================
@@ -3449,6 +4133,40 @@
     const b = Math.max(el.breite, 420), h = Math.max(el.hoehe || 200, 300);
     ansichtPassend = false; // Element-Fit ist keine benannte Ansicht
     fitAuf(el.x + bx - 60, el.y + by - 60, b + 120, h + 120, 60);
+  }
+
+  // Steht ein Element (auch nur zum Teil) im Bild?
+  function imBild(el) {
+    const bx = versatz.get(tafelVon(el)) || 0, by = versatzY.get(tafelVon(el)) || 0;
+    const x0 = (el.x + bx) * ansicht.s + ansicht.tx;
+    const y0 = (el.y + by) * ansicht.s + ansicht.ty;
+    const x1 = x0 + (el.breite || 60) * ansicht.s;
+    const y1 = y0 + (el.hoehe || 60) * ansicht.s;
+    return x1 > 8 && y1 > 8 && x0 < breite - 8 && y0 < hoehe - 8;
+  }
+
+  // Hinfahren OHNE zu zoomen: der Block wandert in die Bildmitte, die
+  // Vergroesserung bleibt, wie sie ist. Gebraucht, wenn eine Aufgabe in
+  // einen Block gewandert ist, der gerade nicht im Bild steht — ein
+  // Zoomsprung waere dort zu viel Bewegung fuer "sieh mal, dort liegt es".
+  function insBildHolen(el, danach) {
+    const bx = versatz.get(tafelVon(el)) || 0, by = versatzY.get(tafelVon(el)) || 0;
+    const mx = (el.x + bx + (el.breite || 60) / 2) * ansicht.s;
+    const my = (el.y + by + (el.hoehe || 60) / 2) * ansicht.s;
+    const ziel = { tx: breite / 2 - mx, ty: hoehe / 2 - my };
+    ansichtPassend = false;
+    if (fitTween) { fitTween.kill(); fitTween = null; gesteBeenden(); }
+    if (sanft || !gsap) {
+      ansicht.tx = ziel.tx; ansicht.ty = ziel.ty;
+      panKlemmen(); aufPixelSnappen();
+      if (danach) danach();
+      return;
+    }
+    gesteBeginnen();
+    fitTween = gsap.to(ansicht, {
+      tx: ziel.tx, ty: ziel.ty, duration: 0.5, ease: "power3.inOut", onUpdate: anwenden,
+      onComplete: () => { fitTween = null; panKlemmen(); gesteBeenden(); if (danach) danach(); },
+    });
   }
 
   // Zoom um einen Schirmpunkt herum (Rad, Knoepfe, Pinch).
@@ -3775,7 +4493,7 @@
 
   // ---- Pointer auf der FLAECHE (Auswahl, Pan, Platzieren, Pinch).
   flaeche.addEventListener("pointerdown", (ev) => {
-    if (ev.target.closest(".wb-kopf,.wb-leiste,.wb-hilfe,.wb-toasts,.wb-pfeile,.wb-fremdleiste,.wb-schild,.wb-wischenknopf,.wb-ablage,.wb-kasten,.wb-griff,.wb-groesse-griff,.wb-zeile-tools,.wb-zeile-link,.wb-abhaken")) return;
+    if (ev.target.closest(".wb-kopf,.wb-leiste,.wb-hilfe,.wb-toasts,.wb-pfeile,.wb-fremdleiste,.wb-schild,.wb-wischenknopf,.wb-ablage,.wb-kasten,.wb-griff,.wb-zeile-griff,.wb-groesse-griff,.wb-zeile-tools,.wb-zeile-link,.wb-abhaken")) return;
     $(".wb-hilfe").hidden = true;
 
     aktivePointer.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
@@ -4895,10 +5613,19 @@
   // Elemente: ein "loeschen" darf ein noch fliegendes "anlegen" nicht
   // ueberholen — sonst gewinnt das anlegen, und das Element steht nach
   // dem naechsten Poll wieder da.
+  //
+  // Sie haengen sich zusaetzlich SELBST in die Kette (01.09.2026): Sonst
+  // ueberholt ein unmittelbar danach ausgeloestes "aendern" das
+  // "wiederherstellen" — der Server saehe noch den Grabstein, antwortete
+  // mit 404, und der Client raeumte das gerade Zurueckgeholte wieder weg.
+  // Gemessen beim Strg+Z ueber ein Zusammenfuehren: der Block kam zurueck
+  // und verschwand im selben Atemzug.
   function nachKetten(ids, arbeit) {
-    Promise.all(ids.map((id) => ketten.get(id) || Promise.resolve()))
+    const lauf = Promise.all(ids.map((id) => ketten.get(id) || Promise.resolve()))
       .then(arbeit)
       .catch(() => {});
+    for (const id of ids) ketten.set(id, lauf);
+    return lauf;
   }
 
   function elementLoeschen(ids, optionen) {
@@ -6036,11 +6763,22 @@
     blatt.className = "wb-mobil";
     blatt.innerHTML = `
       <div class="wb-mobil-kopf">
-        <b>${el.art === "notiz" ? "Haftnotiz" : "Textblock"}</b>
+        <b></b>
         <button type="button" class="wb-mobil-fertig">Fertig</button>
       </div>
       <div class="wb-mobil-werkzeuge"></div>
       <div class="wb-mobil-zeilen"><div class="wb-zeilen"></div></div>`;
+    // Der Titel des Blatts ist die Ueberschrift des Blocks — am Telefon
+    // sieht man die Tafel dahinter nicht mehr, und "Textblock" saehe auf
+    // jedem Block gleich aus. Ohne Einordnung bleibt es bei der Art.
+    const katBlatt = kategorieVon(el.inhalt.kategorie);
+    const titelBlatt = $(".wb-mobil-kopf b", blatt);
+    titelBlatt.textContent = katBlatt ? kategorieTitel(katBlatt)
+      : (el.art === "notiz" ? "Haftnotiz" : "Textblock");
+    if (katBlatt) {
+      titelBlatt.className = "wb-mobil-titel-kat";
+      titelBlatt.style.setProperty("--kopf", katBlatt.kopf);
+    }
     const werkzeugZeile = $(".wb-mobil-werkzeuge", blatt);
     const kasten = kastenBauen(el.id);
     kasten.style.display = "flex";
@@ -6210,10 +6948,20 @@
   // Nach Kasten-Aenderungen die Blatt-Ansicht nachziehen.
   function mobilAnsichtAuffrischen() {
     if (!mobilOffen) return;
-    const { el, liste } = mobilOffen;
+    const { el, liste, blatt } = mobilOffen;
     liste.dataset.liste = el.inhalt.liste;
     liste.style.fontSize = Math.max(el.inhalt.groesse, 24) + "px";
     liste.style.color = tinte(el.inhalt.farbe);
+    // Die Ueberschrift im Blatt-Titel zieht mit: wer hier einordnet, sieht
+    // sofort, in welchem Block er gerade schreibt.
+    const kat = kategorieVon(el.inhalt.kategorie);
+    const t = $(".wb-mobil-kopf b", blatt);
+    if (t) {
+      t.textContent = kat ? kategorieTitel(kat)
+        : (el.art === "notiz" ? "Haftnotiz" : "Textblock");
+      t.className = kat ? "wb-mobil-titel-kat" : "";
+      if (kat) t.style.setProperty("--kopf", kat.kopf);
+    }
   }
 
   function mobilVerwerfen() {
@@ -6248,7 +6996,7 @@
     if (!istMobil() || mobilOffen) return;
     const knoten = ev.target.closest(".wb-el");
     if (!knoten || !knoten.classList.contains("wb-darf")) return;
-    if (ev.target.closest(".wb-abhaken,.wb-zeile-tools,.wb-zeile-link,.wb-kasten,.wb-griff,.wb-groesse-griff")) return;
+    if (ev.target.closest(".wb-abhaken,.wb-zeile-tools,.wb-zeile-link,.wb-kasten,.wb-griff,.wb-zeile-griff,.wb-groesse-griff")) return;
     const el = elemente.get(knoten.dataset.id);
     if (el) mobilOeffnen(el);
   });
@@ -6343,6 +7091,13 @@
     get pfeile() {
       return RICHTUNGEN.filter((r) => !$(".wb-pfeil-" + r, pfeileEl).hidden);
     },
+    // Laeuft gerade eine Abgabe? Welches Ziel steht am Zeiger?
+    get abgabe() {
+      if (!abgabe) return null;
+      return { id: abgabe.el.id, zeile: abgabe.idx, kategorie: abgabe.kat,
+               ziel: abgabe.ziel, zielBlock: abgabe.zielBlock ? abgabe.zielBlock.id : null,
+               hinweis: abgabeGeist ? abgabeGeist.textContent : "" };
+    },
     // Fuer Tests: kompakter Blick auf ein Board (das TAFEL-Board).
     stand(tafel) {
       return [...elemente.values()]
@@ -6351,6 +7106,18 @@
                        besitzer: e.besitzer, tafel: tafelVon(e),
                        kategorie: e.inhalt.kategorie || "",
                        ueberschrift: istUeberschrift(e),
+                       // Traegt der Block die Ueberschrift seiner Kategorie
+                       // ("1 · Kunden"), und was steht darin? Und ist er
+                       // eine ausgeblendete Alt-Ueberschrift?
+                       kopfblock: !!(elementKnoten.get(e.id)
+                         && elementKnoten.get(e.id).classList.contains("wb-kopfblock")),
+                       altkopf: !!(elementKnoten.get(e.id)
+                         && elementKnoten.get(e.id).classList.contains("wb-altkopf")),
+                       kopf: (() => {
+                         const k = elementKnoten.get(e.id);
+                         const h = k && k.querySelector(".wb-blockkopf");
+                         return h && k.classList.contains("wb-kopfblock") ? h.textContent : "";
+                       })(),
                        x: e.x, y: e.y, breite: e.breite, hoehe: e.hoehe,
                        punkte: e.inhalt.punkte ? e.inhalt.punkte.length : 0,
                        links: e.inhalt.zeilen ? e.inhalt.zeilen.map((z) => z.link || "") : [],
