@@ -127,9 +127,24 @@ function probeZeilen() {
   } catch { return []; }
 }
 
+// Der GERATENE Monat haengt an der Uhr: Sagt niemand einen Zeitraum, nimmt
+// der Versand den letzten abgeschlossenen Monat. Genau das darf hier nicht
+// fest verdrahtet stehen — am 01.09.2026 fiel diese Pruefung um, weil sie am
+// 20.08. geschrieben wurde und "Juli" erwartete, waehrend der Code voellig
+// richtig August raet. Ein Test, der beim Monatswechsel rot wird, blockiert
+// jeden Push im ganzen Haus und sagt dabei nichts ueber die Sache aus.
+//
+// Wo ein Auftrag den Monat NENNT ("Schick die Juli-Rechnungen"), bleibt Juli
+// fest stehen — dort haengt nichts am Kalender.
+const geratenRef = (() => { const h = new Date(); return new Date(h.getFullYear(), h.getMonth() - 1, 1); })();
+const GERATEN_NAME = buch.MONATSNAME[geratenRef.getMonth()];
+const GERATEN_TITEL = `${GERATEN_NAME} ${geratenRef.getFullYear()}`;
+
 (async () => {
   // ================================================== 1. Zeitraum verstehen
   console.log("\n— Zeitraum aus dem Auftrag —");
+  // Hier ist die Uhr bewusst festgenagelt: Diese Faelle pruefen das VERSTEHEN
+  // von Zeitangaben, und dafuer muss "jetzt" bekannt sein.
   const jetzt = new Date("2026-08-20T10:00:00");
   const FAELLE = [
     ["Schick den kompletten Ordner mit den Rechnungen an unsere Steuerberaterin.", "Juli 2026", true],
@@ -193,12 +208,12 @@ function probeZeilen() {
   melde(a.ok && a.entwurf === true, "legt einen Entwurf an, statt zu fragen und zu senden");
   melde(entwuerfe.length === 1, "genau ein Entwurf: " + entwuerfe.length);
   melde(entwuerfe[0]?.an === "meier@beispiel-kanzlei.de", "an die hinterlegte Adresse: " + entwuerfe[0]?.an);
-  melde(/Buchhaltung Juli 2026/.test(entwuerfe[0]?.betreff || ""), "Betreff: " + entwuerfe[0]?.betreff);
+  melde(entwuerfe[0]?.betreff?.includes(`Buchhaltung ${GERATEN_TITEL}`), "Betreff: " + entwuerfe[0]?.betreff);
   melde(entwuerfe[0]?.anhaenge.length === 1 && /\.zip \(\d{4,}/.test(entwuerfe[0].anhaenge[0]),
     "ein echtes ZIP hängt dran: " + entwuerfe[0]?.anhaenge[0]);
   melde(/Guten Tag Frau Meier,/.test(entwuerfe[0]?.text || ""), "die Anrede steht in der Mail");
   melde(/Entwurf/.test(a.gesprochen) && /Postfach/.test(a.gesprochen), "sagt, dass es ein Entwurf im Postfach ist");
-  melde(/Juli-Rechnungen/.test(a.gesprochen), "nennt den Zeitraum im Sprechtext");
+  melde(a.gesprochen.includes(`${GERATEN_NAME}-Rechnungen`), "nennt den Zeitraum im Sprechtext");
   melde(/achtzehn Belege/.test(a.gesprochen), "Anzahl als Wort: „achtzehn Belege“");
   melde(/zweitausendvierhundert Euro/.test(a.gesprochen), "Betrag als Wort: „zweitausendvierhundert Euro“");
   melde(/Frau Meier/.test(a.gesprochen), "nennt die Empfängerin beim Namen");
@@ -239,9 +254,15 @@ function probeZeilen() {
   const entwuerfeVorWdh = entwuerfe.length;
   const geloeschtVorWdh = geloescht.length;
 
+  // Die beiden ersten Saetze muessen DENSELBEN Monat nennen, den der Entwurf
+  // oben traegt — sonst ist es kein wiederholter Auftrag mehr, sondern ein
+  // neuer fuer einen anderen Zeitraum, und der Versand legt voellig zu Recht
+  // einen zweiten Entwurf an. Oben wurde der Monat GERATEN, also steht hier
+  // derselbe geratene Monat. (Am 20.08. geschrieben, als das zufaellig beides
+  // "Juli" war — am 01.09. fiel der Abschnitt deshalb um.)
   for (const satz of [
-    "Schick den Juli-Ordner an die Steuerberaterin",
-    "Schick den Juli-Ordner an die Steuerberaterin.",
+    `Schick den ${GERATEN_NAME}-Ordner an die Steuerberaterin`,
+    `Schick den ${GERATEN_NAME}-Ordner an die Steuerberaterin.`,
     "Ja, ist die schon raus?",
     "Ist die schon raus?",
     "Schick die Rechnungen an die Steuerberaterin",
@@ -324,7 +345,8 @@ function probeZeilen() {
   entwuerfe.length = 0; geloescht.length = 0;
   sv.vergessen();
   const v1 = await sv.vorbereiten(NUTZER, { text: "Schick den Ordner an die Steuerberaterin." });
-  melde(/Juli/.test(v1.gesprochen), "geraten wird der letzte abgeschlossene Monat — und er wird ausgesprochen");
+  melde(v1.gesprochen.includes(GERATEN_NAME),
+    `geraten wird der letzte abgeschlossene Monat (${GERATEN_NAME}) — und er wird ausgesprochen`);
   const v2 = await sv.antwortAuf("Nein, den Juni.");
   console.log("   gesprochen: " + (v2 && v2.gesprochen));
   melde(v2 && v2.ok && /Juni-Rechnungen/.test(v2.gesprochen), "der Monat wird umgebogen statt verworfen");
