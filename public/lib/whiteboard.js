@@ -2427,7 +2427,15 @@
       // Eine leere HAFTNOTIZ bleibt: sie ist ein Gegenstand, den man
       // hinklebt und spaeter beschriftet. Ein leerer TEXTBLOCK verschwindet
       // weiterhin — unsichtbar und leer waere er nur eine Falle.
-      if (leer && el.art !== "notiz") {
+      //
+      // Ein eingeordneter Block bleibt AUCH (01.09.2026, real passiert):
+      // Lukas hat die beiden Zeilen unter "3 · Content & Wissen" geleert, um
+      // sie neu zu schreiben — und damit war der ganze Block weg, samt
+      // Ueberschrift und Kategorie. Ein Kategorie-Block ist kein loser Text,
+      // sondern ein Behaelter mit Titel; leer heisst dort "nichts offen",
+      // nicht "gibt es nicht". Wer ihn wirklich loswerden will, nimmt ihm die
+      // Kategorie oder loescht ihn ueber den Papierkorb.
+      if (leer && el.art !== "notiz" && !el.inhalt.kategorie) {
         elementLoeschen([el.id], { still: true });
       } else {
         if (adressenErkennen(el)) blockRendern(el);
@@ -6977,8 +6985,11 @@
     mobilOffen = null;
     blatt.remove();
     if (!elemente.has(el.id)) return;
-    // Wie am Schreibtisch: die leere Haftnotiz bleibt, der leere Textblock geht.
-    if (el.art !== "notiz" && el.inhalt.zeilen.every((z) => !z.t.trim())) {
+    // Wie am Schreibtisch: die leere Haftnotiz bleibt, der leere Textblock
+    // geht — und ein eingeordneter Block bleibt ebenfalls (siehe die
+    // ausfuehrliche Begruendung am Schreibtisch-Zweig weiter oben).
+    if (el.art !== "notiz" && !el.inhalt.kategorie
+        && el.inhalt.zeilen.every((z) => !z.t.trim())) {
       elementLoeschen([el.id], { still: true });
       inArbeit.delete(el.id);
       return;
