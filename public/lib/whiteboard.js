@@ -2387,10 +2387,19 @@
     const knoten = elementKnoten.get(el.id);
     if (knoten) {
       el.breite = Math.max(el.breite, 40);
+      const hoeheVorher = el.hoehe || 0;
       // Nur Textbloecke wachsen mit dem Text. Die Hoehe einer Haftnotiz ist
       // gewaehlt (aufgezogen oder skaliert) \u2014 sie hier nachzumessen wuerde
       // die Wahl bei jedem Tastendruck ueberschreiben.
       if (el.art !== "notiz") el.hoehe = Math.round(knoten.offsetHeight);
+      // Nach unten aus der Tafel WACHSEN kann keiner. Das Ziehen klemmt seit
+      // je an der Kante (blockZiehen), das Wachsen tat es nicht: ein Block
+      // unten an der Tafel schob seine neuen Zeilen ueber den Rahmen hinaus,
+      // wo sie niemand mehr liest. Er rueckt jetzt hoch statt hinaus.
+      const maxY = Math.max(0, BOARD_H - (el.hoehe || 0));
+      if (el.y > maxY) { el.y = Math.round(maxY); knoten.style.top = el.y + "px"; }
+      // Und was jetzt unter ihm im Weg liegt, weicht aus.
+      if ((el.hoehe || 0) > hoeheVorher) untenPlatzMachen(el);
     }
     aenderungEinreihen(el, sofort);
     schilderAuffrischen();
@@ -3979,6 +3988,95 @@
     zieleBewegen([{ el, x0: el.x, y0: el.y, x1, y1 }],
                  Object.assign({ still: true }, optionen || {}), null);
     return true;
+  }
+
+  // ------------------------------------------------- Wachsen macht Platz
+  //
+  // Ein Textblock waechst mit seinem Text: ein Absatz mehr, und er ist zwei
+  // Zeilen hoeher. Bisher wuchs er dabei UEBER den Block darunter — der neue
+  // Absatz stand mitten in fremdem Text, und welche Zeile zu welchem Block
+  // gehoert, war nicht mehr zu sehen. Jetzt weicht aus, was er ueberdeckt.
+  //
+  // Drei Regeln halten das ruhig:
+  //   1. Es rueckt nur, wer wirklich UEBERDECKT wird: waagrecht ueberlappend
+  //      und senkrecht im Weg, mit der Oberkante nicht ueber der des
+  //      Schiebers. Was daneben oder schon frei darunter steht, bleibt
+  //      liegen — die Tafel ist kein Textfluss, der sich neu setzt.
+  //   2. Die Bewegung PFLANZT SICH FORT: wer ausweicht, wird selbst zum
+  //      Schieber (die Runden). Sonst loeste der erste Block sein Problem
+  //      und schuf dem naechsten eins.
+  //   3. Es geht nur nach UNTEN und nur so weit wie noetig. Schrumpft der
+  //      Text wieder, bleibt das Gerueckte stehen: zurueckzuspringen hiesse,
+  //      Lagen zu aendern, die der Nutzer inzwischen selbst gewaehlt haben
+  //      kann — und ein Block, der beim Loeschen eines Zeichens huepft, ist
+  //      schlimmer als eine Luecke.
+  //
+  // Die Tafel ist die Grenze (wie in spalteStapeln: ausserhalb ist weg, und
+  // weg ist schlimmer als eng). Wer unten anstoesst, bleibt stehen, statt
+  // ueber den Rahmen geschoben zu werden.
+  const SCHUB_LUFT = 24;     // Welteinheiten Luft zwischen zwei Bloecken
+  const SCHUB_RUNDEN = 12;   // Deckel: keine Kette laeuft endlos
+
+  function untenPlatzMachen(el) {
+    if (!el || el.art === "strich" || !darfBearbeiten(el)) return;
+    const tafel = tafelVon(el);
+    // Wie in nachRangOrdnen: gemessen, nicht geraten — und die Zahl gleich
+    // ins Modell gezogen. Sonst klemmt die Rechnung gegen eine gespeicherte
+    // Hoehe, die niemand mehr sieht, und der Block steht am Ende doch ein
+    // Stueck unter der Tafelkante.
+    const hoeheVon = (a) => {
+      const k = elementKnoten.get(a.id);
+      const h = Math.max(40, k ? Math.round(k.offsetHeight) : (a.hoehe || 60));
+      if (a.art !== "notiz") a.hoehe = h;
+      return h;
+    };
+    // Nur, was auf DERSELBEN Tafel liegt und was ich auch bewegen darf —
+    // einen fremden Block wiese der Server mit 404 ab. Wer gerade selbst in
+    // Bewegung ist (Zug, Skalieren, laufende Ordnen-Animation), wird nicht
+    // auch noch geschoben: zwei Uhren fuer eine Bewegung sehen kaputt aus.
+    const andere = [];
+    for (const a of elemente.values()) {
+      if (a === el || a.art === "strich") continue;
+      if (tafelVon(a) !== tafel || !darfBearbeiten(a)) continue;
+      if (ordnend.has(a.id)) continue;
+      const k = elementKnoten.get(a.id);
+      if (k && (k.classList.contains("wb-zieht") || k.classList.contains("wb-skaliert"))) continue;
+      andere.push({ el: a, y: a.y, h: hoeheVon(a), geschoben: false });
+    }
+    if (!andere.length) return;
+
+    let welle = [{ el, x: el.x, y: el.y, b: el.breite, h: hoeheVon(el) }];
+    for (let runde = 0; runde < SCHUB_RUNDEN && welle.length; runde++) {
+      const naechste = [];
+      for (const s of welle) {
+        const untenS = s.y + s.h;
+        for (const a of andere) {
+          // Wer schiebt, schiebt nicht sich selbst: der Ausgewichene wird in
+          // der naechsten Runde zum Treiber und traefe sich sonst hier wieder
+          // — er schoebe sich Runde um Runde die eigene Hoehe weiter, bis er
+          // unten an der Tafel klebt (gemessen: 400 -> 1150 statt 400 -> 446).
+          if (a.el === s.el) continue;
+          if (a.el.x >= s.x + s.b || a.el.x + a.el.breite <= s.x) continue; // daneben
+          if (a.y < s.y) continue;            // steht hoeher: nicht mein Problem
+          if (a.y >= untenS) continue;        // steht schon frei darunter
+          const ziel = Math.round(klemm(untenS + SCHUB_LUFT, 0,
+                                        Math.max(0, BOARD_H - a.h)));
+          if (ziel <= a.y) continue;          // Tafelkante: hier bleibt er stehen
+          a.y = ziel; a.geschoben = true;
+          naechste.push({ el: a.el, x: a.el.x, y: a.y, b: a.el.breite, h: a.h });
+        }
+      }
+      welle = naechste;
+    }
+
+    const ziele = andere
+      .filter((a) => a.geschoben && Math.round(a.el.y) !== a.y)
+      .map((a) => ({ el: a.el, x0: a.el.x, y0: a.el.y, x1: Math.round(a.el.x), y1: a.y }));
+    if (!ziele.length) return;
+    // Laeuft schon ein Sammel-Vorgang (Abgabe, Gruppen-Zug), haengt sich das
+    // Ausweichen dort an: ein eigenes sammelnBeginnen() wuerde die bereits
+    // gesammelten Schritte des Aufrufers wegwerfen.
+    zieleBewegen(ziele, { still: true, sammelt: !!sammelSchritte }, null);
   }
 
   // =================================================================
@@ -6363,12 +6461,19 @@
       ende = { right: b.left, top: b.top, height: b.height || zr.height };
     }
     const luft = 8;                       // Layout-px Abstand zum letzten Wort
-    let links = (ende.right - zr.left) / skala + luft;
-    // Nicht ueber die rechte Blockkante hinaus: dort begaenne sonst das
-    // Niemandsland neben dem Block, und bei einer randvollen Zeile laege der
-    // Chip unter den Zeilenwerkzeugen.
-    const breite = c.offsetWidth || 0;
-    if (zeile.clientWidth > breite) links = Math.min(links, zeile.clientWidth - breite);
+    const links = Math.max(0, (ende.right - zr.left) / skala + luft);
+    // Der Chip GEHT MIT — er steht nie im Text. Bis zum 04.09. wurde er an
+    // der rechten Blockkante festgehalten (Math.min gegen clientWidth):
+    // schrieb man weiter nach rechts, lief der eigene Satz unter ihn, und man
+    // sah nicht mehr, was man tippt. Genau das darf ein Hinweis nicht.
+    // Wird der Platz neben dem Wort knapp, legt er zuerst SEIN WORT ab und
+    // ist nur noch das Zeichen (wb-chip-knapp, rund ein Drittel so breit);
+    // reicht auch das nicht, tritt er lieber neben den Block hinaus — dort
+    // steht ohnehin nur Tafel, und der Satz bleibt lesbar. Gemessen wird in
+    // dieser Reihenfolge, weil die schmale Fassung erst nach dem Umschalten
+    // ihre Breite kennt.
+    c.classList.remove("wb-chip-knapp");
+    if (links + (c.offsetWidth || 0) > zeile.clientWidth) c.classList.add("wb-chip-knapp");
     c.style.left = Math.round(links) + "px";
     c.style.top = Math.round((ende.top + ende.height / 2 - zr.top) / skala) + "px";
   }

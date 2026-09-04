@@ -1074,10 +1074,18 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
    (1) Der FOKUS-CHIP: steht der Cursor in einer Zeile, haengt am ENDE ihres
        Textes ein kleiner ruhiger Chip. Er ist absolut gesetzt und verschiebt
        den Textfluss darum um nichts, wenn er auftaucht — seine Lage misst
-       whiteboard.js am letzten Zeichen-Rechteck des Spans. --wb-anti2 haelt
-       ihn bildschirmgross, genau wie die Zeilenwerkzeuge; transform-origin
-       links/mittig, damit er beim Gegen-Skalieren von der Zeile WEG waechst
-       und nie ueber das letzte Wort rutscht. */
+       whiteboard.js am letzten Zeichen-Rechteck des Spans, und zwar bei
+       JEDEM Zeichen neu: er laeuft dem Wort davon, statt sich darauf zu
+       legen. --wb-anti2 haelt ihn bildschirmgross, genau wie die
+       Zeilenwerkzeuge; transform-origin links/mittig, damit er beim
+       Gegen-Skalieren von der Zeile WEG waechst und nie ueber das letzte
+       Wort rutscht. */
+/* Er ist ein ANGEBOT, keine Ansage: einen Tick kleiner als bisher (0,44
+   statt 0,5 em Schrift, 1,5 statt 1,7 em hoch), ohne Schatten und leicht
+   zurueckgenommen (0,8). Der Schatten hob ihn aus der Tafel heraus wie einen
+   Knopf der Werkzeugleiste — neben einer Zeile Handschrift war er damit das
+   Lauteste im Bild, obwohl er nur sagt "hier koenntest du antworten". Beim
+   Hover kommt er voll zurueck. */
 /* Die :active-Fassung steht MIT DABEI, und das ist kein Schmuck: crm.css
    setzt global button:active{transform:translateY(1px)} — das schlug beim
    Aufsetzen der Maus die ganze Transformation weg. Der Chip sprang dadurch
@@ -1085,21 +1093,28 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
    und das Loslassen erzeugte gar keinen Klick mehr: der Chip liess sich
    schlicht nicht druecken (am 31.08. gemessen, Dialog blieb zu). */
 .wb-zeile-chip,.wb-zeile-chip:active{
-  position:absolute;z-index:6;display:inline-flex;align-items:center;gap:.3em;
-  padding:0 .55em;height:1.7em;border-radius:.55em;cursor:pointer;
+  position:absolute;z-index:6;display:inline-flex;align-items:center;gap:.28em;
+  padding:0 .46em;height:1.5em;border-radius:.5em;cursor:pointer;
   transform:translateY(-50%) scale(var(--wb-anti2,1));transform-origin:0 50%;
   background:var(--wb-chrom-flaeche);border:1px solid var(--wb-chrom-rand);
-  box-shadow:var(--wb-schatten1);color:var(--wb-warte-chrom);
-  font:600 .5em/1 'Inter','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;
+  box-shadow:none;color:var(--wb-warte-chrom);opacity:.8;
+  font:600 .44em/1 'Inter','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;
   letter-spacing:.01em;white-space:nowrap;
-  transition:background var(--tempo),border-color var(--tempo);
+  transition:background var(--tempo),border-color var(--tempo),opacity var(--tempo);
 }
+/* Knapper Platz neben dem letzten Wort: der Chip legt sein WORT ab und ist
+   nur noch das Zeichen. Lieber klein und neben dem Satz als gross und
+   darueber — unter dem Chip war der eigene Text nicht mehr zu sehen.
+   whiteboard.js setzt die Klasse beim Nachziehen (chipNachziehen). */
+.wb-zeile-chip.wb-chip-knapp{padding:0 .3em;gap:0}
+.wb-zeile-chip.wb-chip-knapp span{display:none}
 .wb-zeile-chip i{display:block;width:1.15em;height:1.15em;flex:0 0 auto;color:var(--wb-warte)}
 .wb-zeile-chip i svg{width:100%;height:100%;display:block;stroke-width:2.2}
 /* Unsichtbare Trefferflaeche auf 40 px — der Chip selbst misst bei der
-   Vorwahl M nur rund 24 px hoch. ::after ist hier frei (kein data-tip). */
-.wb-zeile-chip::after{content:"";position:absolute;inset:min(0px,calc((1.7em - 40px) / 2))}
+   Vorwahl M nur rund 19 px hoch. ::after ist hier frei (kein data-tip). */
+.wb-zeile-chip::after{content:"";position:absolute;inset:min(0px,calc((1.5em - 40px) / 2))}
 .wb-zeile-chip:hover{
+  opacity:1;
   background:color-mix(in srgb,var(--wb-warte-chrom) 12%,var(--wb-flaeche-fest));
   border-color:color-mix(in srgb,var(--wb-warte-chrom) 45%,var(--wb-chrom-rand));
 }
