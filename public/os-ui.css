@@ -1,0 +1,542 @@
+/* =====================================================================
+   os-ui — gemeinsames Bausteinsystem für alle Arbeitsansichten (05.09.2026)
+
+   Warum es das gibt: Lukas' Urteil zum Stand vom 05.09. war „viel zu wenig
+   nutzerfreundlich, muss viel schöner und übersichtlicher — Orientierung:
+   Apple". Sichtbar in der Kundenakte: elf verschieden große Karten, rund
+   vierzig Felder auf einmal, keine Hierarchie. Gleichzeitig bauen mehrere
+   Leute parallel neue Seiten (Akte, Rechnungen, Belege, Monatsabschluss,
+   Kalender-Popover). Ohne EIN gemeinsames Vokabular entstehen fünf Stile.
+
+   Was es ist: eine ADDITIVE Schicht über crm.css. Kein einziger Selektor aus
+   crm.css wird hier umgeschrieben; alle Bausteine tragen das Präfix „os-".
+   Farben, Radien, Schatten und Tempo kommen aus den Marken in crm.css
+   (--surface, --border, --foreground, --primary, --r-*, --s*, --tempo), damit
+   Hell, Dunkel (:root[data-theme=dark]), Graphit (body.crm-dashboard-design)
+   und Weiß (:root[data-weiss=1]) von selbst mitlaufen.
+
+   Flache Marken: Im Graphit-Design sind --surface, --surface-2 und
+   --background VERLÄUFE. Ein Verlauf taugt nicht als Zeilenhintergrund, als
+   Hover-Fläche oder als Farbstopp. Darum definiert diese Datei eigene, immer
+   flache Flächenmarken (--os-flaeche, --os-flaeche-2, --os-flaeche-3,
+   --os-hebung, --os-grund, --os-trenner) — je Theme einmal, sonst nirgends.
+
+   Leitfaden mit Markup-Beispielen: scratchpad/plan/01-design.md (Koordinator)
+   bzw. der Anschlussvertrag im Kopf des jeweiligen Auftrags.
+
+   Eingebunden wird die Datei global in lib/schale.js direkt nach /crm.css —
+   kein Modul muss sie selbst verlinken.
+
+   Regeln, die für alle Bausteine gelten:
+   - 8-px-Raster, Schriftgrößen 11/12/13/14/16/20/24/26, Zahlen tabular.
+   - Radien 10 px (klein) und 14 px (Gruppen, Kacheln, Tabellen), 16 px (Blatt).
+   - Genau eine Schattenstufe (--s1) für liegende Flächen; schwebende
+     (Blatt, Popover) bekommen --s3. Alles andere trennt ein Rand.
+   - Keine Großbuchstaben-Beschriftungen.
+   - Jeder Baustein hat Hover, Fokus (sichtbar per :focus-visible) und
+     Disabled; alle Übergänge sind unter prefers-reduced-motion abgeschaltet.
+   ===================================================================== */
+
+/* ---------- Flache Flächenmarken je Theme ----------
+   Reihenfolge wie in crm.css: Hell (Grundwert), Dunkel auf <html>, Graphit auf
+   <body> (gewinnt gegen Dunkel, weil näher am Element — dieselbe Mechanik wie
+   bei --surface in crm.css), Weiß erzwingt wieder die hellen Werte. */
+:root{
+  --os-flaeche:#FFFFFF;      /* Gruppen, Kacheln, Tabellen, Blatt */
+  --os-flaeche-2:#F3F5F9;    /* Hover, Hinweise, eingelassene Flächen */
+  --os-flaeche-3:#E7EAF0;    /* Schienen (Segment, Schalter, Fortschritt), Pillen */
+  --os-hebung:#FFFFFF;       /* das erhobene Stück: aktives Segment, Popover */
+  --os-grund:#F4F5F9;        /* flacher Seitengrund, z. B. Blatt-Rumpf */
+  --os-trenner:#ECEEF3;      /* Linien zwischen Zeilen — heller als --border */
+  --os-r:14px;--os-r-klein:10px;--os-r-blatt:16px;
+  --os-hoehe:36px;           /* Einheitshöhe für Knöpfe */
+}
+:root[data-theme="dark"]{
+  --os-flaeche:#131D2C;--os-flaeche-2:#1B2637;--os-flaeche-3:#26344A;
+  --os-hebung:#2A3A52;--os-grund:#0C1420;--os-trenner:#223044;
+}
+body.crm-dashboard-design{
+  --os-flaeche:#F7F8FA;--os-flaeche-2:#E9EBEF;--os-flaeche-3:#D8DCE2;
+  --os-hebung:#FDFDFE;--os-grund:#E4E7EC;--os-trenner:#DCDFE5;
+}
+:root[data-weiss="1"],
+:root[data-weiss="1"] body.crm-dashboard-design{
+  --os-flaeche:#FFFFFF;--os-flaeche-2:#F3F5F9;--os-flaeche-3:#E7EAF0;
+  --os-hebung:#FFFFFF;--os-grund:#F4F5F9;--os-trenner:#ECEEF3;
+}
+
+/* ---------- Breiten-Helfer ----------
+   Eingelassene Listen tragen nicht über 1.400 px. Wer eine Akte oder ein
+   Formular baut, begrenzt die Breite — linksbündig, wie in den Systemein-
+   stellungen, nicht zentriert. */
+.os-breite-schmal{max-width:760px}
+.os-breite-mittel{max-width:1080px}
+.os-spalten{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:0 24px;align-items:start}
+.os-spalten--2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.os-spalten--3{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:1100px){.os-spalten--3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.os-spalten--2,.os-spalten--3{grid-template-columns:1fr}}
+
+/* ---------- .os-kopf — Seitenkopf für Akte, Rechnung, Beleg ----------
+   Titel ist der Name der Sache (Firma, Rechnungsnummer), nicht der Bereich —
+   den zeigt schon die Topbar. Pillen darunter tragen den Zustand, rechts
+   stehen die Aktionen; genau EINE davon ist dunkel (die Primäraktion). */
+.os-kopf{margin:0 0 22px;min-width:0}
+.os-kopf-zurueck{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;
+  color:var(--text-secondary);margin-bottom:10px;transition:color var(--tempo)}
+.os-kopf-zurueck::before{content:"";width:7px;height:7px;border-left:1.6px solid currentColor;
+  border-bottom:1.6px solid currentColor;transform:rotate(45deg);margin-right:2px}
+.os-kopf-zurueck:hover{color:var(--foreground);text-decoration:none}
+.os-kopf-zeile{display:flex;align-items:flex-start;justify-content:space-between;gap:16px 24px;flex-wrap:wrap}
+.os-kopf-text{display:flex;gap:16px;align-items:flex-start;min-width:0;flex:1 1 320px}
+.os-kopf-avatar{flex:0 0 auto;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;
+  background:var(--os-flaeche-3);color:var(--text-secondary);font-size:17px;font-weight:600;
+  letter-spacing:.02em;overflow:hidden}
+.os-kopf-avatar img{width:100%;height:100%;object-fit:cover}
+.os-kopf-titel{font-size:26px;font-weight:650;letter-spacing:-.02em;line-height:1.15;margin:0;overflow-wrap:anywhere}
+.os-kopf-unter{font-size:14px;color:var(--text-secondary);margin:4px 0 0;line-height:1.4}
+.os-kopf-pillen{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.os-kopf-aktionen{display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex:0 0 auto}
+
+/* ---------- .os-werkzeugleiste — Kopfzeile eines Bereichs ----------
+   Titel links, Aktionen rechts. Primär = button.dunkel, sekundär = .sekundaer,
+   leise = .still (alle aus crm.css). Bricht auf schmalen Schirmen um. */
+.os-werkzeugleiste{display:flex;align-items:center;justify-content:space-between;gap:10px 16px;
+  flex-wrap:wrap;margin:0 0 14px;min-width:0}
+.os-werkzeugleiste-titel{font-size:16px;font-weight:600;letter-spacing:-.01em;line-height:1.3;margin:0;min-width:0}
+.os-werkzeugleiste-unter{display:block;font-size:13px;font-weight:400;color:var(--text-secondary);
+  margin-top:2px;letter-spacing:0}
+.os-werkzeugleiste-aktionen{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto}
+
+/* ---------- .os-unternav — Reiter unter dem Seitenkopf ----------
+   Für schale({reiter}) gedacht: sitzt zwischen Topbar und main. Steht sie
+   IN main (unter .os-kopf), fällt der Außenabstand weg. Kein Umbruch —
+   auf schmalen Schirmen scrollt sie waagerecht, ohne sichtbaren Balken. */
+.os-unternav{display:flex;gap:4px;align-items:center;padding:10px 26px 0;overflow-x:auto;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;min-width:0}
+.os-unternav::-webkit-scrollbar{display:none}
+main .os-unternav{padding:0;margin:0 0 18px}
+.os-kopf .os-unternav{padding:0;margin:14px 0 0}
+.os-unternav a{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:0 12px;height:32px;
+  border-radius:9px;font-size:13.5px;font-weight:500;color:var(--text-secondary);white-space:nowrap;
+  transition:color var(--tempo),background var(--tempo),box-shadow var(--tempo)}
+.os-unternav a:hover{color:var(--foreground);background:var(--os-flaeche-2);text-decoration:none}
+.os-unternav a.aktiv{color:var(--foreground);background:var(--os-hebung);font-weight:600;
+  box-shadow:0 0 0 1px var(--border),var(--s1)}
+.os-unternav a small{font-size:11px;font-weight:600;color:var(--text-muted);background:var(--os-flaeche-3);
+  border-radius:99px;padding:1px 6px;line-height:1.4}
+.os-unternav a.aktiv small{color:var(--text-secondary)}
+
+/* ---------- .os-segment — Segmented Control ----------
+   Umschalter zwischen Kategorien EINER Sache (Stammdaten · Auftrag · Stand).
+   Kinder sind <button role=tab> oder <a>. Aktiv = .aktiv oder aria-selected.
+   Ohne Umbruch; bei Platznot scrollt die Schiene. */
+.os-segment{display:inline-flex;align-items:center;gap:2px;padding:3px;max-width:100%;
+  background:var(--os-flaeche-3);border-radius:10px;overflow-x:auto;scrollbar-width:none;vertical-align:middle}
+.os-segment::-webkit-scrollbar{display:none}
+.os-segment>button,.os-segment>a{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  height:30px;min-height:0;padding:0 14px;margin:0;border:0;border-radius:8px;background:transparent;
+  color:var(--text-secondary);font:inherit;font-size:13px;font-weight:500;line-height:1;white-space:nowrap;
+  cursor:pointer;box-shadow:none;transition:background var(--tempo),color var(--tempo),box-shadow var(--tempo)}
+.os-segment>button:hover,.os-segment>a:hover{color:var(--foreground);background:transparent;box-shadow:none;text-decoration:none}
+.os-segment>button:active{transform:none}
+.os-segment>.aktiv,.os-segment>[aria-selected="true"]{background:var(--os-hebung);color:var(--foreground);
+  font-weight:600;box-shadow:var(--s1)}
+.os-segment>button:disabled{opacity:.45;cursor:not-allowed}
+.os-segment>button:focus-visible,.os-segment>a:focus-visible{outline-offset:-1px}
+.os-segment--voll{display:flex}
+.os-segment--voll>button,.os-segment--voll>a{flex:1 1 0}
+.os-segment>button svg,.os-segment>a svg{width:15px;height:15px}
+
+/* ---------- .os-gruppe — eingelassene Liste („inset grouped list") ----------
+   Titel klein und sekundär ÜBER der Fläche, rechts optional ein Werkzeug
+   (Link oder leiser Knopf). Der Rumpf ist die gerundete Fläche mit Zeilen;
+   overflow:hidden schneidet Hover und Fokus an den Ecken sauber ab — deshalb
+   Popover nie IM Rumpf verankern, sondern im Titel-Werkzeug. */
+.os-gruppe{margin:0 0 22px;min-width:0}
+.os-gruppe-titel{display:flex;align-items:baseline;justify-content:space-between;gap:4px 12px;flex-wrap:wrap;
+  padding:0 4px 8px;font-size:13px;font-weight:600;color:var(--text-secondary);letter-spacing:0;line-height:1.3}
+.os-gruppe-titel h2,.os-gruppe-titel h3{font:inherit;color:inherit;margin:0;letter-spacing:0}
+.os-gruppe-unter{display:block;flex-basis:100%;font-size:12px;font-weight:400;color:var(--text-muted);line-height:1.4}
+.os-gruppe-werkzeug{margin-left:auto;display:inline-flex;gap:10px;align-items:center;
+  font-size:12.5px;font-weight:500;color:var(--primary)}
+.os-gruppe-werkzeug a{color:inherit}
+.os-gruppe-werkzeug a:hover{text-decoration:underline}
+.os-gruppe-werkzeug button,.os-gruppe-werkzeug .knopf{background:transparent;border:0;padding:2px 6px;margin:-2px -6px;
+  min-height:0;height:auto;color:var(--primary);font:inherit;font-size:12.5px;font-weight:500;box-shadow:none;
+  border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.os-gruppe-werkzeug button:hover,.os-gruppe-werkzeug .knopf:hover{background:var(--os-flaeche-2);box-shadow:none;
+  color:var(--primary-hover);text-decoration:none}
+.os-gruppe-werkzeug button:active{transform:none}
+.os-gruppe-werkzeug svg{width:14px;height:14px}
+.os-gruppe-rumpf{background:var(--os-flaeche);border:1px solid var(--border);border-radius:var(--os-r);
+  box-shadow:var(--s1);overflow:hidden;min-width:0}
+.os-gruppe-fuss{padding:8px 4px 0;font-size:12px;color:var(--text-muted);line-height:1.45}
+.os-gruppe-fuss a{color:var(--text-secondary);text-decoration:underline;text-underline-offset:2px}
+/* Ein Leerzustand oder eine Tabelle darf direkt im Rumpf stehen. */
+.os-gruppe-rumpf>.os-tabelle-huelle{border:0;border-radius:0;box-shadow:none}
+
+/* ---------- .os-zeile — EINE Zeile: Beschriftung oben, Wert darunter ---------- */
+.os-zeile{position:relative;display:flex;flex-direction:column;justify-content:center;gap:2px;min-height:56px;
+  padding:9px 16px;margin:0;width:100%;font-size:14px;font-weight:400;line-height:1.4;color:var(--foreground);text-align:left;
+  background:transparent;border:0;border-radius:0;box-shadow:none;
+  transition:background var(--tempo),box-shadow var(--tempo)}
+/* Trennlinie nur ZWISCHEN Zeilen — über Geschwister, damit ein verstecktes
+   <input type=hidden> dazwischen die Linie nicht kostet. */
+.os-zeile~.os-zeile{border-top:1px solid var(--os-trenner)}
+.os-zeile-label{display:block;font-size:12px;font-weight:500;color:var(--text-secondary);line-height:1.3;
+  margin:0;letter-spacing:0}
+.os-zeile-wert{position:relative;display:block;min-width:0;font-size:14px;line-height:1.4;color:var(--foreground);
+  overflow-wrap:anywhere}
+/* Leerer Wert: ruhiger Strich, oder ein eigener Satz über data-leer. */
+.os-zeile-wert:empty::before{content:"—";color:var(--text-muted)}
+.os-zeile-wert[data-leer]:empty::before{content:attr(data-leer);color:var(--text-muted)}
+.os-zeile-hilfe{display:block;font-size:12px;color:var(--text-muted);line-height:1.4;margin-top:2px}
+.os-zeile-neben{margin-left:auto;font-size:13px;color:var(--text-muted);white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+.os-zeile-wert a{color:var(--primary)}
+.os-zeile-wert .os-pille{vertical-align:-1px}
+
+/* Variante --eingabe: input/select/textarea liegen RANDLOS in der Zeile.
+   Fokus hebt die ganze Zeile hervor (Fläche + 3-px-Kante links), nicht das
+   Feld. Ausgenommen sind Häkchen/Radios (gehören in --schalter/--chips). */
+.os-zeile--eingabe{cursor:text}
+.os-zeile--eingabe:has(select){cursor:pointer}
+.os-zeile--eingabe :is(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea){
+  display:block;width:100%;min-width:0;margin:0;padding:0;border:0;border-radius:0;background:transparent;
+  box-shadow:none;outline:0;color:var(--foreground);font:inherit;font-size:14px;line-height:1.4;
+  min-height:20px;height:auto}
+.os-zeile--eingabe :is(input,select,textarea):focus,
+body .os-zeile--eingabe :is(input,select,textarea):focus-visible{box-shadow:none;border-color:transparent;outline:0}
+.os-zeile--eingabe select{appearance:none;-webkit-appearance:none;padding-right:26px;cursor:pointer}
+.os-zeile-wert:has(>select)::after{content:"";position:absolute;right:6px;top:50%;width:7px;height:7px;
+  border-right:1.6px solid var(--text-muted);border-bottom:1.6px solid var(--text-muted);
+  transform:translateY(-70%) rotate(45deg);pointer-events:none}
+.os-zeile--eingabe textarea{resize:vertical;min-height:44px;field-sizing:content}
+.os-zeile--eingabe input::placeholder,.os-zeile--eingabe textarea::placeholder{color:var(--text-muted)}
+.os-zeile--eingabe :is(input,select,textarea):disabled{color:var(--text-muted);-webkit-text-fill-color:var(--text-muted);
+  cursor:not-allowed;opacity:1}
+.os-zeile--eingabe:focus-within,.os-zeile-teil:focus-within{background:var(--primary-soft);box-shadow:inset 3px 0 0 var(--primary)}
+.os-zeile-teil:focus-within .os-zeile-label,
+.os-zeile--eingabe:not(.os-zeile--paar):focus-within .os-zeile-label{color:var(--primary)}
+/* Datumsfelder: Chrome setzt ihnen Monospace — hier wieder die Hausschrift. */
+.os-zeile--eingabe input[type=date],.os-zeile--eingabe input[type=time],
+.os-zeile--eingabe input[type=datetime-local],.os-zeile--eingabe input[type=month]{font-family:inherit}
+.os-zeile--eingabe input[type=number]{-moz-appearance:textfield}
+
+/* Variante --paar: zwei kurze Felder nebeneinander (Setup | Retainer),
+   unter 700 px untereinander. Fokus gilt je Hälfte, nicht der ganzen Zeile. */
+.os-zeile--paar{display:grid;grid-template-columns:1fr 1fr;padding:0;gap:0;min-height:0}
+.os-zeile--paar:focus-within{background:transparent;box-shadow:none}
+.os-zeile-teil{position:relative;display:flex;flex-direction:column;justify-content:center;gap:2px;min-height:56px;
+  padding:9px 16px;margin:0;min-width:0;font-size:14px;font-weight:400;color:var(--foreground);
+  transition:background var(--tempo),box-shadow var(--tempo)}
+.os-zeile-teil+.os-zeile-teil{border-left:1px solid var(--os-trenner)}
+@media (max-width:700px){
+  .os-zeile--paar{grid-template-columns:1fr}
+  .os-zeile-teil+.os-zeile-teil{border-left:0;border-top:1px solid var(--os-trenner)}
+}
+
+/* Variante --chips: Mehrfachauswahl als Pillen. Jede Pille ist ein <label>
+   mit einem Häkchen darin; das Häkchen selbst ist unsichtbar, die Pille
+   zeigt den Zustand (gefüllt + Haken). Tastatur: Tab → Leertaste. */
+.os-chips{display:flex;flex-wrap:wrap;gap:6px;padding:3px 0 1px}
+.os-chip{position:relative;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;margin:0;
+  border-radius:99px;border:1px solid var(--border-stark);background:var(--os-flaeche);color:var(--foreground);
+  font-size:12.5px;font-weight:500;line-height:1;cursor:pointer;white-space:nowrap;user-select:none;
+  transition:background var(--tempo),border-color var(--tempo),color var(--tempo)}
+.os-chip input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;
+  appearance:none;-webkit-appearance:none}
+.os-chip:hover{background:var(--os-flaeche-2)}
+.os-chip:has(input:checked){background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
+.os-chip:has(input:checked)::before{content:"";width:5px;height:9px;margin:-3px 1px 0 -1px;
+  border-right:1.8px solid currentColor;border-bottom:1.8px solid currentColor;transform:rotate(45deg)}
+.os-chip:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
+.os-chip:has(input:disabled){opacity:.5;cursor:not-allowed}
+.os-chip:has(input:disabled) input{cursor:not-allowed}
+.os-chip svg{width:14px;height:14px}
+
+/* Variante --schalter: Ja/Nein als Schalter, Beschriftung links in
+   Fließtextgröße, Schalter rechts. Grün = an (wie bei Apple), auch im
+   Graphit-Design, wo das Blau grau wäre und „an" sonst nicht zu erkennen. */
+.os-zeile--schalter{flex-direction:row;align-items:center;justify-content:space-between;gap:16px;
+  cursor:pointer;min-height:52px}
+.os-zeile--schalter .os-zeile-label{display:flex;flex-direction:column;gap:1px;flex:1 1 auto;min-width:0;
+  font-size:14px;font-weight:400;color:var(--foreground)}
+.os-zeile--schalter .os-zeile-hilfe{margin:0}
+.os-schalter{position:relative;flex:0 0 auto;display:inline-block;width:44px;height:26px;border-radius:99px;
+  background:var(--os-flaeche-3);box-shadow:inset 0 0 0 1px rgba(15,27,45,.06);vertical-align:middle;
+  transition:background var(--tempo)}
+.os-schalter input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:1;
+  appearance:none;-webkit-appearance:none}
+.os-schalter::after{content:"";position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.28),0 0 0 .5px rgba(0,0,0,.06);
+  transition:transform var(--tempo);pointer-events:none}
+.os-schalter:has(input:checked){background:var(--success);box-shadow:none}
+.os-schalter:has(input:checked)::after{transform:translateX(18px)}
+.os-schalter:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
+.os-schalter:has(input:disabled){opacity:.5}
+.os-schalter:has(input:disabled) input{cursor:not-allowed}
+
+/* Variante --aktion: klickbare Zeile (<a> oder <button>) mit Chevron rechts.
+   Optional ein Icon links (.os-zeile-icon) und ein Nebentext rechts
+   (.os-zeile-neben, z. B. „3 offen"). */
+.os-zeile--aktion{flex-direction:row;flex-wrap:wrap;align-items:center;gap:2px 12px;padding-right:40px;
+  cursor:pointer;color:var(--foreground);text-decoration:none;font:inherit;font-size:14px;line-height:1.4;
+  font-weight:400;background:transparent;border-radius:0;min-height:56px}
+.os-zeile--aktion .os-zeile-label{flex-basis:100%}
+.os-zeile--aktion .os-zeile-wert{flex:1 1 auto}
+.os-zeile--aktion::after{content:"";position:absolute;right:19px;top:50%;width:8px;height:8px;
+  border-right:1.6px solid var(--text-muted);border-top:1.6px solid var(--text-muted);
+  transform:translateY(-50%) rotate(45deg);pointer-events:none}
+.os-zeile--aktion:hover{background:var(--os-flaeche-2);text-decoration:none;box-shadow:none;color:var(--foreground)}
+.os-zeile--aktion:active{transform:none;background:var(--os-flaeche-3)}
+a.os-zeile--aktion:focus-visible,button.os-zeile--aktion:focus-visible{outline:0;box-shadow:inset 3px 0 0 var(--primary);background:var(--primary-soft)}
+.os-zeile-icon{flex:0 0 auto;width:28px;height:28px;border-radius:8px;background:var(--os-flaeche-2);
+  color:var(--text-secondary);display:grid;place-items:center}
+.os-zeile-icon svg{width:16px;height:16px}
+
+/* Fehlerzustand einer Zeile: rote Kante, Beschriftung und Hilfe rot. */
+.os-zeile--fehler{box-shadow:inset 3px 0 0 var(--danger)}
+.os-zeile--fehler .os-zeile-label,.os-zeile--fehler .os-zeile-hilfe{color:var(--danger)}
+
+/* ---------- .os-pille — Statuspille ---------- */
+.os-pille{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:99px;
+  font-size:11.5px;font-weight:600;line-height:1;white-space:nowrap;vertical-align:middle;
+  background:var(--os-flaeche-3);color:var(--text-secondary)}
+.os-pille--punkt::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto}
+.os-pille--grau{background:var(--os-flaeche-3);color:var(--text-secondary)}
+.os-pille--blau{background:var(--info-flaeche);color:var(--info)}
+.os-pille--gruen{background:var(--success-flaeche);color:var(--success)}
+.os-pille--bernstein{background:var(--warning-flaeche);color:var(--warning)}
+.os-pille--rot{background:var(--danger-flaeche);color:var(--danger)}
+.os-pille--gross{height:26px;padding:0 11px;font-size:12.5px}
+.os-pille svg{width:12px;height:12px}
+
+/* ---------- .os-kacheln / .os-kachel — ruhige Kennzahlen ---------- */
+.os-kacheln{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:0 0 22px}
+.os-kachel{display:flex;flex-direction:column;gap:4px;min-width:0;background:var(--os-flaeche);
+  border:1px solid var(--border);border-radius:var(--os-r);padding:14px 16px 13px;box-shadow:var(--s1);
+  color:var(--foreground);transition:box-shadow var(--tempo),border-color var(--tempo)}
+.os-kachel-label{font-size:12px;font-weight:500;color:var(--text-secondary);line-height:1.3}
+.os-kachel-zahl{font-size:24px;font-weight:650;letter-spacing:-.02em;line-height:1.1;color:var(--foreground);
+  font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.os-kachel-zahl small{font-size:14px;font-weight:500;color:var(--text-secondary);letter-spacing:0;margin-left:2px}
+.os-kachel-fuss{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--text-muted);line-height:1.35}
+.os-kachel--gruen .os-kachel-zahl{color:var(--success)}
+.os-kachel--rot .os-kachel-zahl{color:var(--danger)}
+.os-kachel--bernstein .os-kachel-zahl{color:var(--warning)}
+.os-kachel--blau .os-kachel-zahl{color:var(--primary)}
+a.os-kachel:hover{box-shadow:var(--s2);border-color:var(--border-stark);text-decoration:none}
+a.os-kachel:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+
+/* ---------- .os-fortschritt — Fortschrittsbalken mit Beschriftung ---------- */
+.os-fortschritt{display:flex;flex-direction:column;gap:6px;min-width:0}
+.os-fortschritt-text{display:flex;justify-content:space-between;gap:12px;font-size:12.5px;
+  color:var(--text-secondary);line-height:1.3}
+.os-fortschritt-text b{color:var(--foreground);font-weight:600}
+.os-fortschritt-balken{height:6px;border-radius:99px;background:var(--os-flaeche-3);overflow:hidden}
+.os-fortschritt-balken>span{display:block;height:100%;border-radius:99px;background:var(--primary);
+  transition:width .6s cubic-bezier(.4,0,.2,1)}
+.os-fortschritt--gruen .os-fortschritt-balken>span{background:var(--success)}
+.os-fortschritt--bernstein .os-fortschritt-balken>span{background:var(--warning)}
+.os-fortschritt--rot .os-fortschritt-balken>span{background:var(--danger)}
+.os-fortschritt--klein .os-fortschritt-balken{height:4px}
+
+/* ---------- .os-tabelle — schlanke Tabelle ----------
+   Kopf klein und sekundär, Zeilen-Hover, Zahlen rechtsbündig (.rechts),
+   Zeile als Link über data-href + Skript aus dem Leitfaden — zusätzlich ein
+   echter <a> in der ersten Zelle, damit Tastatur und Vorschau funktionieren. */
+.os-tabelle-huelle{background:var(--os-flaeche);border:1px solid var(--border);border-radius:var(--os-r);
+  box-shadow:var(--s1);overflow-x:auto;-webkit-overflow-scrolling:touch;min-width:0}
+table.os-tabelle{width:100%;border-collapse:collapse;font-size:13.5px}
+.os-tabelle th{text-align:left;padding:10px 16px;font-size:12px;font-weight:600;color:var(--text-secondary);
+  border-bottom:1px solid var(--border);white-space:nowrap;background:var(--os-flaeche)}
+.os-tabelle td{padding:11px 16px;border-bottom:1px solid var(--os-trenner);vertical-align:middle;color:var(--foreground)}
+.os-tabelle tbody tr:last-child td{border-bottom:0}
+.os-tabelle tbody tr{transition:background var(--tempo)}
+.os-tabelle tbody tr:hover{background:var(--os-flaeche-2)}
+.os-tabelle tbody tr[data-href],.os-tabelle tbody tr.os-klick{cursor:pointer}
+.os-tabelle tbody tr:focus-within{background:var(--primary-soft)}
+.os-tabelle .rechts,.os-tabelle .zahl{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.os-tabelle-titel{font-weight:600;line-height:1.35}
+.os-tabelle-unter{font-size:12px;color:var(--text-muted);margin-top:1px}
+.os-tabelle td a{color:var(--foreground)}
+.os-tabelle td a:hover{color:var(--primary)}
+.os-tabelle td a:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:4px}
+.os-tabelle tfoot td{font-weight:600;border-top:1px solid var(--border);border-bottom:0;background:var(--os-flaeche-2)}
+.os-tabelle--dicht th{padding:8px 12px}
+.os-tabelle--dicht td{padding:8px 12px}
+.os-tabelle .os-leer{padding:28px 16px}
+
+/* ---------- .os-blatt — Sheet auf Basis von <dialog> ----------
+   Kopf (Titel, Untertitel, Schließen-X), scrollbarer Rumpf mit Gruppen auf
+   flachem Grund, Fuß mit Knöpfen. Unter 700 px fährt es von unten hoch und
+   nimmt die volle Breite. Das <form> darin ist display:contents, damit Kopf,
+   Rumpf und Fuß direkt in der Flex-Spalte des Dialogs liegen. */
+dialog.os-blatt{padding:0;margin:auto;width:min(620px,calc(100vw - 32px));max-width:none;
+  max-height:min(88vh,calc(100vh - 48px));border:1px solid var(--border);border-radius:var(--os-r-blatt);
+  background:var(--os-flaeche);color:var(--foreground);box-shadow:var(--s3);overflow:hidden}
+dialog.os-blatt[open]{display:flex;flex-direction:column;animation:os-blatt-auf .22s cubic-bezier(.2,.7,.2,1)}
+dialog.os-blatt>form{display:contents}
+dialog.os-blatt.os-blatt--schmal{width:min(440px,calc(100vw - 32px))}
+dialog.os-blatt.os-blatt--breit{width:min(880px,calc(100vw - 32px))}
+dialog.os-blatt::backdrop{background:rgba(15,27,45,.38);backdrop-filter:blur(3px)}
+.os-blatt-kopf{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 22px 14px;
+  border-bottom:1px solid var(--os-trenner);flex:0 0 auto}
+.os-blatt-kopf h2,.os-blatt-titel{font-size:18px;font-weight:600;letter-spacing:-.01em;line-height:1.25;margin:0}
+.os-blatt-unter{font-size:13px;color:var(--text-secondary);margin:3px 0 0;line-height:1.4}
+.os-blatt-schliessen{flex:0 0 auto;width:30px;height:30px;min-height:0;padding:0;margin:-4px -6px 0 0;border:0;
+  border-radius:50%;background:var(--os-flaeche-3);color:var(--text-secondary);display:grid;place-items:center;
+  box-shadow:none;cursor:pointer;font-size:16px;line-height:1;transition:background var(--tempo),color var(--tempo)}
+.os-blatt-schliessen:hover{background:var(--border-stark);color:var(--foreground);box-shadow:none}
+.os-blatt-schliessen:active{transform:none}
+.os-blatt-schliessen svg{width:15px;height:15px}
+.os-blatt-rumpf{flex:1 1 auto;min-height:0;overflow:auto;padding:18px 22px 6px;background:var(--os-grund);
+  overscroll-behavior:contain}
+.os-blatt-rumpf>.os-gruppe:last-child{margin-bottom:16px}
+.os-blatt-rumpf>.os-hinweis:first-child{margin-top:-2px}
+.os-blatt-fuss{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding:14px 22px;
+  border-top:1px solid var(--os-trenner);background:var(--os-flaeche);flex:0 0 auto}
+.os-blatt-fuss .links{margin-right:auto}
+@keyframes os-blatt-auf{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes os-blatt-hoch{from{transform:translateY(100%)}to{transform:none}}
+@media (max-width:700px){
+  dialog.os-blatt,dialog.os-blatt.os-blatt--schmal,dialog.os-blatt.os-blatt--breit{
+    position:fixed;inset:auto 0 0 0;margin:0;width:100%;max-width:100%;max-height:92vh;
+    border-radius:18px 18px 0 0;border-bottom:0}
+  dialog.os-blatt[open]{animation:os-blatt-hoch .28s cubic-bezier(.2,.7,.2,1)}
+  .os-blatt-fuss{padding-bottom:max(14px,env(safe-area-inset-bottom))}
+  .os-blatt-fuss button,.os-blatt-fuss .knopf{flex:1 1 auto;justify-content:center}
+  .os-blatt-fuss .links{flex:1 1 100%;margin:0}
+}
+
+/* ---------- .os-popover — kleines Popover mit Zipfel ----------
+   Anker: ein Elternelement mit .os-popover-anker (position:relative). Das
+   Popover liegt darunter (Standard) oder darüber (--oben), Zipfel links oder
+   rechts (--rechts). Wer es per Skript frei platziert (Kalender), setzt
+   position:fixed + top/left selbst und nimmt --ohne-zipfel. */
+.os-popover-anker{position:relative;display:inline-block}
+.os-popover{position:absolute;z-index:60;top:calc(100% + 10px);left:0;min-width:220px;
+  max-width:min(340px,calc(100vw - 24px));background:var(--os-hebung);color:var(--foreground);
+  border:1px solid var(--border);border-radius:12px;box-shadow:var(--s3);padding:6px 0;font-size:13px;
+  text-align:left;animation:os-pop .16s ease-out}
+.os-popover[hidden]{display:none}
+.os-popover::before{content:"";position:absolute;top:-6px;left:20px;width:10px;height:10px;background:inherit;
+  border-left:1px solid var(--border);border-top:1px solid var(--border);transform:rotate(45deg)}
+.os-popover--rechts{left:auto;right:0}
+.os-popover--rechts::before{left:auto;right:20px}
+.os-popover--oben{top:auto;bottom:calc(100% + 10px)}
+.os-popover--oben::before{top:auto;bottom:-6px;border-left:0;border-top:0;
+  border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+.os-popover--ohne-zipfel::before{display:none}
+.os-popover--breit{min-width:300px;max-width:min(420px,calc(100vw - 24px))}
+.os-popover-kopf{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px;
+  font-size:12.5px;font-weight:600;color:var(--text-secondary);border-bottom:1px solid var(--os-trenner);margin-bottom:4px}
+.os-popover-kopf b{color:var(--foreground);font-size:13.5px;font-weight:600}
+.os-popover-rumpf{padding:6px 14px 8px;line-height:1.45;color:var(--foreground)}
+.os-popover-rumpf p{margin:0 0 4px}
+.os-popover-liste{display:flex;flex-direction:column;max-height:300px;overflow:auto;padding:0;overscroll-behavior:contain}
+.os-popover-liste label,.os-popover-liste a,.os-popover-liste button{display:flex;align-items:center;gap:10px;
+  margin:0;padding:7px 14px;min-height:34px;width:100%;font:inherit;font-size:13px;font-weight:450;line-height:1.3;
+  color:var(--foreground);background:transparent;border:0;border-radius:0;box-shadow:none;cursor:pointer;text-align:left;
+  transition:background var(--tempo)}
+.os-popover-liste label:hover,.os-popover-liste a:hover,.os-popover-liste button:hover{background:var(--os-flaeche-2);
+  text-decoration:none;color:var(--foreground);box-shadow:none}
+.os-popover-liste button:active{transform:none}
+.os-popover-liste :is(label,a,button):focus-visible{outline:0;background:var(--primary-soft)}
+.os-popover-liste input[type=checkbox],.os-popover-liste input[type=radio]{width:16px;height:16px;margin:0;padding:0;
+  accent-color:var(--primary);flex:0 0 auto}
+.os-popover-liste label:has(input:focus-visible){background:var(--primary-soft)}
+.os-popover-liste .os-popover-trenner{height:1px;background:var(--os-trenner);margin:4px 0}
+.os-popover-fuss{display:flex;justify-content:flex-end;gap:6px;padding:8px 10px 4px;border-top:1px solid var(--os-trenner);margin-top:4px}
+.os-popover-fuss button,.os-popover-fuss .knopf{min-height:30px;padding:0 12px;font-size:12.5px}
+@keyframes os-pop{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+/* ---------- .os-leer — Leerzustand ---------- */
+.os-leer{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:40px 24px;
+  color:var(--text-secondary)}
+.os-leer-icon{width:44px;height:44px;border-radius:12px;background:var(--os-flaeche-3);color:var(--text-muted);
+  display:grid;place-items:center;margin-bottom:6px}
+.os-leer-icon svg{width:20px;height:20px}
+.os-leer h3,.os-leer-titel{font-size:14.5px;font-weight:600;color:var(--foreground);margin:0}
+.os-leer p{font-size:13.5px;color:var(--text-secondary);max-width:44ch;margin:0;line-height:1.5}
+.os-leer>button,.os-leer>.knopf,.os-leer>a{margin-top:10px}
+.os-leer--klein{padding:22px 16px;gap:4px}
+.os-leer--klein .os-leer-icon{width:34px;height:34px;border-radius:9px;margin-bottom:2px}
+.os-leer--klein .os-leer-icon svg{width:16px;height:16px}
+.os-leer--klein p{font-size:13px}
+
+/* ---------- .os-hinweis — ruhige Inline-Meldung ----------
+   Getönte Fläche, Text in Textfarbe, nur das Icon trägt die Bedeutung.
+   Kein Balken, keine Linkskante. */
+.os-hinweis{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:var(--os-r-klein);
+  background:var(--os-flaeche-2);color:var(--foreground);font-size:13px;line-height:1.45;margin:0 0 14px}
+.os-hinweis svg{width:16px;height:16px;flex:0 0 auto;margin-top:2px;color:var(--text-secondary)}
+.os-hinweis b{font-weight:600}
+.os-hinweis a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.os-hinweis-aktion{margin-left:auto;flex:0 0 auto;align-self:center}
+.os-hinweis--info{background:var(--info-flaeche)}
+.os-hinweis--info svg{color:var(--info)}
+.os-hinweis--warn{background:var(--warning-flaeche)}
+.os-hinweis--warn svg{color:var(--warning)}
+.os-hinweis--erfolg{background:var(--success-flaeche)}
+.os-hinweis--erfolg svg{color:var(--success)}
+.os-hinweis--fehler{background:var(--danger-flaeche)}
+.os-hinweis--fehler svg{color:var(--danger)}
+
+/* ---------- Bewegung aus, wenn gewünscht ---------- */
+@media (prefers-reduced-motion:reduce){
+  [class^="os-"],[class*=" os-"],[class^="os-"]::before,[class*=" os-"]::before,
+  [class^="os-"]::after,[class*=" os-"]::after,.os-fortschritt-balken>span{
+    transition:none!important;animation:none!important}
+}
+
+/* =====================================================================
+   Globaler Feinschliff — additive Regeln für ALLE bestehenden Seiten,
+   außer der Zentrale/Sprachbühne (body.jarvis): die ist eine eigene Bühne
+   mit eigenem Stil (jarvis*.css) und bleibt hier unberührt.
+
+   Fast alles steht in :where() und hat damit Spezifität 0: jede bestehende
+   Klassenregel in crm.css/style.css gewinnt weiterhin, nachgezogen werden
+   nur die nackten Standardwerte von button/input/select/textarea/dialog.
+   ===================================================================== */
+
+/* 1. Knöpfe und Felder in der Hausschrift. crm.css schreibt
+   `font:600 13.5px/1.2 inherit` — in der font-Kurzschrift ist „inherit" als
+   Schriftfamilie ungültig, der Browser verwirft die GANZE Angabe. Gemessen am
+   05.09.2026 im Browser: jeder Knopf und jedes Feld stand in Arial 13,33 px,
+   Gewicht 400, mitten in einer Oberfläche aus SF/Inter; Datumsfelder dazu in
+   Monospace (Chromes Vorgabe für type=date). Hier steht, was gemeint war. */
+body:where(:not(.jarvis)) :where(button,.knopf){font-family:inherit;font-size:13.5px;font-weight:600;line-height:1.2}
+body:where(:not(.jarvis)) :where(input,select,textarea){font-family:inherit;font-size:13.5px;font-weight:400;line-height:1.2}
+body:where(:not(.jarvis)) :where(textarea){line-height:1.45}
+
+/* 2. Einheitliche Höhe 36 px für die Standardknöpfe (ohne Klasse, .dunkel,
+   .sekundaer, .gefahr, .knopf). Felder landen mit 9-px-Polster, 1-px-Rand
+   und Zeilenhöhe 1,2 von selbst bei 36 px — vorher standen 34-px-Knöpfe
+   neben 35-px-Feldern. Leise, kleine und winzige Knöpfe (.still/.klein/
+   .tiny) und alle Icon-Knöpfe mit eigener Klasse behalten ihre Maße. */
+body:where(:not(.jarvis)) :where(button:not([class]),button.dunkel,button.sekundaer,button.gefahr,.knopf):where(:not(.klein,.tiny,.still)){
+  min-height:var(--os-hoehe)}
+
+/* 3. Fokus sichtbar, aber nur per Tastatur (:focus-visible): 2-px-Ring in
+   der Primärfarbe (im Graphit-Design ist das dessen Grau — dieselbe Farbe,
+   die crm.css dort schon nimmt). Felder bleiben unangetastet: sie haben
+   ihren Leuchtrand aus crm.css, und Graphit legt selbst einen Ring darüber.
+   Spezifität (0,2,1) — jede Bausteinregel mit eigener Fokus-Optik gewinnt. */
+body:where(:not(.jarvis)) :is(button,.knopf,a,summary,[tabindex]):focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+
+/* 4. Kein grauer Blitz beim Antippen auf Touch-Geräten. */
+body:not(.jarvis) :is(a,button,label,summary){-webkit-tap-highlight-color:transparent}
+
+/* 5. Dialoge im Dunkelmodus: crm.css gibt <dialog> keinen Hintergrund, der
+   Browser malt Weiß — mit heller Schrift darauf. Gemessen 05.09.2026 an der
+   Termin-Warnung im Kalender: rgb(255,255,255) hinter rgb(232,238,246).
+   Flache Fläche in Theme-Farbe; die Graphit-Verläufe liegen als
+   background-image darüber und bleiben, wie sie sind. */
+body:not(.jarvis) dialog{background-color:var(--os-flaeche)}
+
+/* 6. Im Dunkelmodus auch die Browser-eigenen Teile dunkel: Rollbalken,
+   Auswahllisten, Datumswähler, Häkchen. Vererbt sich, deshalb auf body. */
+:root[data-theme="dark"] body:not(.jarvis){color-scheme:dark}
