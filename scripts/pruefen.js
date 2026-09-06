@@ -151,6 +151,15 @@ const TESTS = [
   // PDF-Links und der abgelaufene Link. Beide mit Attrappen fuer schnell.js,
   // gmail-direkt.js, whatsapp.js und crm.js — ohne Netz, ohne Datenbank.
   "test-beleg-diktat", "test-beleg-versand",
+  // 05.09.2026: Beleg im Gespraech (lib/beleg-chat.js) — die Werkzeugschleife
+  // und die Regel, an der alles haengt: In einem Gespraech entsteht GENAU EIN
+  // Beleg. Geprueft werden das Anlegen, das Aendern desselben Belegs (Betrag,
+  // Datum, Position dazu und weg), die abgelehnte zweite Anlage, der
+  // mehrdeutige Kunde, der unmoegliche Betrag, der Abbruch nach sechs Runden
+  // und das werfende Modell. Mit Attrappen fuer schnell.js, crm.js (samt einer
+  // Arbeitsspeicher-Fassung von beleg_chat aus 0063) und den Datenzugriffen aus
+  // rechnungen.js — ohne Netz, ohne Datenbank.
+  "test-beleg-chat",
 ];
 
 // NICHT hier drin, mit Grund:

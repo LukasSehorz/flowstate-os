@@ -15,6 +15,16 @@
 //   4. Zahlen als Zahlen (<v>), Datum als Seriennummer mit Datumsformat,
 //      Texte inline (t="inlineStr"), Umlaute und "&" korrekt kodiert
 //   5. eingefrorene Kopfzeile, Spaltenbreiten, Filter, Summenzeile fett
+//   6. VERKNUEPFUNGEN (06.09.2026): der <hyperlinks>-Block an der richtigen
+//      Stelle im Blatt, eine Beziehungsdatei je Blatt mit Links, jede r:id aus
+//      dem Blatt mit Entsprechung darin, Ziele als URI kodiert (Leerzeichen,
+//      "&", Umlaute), kein leeres <hyperlinks> und keine ueberfluessige .rels
+//      auf Blaettern ohne Links.
+//
+// Die Verknuepfung ist die Stelle, an der eine .xlsx am leichtesten kaputt
+// geht: eine r:id ohne Beziehung, der Block an der falschen Stelle, ein rohes
+// Leerzeichen im Target — und Excel fragt beim Oeffnen "Reparieren?". Danach
+// ist die Datei fuer die Kanzlei wertlos. Darum hier besonders genau.
 //
 //   node scripts/test-xlsx-schreiben.js
 
@@ -118,6 +128,26 @@ const datei = xlsx.bauen({
     { name: "Offen", spalten: [{ titel: "Richtung" }, { titel: "Betrag €", typ: "geld" }], zeilen: [], leerText: "Zum Stichtag war nichts offen." },
     // Ein dritter Name, der Excel nicht gefaellt: zu lang und mit verbotenen Zeichen.
     { name: "Ein sehr langer Blattname mit [Klammern] und /Schrägstrich/ und noch mehr", spalten: [{ titel: "x" }], zeilen: [["y"]] },
+    // Blatt 4: die Verknuepfungen. Bewusst ein eigenes Blatt — so pruefen die
+    // Blaetter 1 bis 3 gleichzeitig, dass ein Blatt OHNE Links weder einen
+    // <hyperlinks>-Block noch eine Beziehungsdatei bekommt.
+    {
+      name: "Verknüpfungen",
+      spalten: [{ titel: "Datei", breite: 44 }, { titel: "Online", breite: 18 }],
+      zeilen: [
+        // Leerzeichen, "&" und Umlaut im Dateinamen — der Fall, an dem eine
+        // Verknuepfung erfahrungsgemaess zerbricht.
+        [{ wert: "0042 Müller & Söhne.pdf", link: "Belege/0042 Müller & Söhne.pdf", hinweis: "Beleg öffnen" },
+         { wert: "Rechnung ansehen", link: "https://os.example.com/r/AbC-1_2" }],
+        // Zweite Zeile auf DASSELBE Ziel: zwei eigene Beziehungen, beide gueltig.
+        [{ wert: "0042 Müller & Söhne.pdf", link: "Belege/0042 Müller & Söhne.pdf" }, null],
+        // Link ohne Wert: die Zelle entsteht gar nicht, also darf auch keine
+        // Verknuepfung darauf zeigen (sonst zeigte sie auf eine leere Zelle).
+        [{ wert: "", link: "Belege/gibt-es-nicht.pdf" }, null],
+        // Eigener Stil schlaegt den Verknuepfungsstil, der Link bleibt.
+        [{ wert: "mit eigenem Stil", link: "Belege/x.pdf", stil: "fett" }, null],
+      ],
+    },
   ],
 });
 
@@ -193,10 +223,93 @@ const ct = teil("[Content_Types].xml");
 pruefe("[Content_Types] nennt Workbook, Styles und alle drei Blaetter",
   /workbook\.xml/.test(ct) && /styles\.xml/.test(ct) && /sheet1\.xml/.test(ct) && /sheet2\.xml/.test(ct) && /sheet3\.xml/.test(ct));
 const st = teil("xl/styles.xml");
-pruefe("styles: neun Zellformate, Datum dd.mm.yyyy, Euro-Format",
-  /<cellXfs count="9">/.test(st) && (st.match(/<xf /g) || []).length === 10 && /dd\.mm\.yyyy/.test(st) && /€/.test(st));
+pruefe("styles: zehn Zellformate, Datum dd.mm.yyyy, Euro-Format",
+  /<cellXfs count="10">/.test(st) && (st.match(/<xf /g) || []).length === 11 && /dd\.mm\.yyyy/.test(st) && /€/.test(st));
+pruefe("styles: Verknuepfungsschrift blau #0563C1 und unterstrichen, fonts count stimmt",
+  /<fonts count="5">/.test(st) && (st.match(/<font>/g) || []).length === 5
+  && /<font><u\/><sz val="11"\/><color rgb="FF0563C1"\/><name val="Calibri"\/><\/font>/.test(st)
+  && /<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1"\/>/.test(st));
 pruefe("core.xml traegt Autor und Erstellzeit", /<dc:creator>Testlauf<\/dc:creator>/.test(teil("docProps/core.xml")) && /2026-09-05T10:00:00Z/.test(teil("docProps/core.xml")));
 pruefe("MIME-Typ exportiert", xlsx.MIME === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+console.log("\n— Verknuepfungen (Blatt 4) —");
+const s4 = teil("xl/worksheets/sheet4.xml");
+const r4 = teil("xl/worksheets/_rels/sheet4.xml.rels");
+pruefe("Blatt mit Links hat eine Beziehungsdatei", r4 !== null);
+pruefe("Blaetter ohne Links haben KEINE Beziehungsdatei",
+  teil("xl/worksheets/_rels/sheet1.xml.rels") === null
+  && teil("xl/worksheets/_rels/sheet2.xml.rels") === null
+  && teil("xl/worksheets/_rels/sheet3.xml.rels") === null);
+pruefe("Blaetter ohne Links haben KEIN (auch kein leeres) <hyperlinks>",
+  !/<hyperlinks/.test(s1) && !/<hyperlinks/.test(s2) && !/<hyperlinks/.test(teil("xl/worksheets/sheet3.xml")));
+// Die Reihenfolge im Blatt ist in OOXML vorgeschrieben: sheetData, autoFilter,
+// hyperlinks, pageMargins. Steht der Block woanders, faellt Excel ueber das
+// Schema — genau der Fall "Reparieren?".
+pruefe("<hyperlinks> steht nach </sheetData>/autoFilter und vor <pageMargins>",
+  s4.indexOf("</sheetData>") < s4.indexOf("<hyperlinks>")
+  && s4.indexOf("<autoFilter") < s4.indexOf("<hyperlinks>")
+  && s4.indexOf("<hyperlinks>") < s4.indexOf("<pageMargins"),
+  `sheetData ${s4.indexOf("</sheetData>")} · autoFilter ${s4.indexOf("<autoFilter")} · hyperlinks ${s4.indexOf("<hyperlinks>")} · pageMargins ${s4.indexOf("<pageMargins")}`);
+
+// Jede Verknuepfung im Blatt und jede Beziehung in der .rels — und dann beide
+// Listen gegeneinander. Eine r:id ohne Beziehung ist der haeufigste Grund
+// dafuer, dass Excel eine Mappe fuer beschaedigt haelt.
+const imBlatt = [...s4.matchAll(/<hyperlink ref="([A-Z]+\d+)" r:id="(rId\d+)"(?: tooltip="([^"]*)")?\/>/g)]
+  .map((m) => ({ ref: m[1], id: m[2], tooltip: m[3] }));
+const inRels = new Map([...r4.matchAll(/<Relationship Id="(rId\d+)" Type="([^"]+)" Target="([^"]*)" TargetMode="([^"]+)"\/>/g)]
+  .map((m) => [m[1], { typ: m[2], ziel: m[3], modus: m[4] }]));
+pruefe("vier Verknuepfungen im Blatt (die leere Zelle bekommt keine)",
+  imBlatt.length === 4, `gefunden: ${imBlatt.map((h) => h.ref).join(", ")}`);
+pruefe("jede r:id im Blatt hat eine Beziehung in der .rels",
+  imBlatt.every((h) => inRels.has(h.id)),
+  imBlatt.filter((h) => !inRels.has(h.id)).map((h) => `${h.ref}=${h.id}`).join(", "));
+pruefe("keine Beziehung ohne Verknuepfung im Blatt",
+  inRels.size === imBlatt.length, `${inRels.size} Beziehungen / ${imBlatt.length} Verknuepfungen`);
+pruefe("alle Beziehungen sind vom Typ hyperlink und TargetMode External",
+  [...inRels.values()].every((b) => /\/relationships\/hyperlink$/.test(b.typ) && b.modus === "External"));
+pruefe("Verknuepfung zeigt auf Zellen, die es im Blatt wirklich gibt",
+  imBlatt.every((h) => new RegExp(`<c r="${h.ref}"`).test(s4)),
+  imBlatt.filter((h) => !new RegExp(`<c r="${h.ref}"`).test(s4)).map((h) => h.ref).join(", "));
+pruefe("keine Verknuepfung auf die leere Zelle A4 (Link ohne Wert)",
+  !imBlatt.some((h) => h.ref === "A4") && !/<c r="A4"/.test(s4));
+const zielA2 = inRels.get((imBlatt.find((h) => h.ref === "A2") || {}).id);
+pruefe("relatives Ziel ist als URI kodiert: Leerzeichen %20, & %26, ö %C3%B6",
+  zielA2 && zielA2.ziel === "Belege/0042%20M%C3%BCller%20%26%20S%C3%B6hne.pdf", zielA2 && zielA2.ziel);
+pruefe("der Schraegstrich bleibt Trenner (Belege/ steht unkodiert)",
+  zielA2 && zielA2.ziel.startsWith("Belege/") && !zielA2.ziel.includes("%2F"));
+const zielB2 = inRels.get((imBlatt.find((h) => h.ref === "B2") || {}).id);
+pruefe("Web-Ziel bleibt unveraendert (:// nicht kodiert)",
+  zielB2 && zielB2.ziel === "https://os.example.com/r/AbC-1_2", zielB2 && zielB2.ziel);
+pruefe("zwei Zeilen auf dasselbe Ziel bekommen zwei eigene Beziehungen",
+  (() => { const a = imBlatt.find((h) => h.ref === "A2"), b = imBlatt.find((h) => h.ref === "A3");
+    return a && b && a.id !== b.id && inRels.get(a.id).ziel === inRels.get(b.id).ziel; })());
+pruefe("verknuepfte Zelle traegt den Verknuepfungsstil s=9 (blau, unterstrichen)",
+  /<c r="A2" s="9" t="inlineStr">/.test(s4) && /<c r="B2" s="9" t="inlineStr">/.test(s4));
+pruefe("eigener Stil schlaegt den Verknuepfungsstil, die Verknuepfung bleibt",
+  /<c r="A5" s="7" t="inlineStr">/.test(s4) && imBlatt.some((h) => h.ref === "A5"));
+pruefe("Hinweis landet als tooltip, ohne Hinweis kein Attribut",
+  (imBlatt.find((h) => h.ref === "A2") || {}).tooltip === "Beleg öffnen"
+  && (imBlatt.find((h) => h.ref === "A3") || {}).tooltip === undefined);
+pruefe("Umlaut im Zellentext bleibt lesbar, & bleibt kodiert",
+  /0042 Müller &amp; Söhne\.pdf/.test(s4) && !/[^&]& /.test(s4));
+
+console.log("\n— zielUri —");
+for (const [ein, soll] of [
+  ["Belege/a b.pdf", "Belege/a%20b.pdf"],
+  ["Belege/ä&b.pdf", "Belege/%C3%A4%26b.pdf"],
+  ["https://x.de/r/A_b-1", "https://x.de/r/A_b-1"],
+  ["https://x.de/a b", "https://x.de/a%20b"],
+  ["mailto:a@b.de", "mailto:a@b.de"],
+  // Kein Ausbrechen aus dem entpackten Ordner, kein doppelter Schraegstrich.
+  ["../../etc/passwd", "etc/passwd"],
+  ["/Belege/x.pdf", "Belege/x.pdf"],
+  ["Belege//x.pdf", "Belege/x.pdf"],
+  ["", ""],
+  [null, ""],
+]) {
+  const ist = xlsx.zielUri(ein);
+  pruefe(`zielUri(${JSON.stringify(ein)}) = ${JSON.stringify(ist)}`, ist === soll, `erwartet ${JSON.stringify(soll)}`);
+}
 
 console.log("\n— Hilfsfunktionen —");
 pruefe("spaltenBuchstabe: 1=A, 26=Z, 27=AA, 52=AZ, 53=BA",

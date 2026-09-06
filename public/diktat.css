@@ -68,3 +68,114 @@
   .dk-seite .dk-aktionen>*{flex:1 1 100%;justify-content:center}
   .dk-seite .dk-aktionen .still{margin-right:0;order:0}
 }
+
+/* =====================================================================
+   Das Gespräch (Präfix .dk-, 05.09.2026)
+
+   Warum diese Seite anders aussieht als der Rest des Hauses: Hier wird
+   nicht ausgefüllt, sondern geredet. Links steht der Faden, rechts der
+   Beleg, über den geredet wird — und beides gehört auf EINEN Bildschirm,
+   sonst muss man beim Ändern raten, was gerade danebensteht.
+
+   Ab 900 px nebeneinander (Gespräch etwas schmaler als der Beleg: Text
+   liest sich in ~55 Zeichen am besten, ein Blatt braucht Fläche).
+   Darunter untereinander — auf dem Telefon zuerst der Beleg, dann das
+   Gespräch? Nein: zuerst das Gespräch. Das Eingabefeld ist das, was man
+   sucht, wenn man die Seite öffnet.
+   ===================================================================== */
+.dk-seite .dk-chat{display:grid;grid-template-columns:1fr;gap:18px;align-items:start}
+@media (min-width:900px){
+  .dk-seite .dk-chat{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:22px}
+  /* Beide Spalten stehen mit, wenn man scrollt — sonst verliert man beim
+     langen Gespräch den Beleg aus dem Blick. */
+  .dk-seite .dk-beleg{position:sticky;top:16px}
+}
+
+/* ---------- Der Verlauf ----------
+   Fester Rahmen mit eigenem Rollbereich: Das Eingabefeld bleibt immer
+   sichtbar, egal wie lang das Gespräch wird. min-height statt height,
+   damit ein kurzes Gespräch keine leere Fläche aufspannt. */
+.dk-seite .dk-verlauf{display:flex;flex-direction:column;gap:12px;
+  max-height:min(58vh,520px);min-height:180px;overflow-y:auto;
+  padding:16px;background:var(--os-flaeche);border:1px solid var(--border);
+  border-radius:14px;scroll-behavior:smooth}
+
+/* Blasen. Ich rechts und gefüllt, das System links und ruhig — dieselbe
+   Leserichtung wie in jedem Messenger, damit niemand nachdenken muss,
+   wer was gesagt hat. Keine Spitzen, keine Schatten: Es ist ein
+   Arbeitswerkzeug, kein Chatspielzeug. */
+.dk-seite .dk-blase{max-width:82%;padding:9px 13px;border-radius:14px;
+  font-size:14px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.dk-seite .dk-ich{align-self:flex-end;background:var(--primary);color:#fff;
+  border-bottom-right-radius:5px}
+.dk-seite .dk-os{align-self:flex-start;background:var(--os-flaeche-2);
+  color:var(--foreground);border:1px solid var(--border);border-bottom-left-radius:5px}
+.dk-seite .dk-blase b{font-weight:600}
+
+/* Was bei dieser Nachricht mit dem Beleg passiert ist. Klein und unter
+   der Blase: Im Verlauf soll später nachvollziehbar sein, welcher Satz
+   welche Zahl bewegt hat — ohne dass es die Nachricht selbst überlagert. */
+.dk-seite .dk-tat{align-self:flex-start;display:flex;flex-wrap:wrap;gap:6px;
+  align-items:center;margin:-6px 0 0 2px;font-size:11.5px;color:var(--text-muted)}
+.dk-seite .dk-tat svg{width:13px;height:13px}
+
+.dk-seite .dk-zeit{align-self:flex-end;font-size:11px;color:var(--text-muted);margin:-8px 2px 0 0}
+
+/* Die Beispiele in der ersten Nachricht: antippen füllt das Feld. Als
+   Knopf gebaut (nicht als Link), weil nichts geladen wird. */
+.dk-seite .dk-beispiele{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.dk-seite .dk-beispiel-knopf{border:1px solid var(--border-stark);background:var(--os-flaeche);
+  color:var(--text-secondary);border-radius:99px;padding:5px 11px;font-size:12.5px;
+  font-family:inherit;cursor:pointer;text-align:left}
+.dk-seite .dk-beispiel-knopf:hover{border-color:var(--primary);color:var(--primary)}
+
+/* ---------- Das Eingabefeld ----------
+   Feld und Knopf in einer Zeile, der Knopf unten bündig: Das Feld wächst
+   beim Tippen nach unten, der Knopf soll dabei nicht mitwandern. */
+.dk-seite .dk-schreiben{display:flex;gap:8px;align-items:flex-end;margin-top:12px}
+.dk-seite .dk-schreiben textarea{flex:1;min-height:52px;max-height:220px;resize:vertical;
+  font-family:inherit;font-size:14.5px;line-height:1.5;padding:11px 13px;
+  background:var(--os-flaeche);color:var(--foreground);
+  border:1px solid var(--border-stark);border-radius:12px}
+.dk-seite .dk-schreiben textarea:focus{outline:none;border-color:var(--primary);background:var(--primary-soft)}
+.dk-seite .dk-schreiben button{flex:0 0 auto}
+.dk-seite .dk-tastenhilfe{margin:6px 2px 0;font-size:11.5px;color:var(--text-muted)}
+
+/* ---------- Der Beleg daneben ---------- */
+.dk-seite .dk-beleg .os-gruppe{margin-bottom:12px}
+.dk-seite .dk-posliste{display:flex;flex-direction:column;gap:2px;margin:0;padding:0;list-style:none}
+.dk-seite .dk-posliste li{display:flex;gap:10px;justify-content:space-between;
+  font-size:13.5px;line-height:1.5}
+.dk-seite .dk-posliste .rg-betrag{white-space:nowrap}
+
+/* Die PDF-Vorschau. Feste Höhe im A4-Verhältnis, damit die Seite beim
+   Nachladen nicht springt. */
+.dk-seite .dk-pdf{border:1px solid var(--border);border-radius:14px;overflow:hidden;
+  background:var(--os-flaeche-2);margin-bottom:12px}
+.dk-seite .dk-pdf iframe{display:block;width:100%;height:min(52vh,480px);border:0;background:#fff}
+.dk-seite .dk-pdf-fuss{padding:8px 12px;font-size:11.5px;color:var(--text-muted);
+  border-top:1px solid var(--border)}
+/* "Stellen" ist ein POST und steckt deshalb in einem eigenen Formular. Ohne
+   diese Zeile waere es in der Knopfreihe ein Block statt eines Knopfes. */
+.dk-seite .dk-aktionen form{display:flex;margin:0}
+
+@media (max-width:560px){
+  .dk-seite .dk-verlauf{max-height:min(52vh,380px);padding:12px}
+  .dk-seite .dk-blase{max-width:92%}
+  .dk-seite .dk-pdf iframe{height:52vh}
+  /* Auf dem Telefon steht der Knopf UNTER dem Feld und ueber die volle
+     Breite. Nebeneinander bliebe fuer den Text zu wenig Platz — und der
+     Knopf saesse genau dort, wo die schwebende Kugel unten rechts sitzt. */
+  .dk-seite .dk-schreiben{flex-direction:column;align-items:stretch}
+  .dk-seite .dk-schreiben button{width:100%;justify-content:center}
+  .dk-seite .dk-aktionen form button{flex:1;justify-content:center}
+}
+
+/* Leise Nebenaktion. rechnungen.css kennt nur die gefuellte Vorgabe und
+   "sekundaer" — der Rueckfall aufs Formular soll aber mit keinem von beiden
+   konkurrieren: Er ist da, wenn man ihn braucht, und sonst still. Eigener
+   Name mit Bereichs-Praefix, damit in rechnungen.css nichts umgeschrieben
+   werden muss. */
+.dk-seite a.rg-knopf.dk-still{background:transparent;color:var(--text-secondary);
+  border:1px solid transparent;box-shadow:none}
+.dk-seite a.rg-knopf.dk-still:hover{background:var(--os-flaeche-2);color:var(--foreground);box-shadow:none}
