@@ -111,6 +111,46 @@ const TESTS = [
   // 21.08.2026: aus 37,30 Euro wurden beim Buchen ueber Telegram 373,00 —
   // zuBetrag() las den Punkt einer fertigen Zahl als Tausenderpunkt.
   "test-betrag",
+  // 05.09.2026: Buchhaltung modern (Auftrag D2). test-xlsx-schreiben nimmt
+  // das erzeugte Excel mit einem eigenen ZIP-Leser auseinander (CRC, XML,
+  // Zahlen/Daten/Umlaute) — die Datei geht an die Steuerkanzlei, und ein
+  // Fehler dort faellt erst beim Empfaenger auf. test-buchhaltung prueft die
+  // Rechnerei des Kosten-Dashboards und des Monatsstatus (Fixkosten je Monat,
+  // offene Summen, Quellen, naechste Faelligkeit) ohne Datenbank; der
+  // DB-Durchlauf liegt in test-buchhaltung-db.js (Test-DB noetig).
+  "test-xlsx-schreiben", "test-buchhaltung",
+  // 05.09.2026: die Kundenakte in Kategorien und Zeilen (lib/crm-akte.js).
+  // Welche Zeile sichtbar ist und was eine Firma zur Pipeline beitraegt,
+  // sieht man einer Seite nicht an, wenn es still falsch ist — darum hier,
+  // ohne Datenbank. Der DB-Teil liegt in test-akte-db.js (Test-DB noetig).
+  "test-akte",
+  // 05.09.2026: Kalender <-> Kundenakte (lib/kalender-akte.js, kalender-direkt.js
+  // umformen): Akte-Zeile in der Beschreibung, Ganztags-Regel fuer Erstgespraeche
+  // ohne Uhrzeit, Zuordnung Verknuepfung <-> Google-Termin, und der Feldbruch
+  // ende/ort am Direktweg. Ohne Datenbank, ohne gws-cli.
+  "test-kalender-akte",
+  // 05.09.2026: Rechnungen & Angebote — Summen, Statusfolge, Abschlag,
+  // Nummernformat, Vorlagen (test-rechnungen) und der eigene PDF-Schreiber
+  // (test-pdf-schreiben: Kopf, xref-Versaetze, Seiten, Umbruch). Beide ohne
+  // Datenbank; der DB-Durchlauf liegt in test-rechnungen-db.js (Test-DB).
+  "test-rechnungen", "test-pdf-schreiben",
+  // 05.09.2026: die Bruecke Aufgabe -> Whiteboard (lib/aufgaben-tafel.js):
+  // Block anhaengen, neuen Block an den Kunden-Platz legen, unter Belegtes
+  // ruecken, 200-Zeilen-Grenze, Versionskonflikt, Haken in beide Richtungen —
+  // und dass pruefeElement den Aufgaben-Bezug und eigene Pfade behaelt. Laeuft
+  // mit dem Arbeitsspeicher-Speicher, ganz ohne Datenbank. Das Gegenstueck
+  // MIT Datenbank (RLS mit Verantwortlichem) ist scripts/test-aufgaben-db.js.
+  "test-aufgaben-tafel",
+  // 05.09.2026: Beleg-Diktat (lib/beleg-diktat.js) — die Nachpruefung dessen,
+  // was das Sprachmodell aus einem hingeworfenen Satz macht: Betraege ausserhalb
+  // der Spaltengrenze, Datum in der Zukunft, unbekannte Vorlage, Abschlag 150 %,
+  // Positionssumme != genannter Gesamtbetrag, leere Antwort, Modell wirft. Dazu
+  // die Datumsauflösung ("heute", "15.9.", "nächsten Montag").
+  // Und lib/beleg-versand.js — die feste Textfassung mit Nummer/Betrag/Faelligkeit,
+  // das Verwerfen eines unvollstaendigen Modelltextes, die Zufallsschluessel der
+  // PDF-Links und der abgelaufene Link. Beide mit Attrappen fuer schnell.js,
+  // gmail-direkt.js, whatsapp.js und crm.js — ohne Netz, ohne Datenbank.
+  "test-beleg-diktat", "test-beleg-versand",
 ];
 
 // NICHT hier drin, mit Grund:

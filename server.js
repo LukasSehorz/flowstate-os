@@ -160,6 +160,10 @@ if (process.env.DATABASE_URL) {
   catch (e) { console.error("CRM-Modul konnte nicht geladen werden:", e.message); }
   try { require("./lib/buchhaltung-routes.js")(app); console.log("Buchhaltungs-Modul geladen"); }
   catch (e) { console.error("Buchhaltungs-Modul konnte nicht geladen werden:", e.message); }
+  try { require("./lib/rechnungen-routes.js")(app); console.log("Rechnungen & Angebote geladen"); }
+  catch (e) { console.error("Rechnungen & Angebote konnten nicht geladen werden:", e.message); }
+  try { require("./lib/beleg-diktat-routes.js")(app); console.log("Beleg-Diktat geladen"); }
+  catch (e) { console.error("Beleg-Diktat konnte nicht geladen werden:", e.message); }
   try { require("./lib/marketing-routes.js")(app); console.log("Marketing-Modul geladen"); }
   catch (e) { console.error("Marketing-Modul konnte nicht geladen werden:", e.message); }
   try { require("./lib/content-ideen-routes.js")(app); console.log("Content-Ideen geladen"); }
@@ -777,6 +781,9 @@ async function hudDaten(req) {
     nutzer, admin, darf, datenbank,
     fehler: null, z: null, kz: null, todos: [],
     team: [], anrufeJePerson: {}, anrufe: null, finanzen: null,
+    // Pipeline-Volumen (geschaetzt/geplant) und fester Umsatz aus Rechnungen —
+    // seit 05.09.2026, beide mit RLS (siehe unten).
+    pipeline: null, umsatzFest: null,
   };
   if (!datenbank || !nutzer) return d;
 
@@ -795,6 +802,18 @@ async function hudDaten(req) {
     console.error("Zentrale-Zahlen:", e.message);
     d.fehler = "Umsatz, Aufgaben und Pipeline sind gerade nicht abrufbar — die CRM-Datenbank antwortet nicht.";
     return d;
+  }
+
+  // Pipeline-Volumen (umsatz_geplant/geschaetzt aus der Kundenakte, Migration
+  // 0057) und fester Umsatz (gestellt/bezahlt/offen aus echten Rechnungen,
+  // Agent D1). Die Regel steht in lib/crm.js ueber pipelineVolumen: Eine Firma
+  // zaehlt in der Pipeline, bis ihre erste Rechnung gestellt ist — danach
+  // unter festem Umsatz. Beide mit RLS, beide fallen still auf Nullen zurueck.
+  if (darf("crm")) {
+    try { d.pipeline = await crm.pipelineVolumen(nutzer); }
+    catch (e) { console.error("Zentrale-Pipeline:", e.message); }
+    try { d.umsatzFest = await crm.umsatzFestSicher(nutzer); }
+    catch (e) { console.error("Zentrale-Rechnungen:", e.message); }
   }
 
   // Cold Calling. Ohne Adminrechte NUR die eigene Liste: sonst stehen bei
@@ -899,6 +918,14 @@ function hudWerte(d) {
       fin_offen: f ? f.offen_summe : 0,
       fin_ueberfaellig: f ? f.ueberfaellig : 0,
       fin_belege: f ? f.belege_offen : 0,
+      // Pipeline-Volumen und fester Umsatz (05.09.2026) — dieselben Zahlen wie
+      // im CRM-Dashboard, aus denselben Funktionen.
+      pipeline_volumen: d.pipeline ? d.pipeline.gesamt : 0,
+      pipeline_geplant: d.pipeline ? d.pipeline.geplant : 0,
+      pipeline_geschaetzt: d.pipeline ? d.pipeline.geschaetzt : 0,
+      rechnungen_gestellt: d.umsatzFest ? d.umsatzFest.gestellt : 0,
+      rechnungen_bezahlt: d.umsatzFest ? d.umsatzFest.bezahlt : 0,
+      rechnungen_offen: d.umsatzFest ? d.umsatzFest.offen : 0,
     },
   };
 }
@@ -1385,6 +1412,15 @@ app.get("/", async (req, res) => {
       crmZiel("/crm")),
   ];
   const kachelMitte = [
+    // Pipeline-Volumen (geschaetzt + geplant aus der Kundenakte) und der offene
+    // Rechnungsbetrag — vorn, weil Lukas genau diese zwei Zahlen hier sehen
+    // will (05.09.2026). Die Reihe bleibt bei sechs Kacheln; was dahinter
+    // steht, rueckt nach, sobald eine der beiden nichts zu sagen hat.
+    v.pipeline_volumen > 0 ? kachel("Pipeline", hudZ("pipeline_volumen", v.pipeline_volumen, "eur"),
+      `geplant ${eur(v.pipeline_geplant)} · geschätzt ${eur(v.pipeline_geschaetzt)}`, crmZiel("/crm")) : "",
+    v.rechnungen_gestellt > 0 ? kachel("Offen", hudZ("rechnungen_offen", v.rechnungen_offen, "eur"),
+      `${eur(v.rechnungen_bezahlt)} von ${eur(v.rechnungen_gestellt)} bezahlt`,
+      d.admin ? "/buchhaltung/rechnungen" : crmZiel("/crm")) : "",
     v.pipeline_wert > 0 ? kachel("Pipeline offen", hudZ("pipeline_wert", v.pipeline_wert, "eur"),
       "Summe aller offenen Deals", crmZiel("/crm")) : "",
     v.forecast > 0 ? kachel("Forecast", hudZ("forecast", v.forecast, "eur"),

@@ -1,0 +1,70 @@
+/* =====================================================================
+   Flowstate — Beleg diktieren und verschicken (Praefix .dk-), 05.09.2026
+
+   Additive Schicht ueber public/os-ui.css und public/rechnungen.css. Diese
+   Seiten sind zu 90 % aus den gemeinsamen Bausteinen gebaut (.os-kopf,
+   .os-gruppe/.os-zeile, .os-tabelle, .os-hinweis, .os-chips, .os-segment) —
+   hier steht nur, was diese zwei Seiten zusaetzlich brauchen:
+
+     · das grosse Textfeld, in das diktiert wird (die eine Sache, um die es
+       auf der Diktat-Seite geht — es darf deutlich groesser sein als ein
+       normales Zeilenfeld),
+     · die Knopfreihe unter dem Formular,
+     · das Echo des eigenen Textes in der Vorschau,
+     · der PDF-Link als Code-Schnipsel,
+     · die Kanalleiste (E-Mail / WhatsApp).
+
+   Farben ausschliesslich ueber die Marken aus crm.css und os-ui.css —
+   damit laufen Hell, Dunkel, Graphit und Weiss von selbst mit. Keine
+   einzige harte Farbe in dieser Datei.
+   ===================================================================== */
+
+/* ---------- Das Textfeld, in das diktiert wird ----------
+   Ein Diktat ist zwei bis vier Zeilen lang. Ein Feld in Zeilenhoehe wuerde
+   dazu verleiten, es kurz zu halten — genau das Gegenteil von dem, was
+   hier gewollt ist: je mehr Fakten im Text stehen, desto weniger muss
+   nachher von Hand nachgetragen werden. Deshalb ist es gross, hat
+   Fliesstextgroesse und waechst mit dem Inhalt mit. */
+.dk-seite .dk-diktat{min-height:0;padding-top:12px;padding-bottom:12px}
+.dk-seite .dk-diktat textarea{font-size:15px;line-height:1.55;min-height:112px}
+.dk-seite .dk-diktat textarea::placeholder{color:var(--text-muted);opacity:.85}
+
+/* Das Beispiel in der Fussnote ist derselbe Satz wie im Platzhalter — leicht
+   abgesetzt, damit man sieht, wo es anfaengt und aufhoert. */
+.dk-seite .dk-beispiel{color:var(--text-secondary)}
+
+/* ---------- Knopfreihe unter einem Formular ----------
+   Rechtsbuendig wie im Fuss eines Blattes; unter 560 px untereinander und
+   ueber die volle Breite, damit auf dem Telefon nichts abgeschnitten wird. */
+.dk-seite .dk-aktionen{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  justify-content:flex-end;margin:0 0 22px}
+.dk-seite .dk-aktionen .still{margin-right:auto;order:-1}
+
+/* ---------- Vorschau ---------- */
+/* Das Echo des eigenen Diktats: als Zitat gesetzt, damit klar ist, dass das
+   die EIGENE Eingabe ist und nicht etwas, das das System geschrieben hat. */
+.dk-seite .dk-diktat-echo{white-space:pre-wrap;color:var(--text-secondary);
+  font-size:13.5px;line-height:1.5;border-left:2px solid var(--border-stark);
+  padding-left:10px;margin:2px 0}
+.dk-seite .dk-nochmal{margin-top:4px}
+.dk-seite .dk-pos-nr{width:44px;color:var(--text-muted);font-variant-numeric:tabular-nums}
+
+/* ---------- Nachricht ---------- */
+.dk-seite .dk-kanal{margin:0 0 16px}
+/* Der PDF-Link ist zum Lesen und Kopieren da, nicht zum Ueberfliegen: feste
+   Breite je Zeichen, und er bricht auch mitten im Schluessel um, statt die
+   Zeile zu sprengen. */
+.dk-seite .dk-link{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12px;background:var(--os-flaeche-2);border-radius:6px;padding:1px 5px;
+  overflow-wrap:anywhere;word-break:break-all}
+.dk-seite .dk-fehler{color:var(--danger)}
+
+/* Der Nachrichtentext ist das, was der Kunde liest — er bekommt Fliesstext-
+   groesse und genug Hoehe, damit man ihn ohne Scrollen im Feld ueberblickt. */
+.dk-seite .os-zeile--eingabe textarea[name="text"]{font-size:14px;line-height:1.55;min-height:150px}
+
+@media (max-width:560px){
+  .dk-seite .dk-aktionen{justify-content:stretch}
+  .dk-seite .dk-aktionen>*{flex:1 1 100%;justify-content:center}
+  .dk-seite .dk-aktionen .still{margin-right:0;order:0}
+}

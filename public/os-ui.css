@@ -87,6 +87,13 @@ body.crm-dashboard-design{
 .os-kopf-zurueck::before{content:"";width:7px;height:7px;border-left:1.6px solid currentColor;
   border-bottom:1.6px solid currentColor;transform:rotate(45deg);margin-right:2px}
 .os-kopf-zurueck:hover{color:var(--foreground);text-decoration:none}
+/* Wer statt des gezeichneten Winkels ein eigenes Icon mitbringt (ICON.pfeil aus
+   schale.js), bekommt es auf Textgröße gebracht — ohne Breite dehnt ein <svg>
+   in einem Flex-Behälter sonst auf seine Vorgabegröße. Gemessen am 05.09.2026
+   auf /crm/firma/52: 69×69 px, daneben brach „Kunden" Buchstabe für Buchstabe
+   um. crm.css:374 setzt nur `button svg`, nicht `a svg`. */
+.os-kopf-zurueck svg{width:15px;height:15px;flex:0 0 auto}
+.os-kopf-zurueck:has(svg)::before{display:none}
 .os-kopf-zeile{display:flex;align-items:flex-start;justify-content:space-between;gap:16px 24px;flex-wrap:wrap}
 .os-kopf-text{display:flex;gap:16px;align-items:flex-start;min-width:0;flex:1 1 320px}
 .os-kopf-avatar{flex:0 0 auto;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;
@@ -484,6 +491,290 @@ dialog.os-blatt::backdrop{background:rgba(15,27,45,.38);backdrop-filter:blur(3px
 .os-hinweis--erfolg svg{color:var(--success)}
 .os-hinweis--fehler{background:var(--danger-flaeche)}
 .os-hinweis--fehler svg{color:var(--danger)}
+
+/* ---------- .topbar-zurueck — der globale Zurück-Pfeil (05.09.2026) ----------
+   Gerendert von lib/schale.js in der Kopfzeile links vom Titel, auf jeder
+   Arbeitsseite außer Zentrale und Sprachbühne. Ruhig und rund wie die anderen
+   Kopf-Werkzeuge; er ist ein <a>, deshalb steht das Aussehen hier und nicht
+   bei `button.still` in crm.css. Auf schmalen Schirmen bleibt er stehen — er
+   ist wichtiger als Datum und Stoppuhr, die dort weichen.
+
+   Maße: 33×33 px ist die Fläche, die `.thema-schalter` (crm.css:1667 — 8 px
+   Polster um ein 17-px-Symbol) tatsächlich einnimmt; der Pfeil trägt dieselbe,
+   damit die Reihe der Kopf-Werkzeuge eine Reihe bleibt. Das Symbol selbst ist
+   16 px, wie das Lupensymbol der Suche (crm.css:288) — ein Winkel braucht
+   weniger Kantenlänge als eine Glocke, um gleich groß zu wirken.
+   `margin-right:-8px` nimmt vom 20-px-Abstand der Kopfzeile (crm.css:280)
+   wieder etwas weg: Pfeil und Titel gehören zusammen und sollen enger stehen
+   als Titel und Suche. */
+.topbar-zurueck{flex:0 0 auto;display:grid;place-items:center;width:33px;height:33px;margin-right:-8px;
+  border-radius:50%;color:var(--text-secondary);background:transparent;
+  transition:background var(--tempo),color var(--tempo)}
+.topbar-zurueck svg{width:16px;height:16px}
+.topbar-zurueck:hover{background:var(--os-flaeche-2);color:var(--foreground);text-decoration:none}
+.topbar-zurueck:active{background:var(--os-flaeche-3)}
+.topbar-zurueck:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+/* Zentrale und Sprachbühne setzen ihre Klasse erst nach dem Rendern der Schale
+   (server.js:1588) — deshalb hier die zweite Sicherung, damit dort kein Pfeil
+   in der abgefilmten Ecke steht. */
+body.jarvis .topbar-zurueck{display:none}
+
+/* ÜBERGANGSWEISE: doppelte Rückwege ausblenden (06.09.2026)
+
+   Drei Seiten trugen ihren eigenen Rück-Pfeil schon vorher direkt unter der
+   Kopfzeile — genau dort, wo jetzt der gemeinsame steht. Zwei Pfeile
+   übereinander, die dasselbe tun, sind keine Wahl, sondern eine Stolperstelle.
+   Ausgeblendet wird nur, wo BEIDE aufs selbe Ziel führen; der gemeinsame Pfeil
+   geht ohnehin zuerst über den Verlauf, der Rückfall greift nur im frischen
+   Tab. Gemessen am 06.09.2026 auf Port 3056:
+     .os-kopf-zurueck  Kundenakte/Lead-Akte (crm-akte.js:445) → /crm/kunden
+                       bzw. /crm/leads — identisch mit dem Rückfall.
+     .akte-zurueck     Team-Person (crm-routes.js:3716) → /crm/team — identisch.
+     .ct-zurueck       nur die Fassung mit href="/content" (content-routes.js:711,
+                       content-ideen-routes.js:379) → /content — identisch.
+                       Die zweite Fassung auf der Ideen-Seite zeigt auf
+                       /content/ideen?marke=… und bleibt deshalb STEHEN: sie
+                       weiß mehr als der Rückfall, und dieses Wissen soll im
+                       frischen Tab nicht verlorengehen.
+
+   Nicht ausgeblendet, weil es keine zweiten Pfeile sind, sondern beschriftete
+   Handlungen in der Aktionszeile: „Zur Liste" (rechnungen-routes.js:514),
+   „← Zentrale" (server.js:1656) und vor allem „Zurück zu Lead" auf der
+   Kundenakte (crm-akte.js:441) — das ist kein Weg zurück, sondern das Zurück-
+   stufen eines Kunden. Liste mit Datei und Zeile steht im Bericht; sobald die
+   zuständigen Module ihren Weg entfernt haben, fällt dieser Block ersatzlos
+   weg. */
+body:not(.jarvis) .os-kopf-zurueck,
+body:not(.jarvis) .akte-zurueck,
+body:not(.jarvis) a.ct-zurueck[href="/content"]{display:none}
+
+/* =====================================================================
+   DUNKLE FASSUNG DER GRAPHIT-SEITEN (05.09.2026)
+
+   Der Befund: `lib/schale.js:318` setzt `body.crm-dashboard-design` für alles,
+   dessen `aktiv` mit crm|buchhaltung|content|zentrale beginnt — also CRM,
+   Kundenakte, Buchhaltung, Rechnungen, To-dos. Die Graphit-Palette in
+   crm.css:37–104 kennt aber nur eine helle Fassung UND sitzt auf dem <body>,
+   also NÄHER am Element als `:root[data-theme="dark"]` (crm.css:105–123).
+   Folge: Der Umschalter in der Kopfzeile setzte `data-theme=dark`, die Seite
+   blieb hell. Drei Prüfer haben das unabhängig voneinander gemeldet.
+
+   Die Entscheidung: Graphit ist eine Lichtstudie in Hellgrau — eine Bühne aus
+   einer Lichtquelle oben links und echtem Gewicht unten rechts. Im Dunkeln
+   gibt es diese Studie nicht; dort gilt die dunkle Fassung des Systems, wie
+   auf Kalender und Whiteboard auch. Statt eine zweite Graphit-Palette zu
+   erfinden (und damit einen dritten Farbstand zu pflegen), holt dieser Block
+   die Marken mit `inherit` vom <html> zurück: was crm.css:105–123 für die
+   dunkle Fassung sagt, gilt dann auch hier — automatisch, auch wenn dort
+   später ein Wert geändert wird.
+
+   `:not([data-weiss="1"])` schirmt den Weiß-Modus ab: dessen Regeln in
+   crm.css:128–196 haben (0,3,1), dieser Block hätte ohne die Abschirmung
+   (0,3,2) und würde ihn schlagen. crm.css bleibt unangetastet. */
+:root[data-theme="dark"]:not([data-weiss="1"]) body.crm-dashboard-design{
+  --blau-900:inherit;--blau-800:inherit;--blau-700:inherit;--blau-600:inherit;
+  --blau-500:inherit;--blau-400:inherit;--blau-300:inherit;--blau-200:inherit;
+  --blau-100:inherit;--blau-50:inherit;
+  --background:inherit;--surface:inherit;--surface-2:inherit;--surface-3:inherit;
+  --border:inherit;--border-stark:inherit;
+  --foreground:inherit;--text-secondary:inherit;--text-muted:inherit;
+  --primary:inherit;--primary-hover:inherit;--primary-soft:inherit;
+  --akzent:inherit;--akzent-flaeche:inherit;--akzent-rand:inherit;
+  --warning:inherit;--warning-flaeche:inherit;--info:inherit;--info-flaeche:inherit;
+  --stage-1:inherit;--stage-2:inherit;--stage-3:inherit;--stage-4:inherit;
+  --stage-5:inherit;--stage-6:inherit;--stage-7:inherit;--stage-8:inherit;
+  --s1:inherit;--s2:inherit;--s3:inherit;
+  /* Die flachen Marken dieser Datei genauso — sonst stünden helle Zeilen in
+     einer dunklen Gruppe. */
+  --os-flaeche:inherit;--os-flaeche-2:inherit;--os-flaeche-3:inherit;
+  --os-hebung:inherit;--os-grund:inherit;--os-trenner:inherit;
+}
+
+/* Ohne JavaScript setzt schale.js:302 kein data-theme; dann entscheidet das
+   Betriebssystem. crm.css kennt diesen Fall nicht, deshalb stehen die dunklen
+   Werte hier einmal ausgeschrieben (Stand crm.css:107–123) — und die Graphit-
+   Seiten holen sie sich mit demselben `inherit` wie oben. */
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme]):not([data-weiss="1"]){
+    --blau-900:#0A1626;--blau-800:#0F2540;--blau-700:#16345B;--blau-600:#4B8DF8;
+    --blau-500:#5E9BFA;--blau-400:#7FB0FC;--blau-300:#9DC3FD;--blau-200:#1E3A5F;
+    --blau-100:#16304F;--blau-50:#132840;
+    --background:#0C1420;--surface:#121C2B;--surface-2:#1A2637;--surface-3:#243247;
+    --border:#223044;--border-stark:#2E3F57;
+    --foreground:#E8EEF6;--text-secondary:#A8B8CC;--text-muted:#7C8DA3;
+    --primary:#4B8DF8;--primary-hover:#6BA1FA;--primary-soft:#16304F;
+    --akzent:#F06CAB;--akzent-flaeche:#33192A;--akzent-rand:#4A2438;
+    --success:#3DBB80;--success-flaeche:#12301F;
+    --warning:#E0A33C;--warning-flaeche:#332612;
+    --danger:#EC6A80;--danger-flaeche:#331A20;
+    --info:#5AA9E6;--info-flaeche:#122536;
+    --stage-1:#1E3A5F;--stage-2:#27507F;--stage-3:#31659F;--stage-4:#3B7ABF;
+    --stage-5:#4B8DF8;--stage-6:#7FB0FC;--stage-7:#9DC3FD;--stage-8:#3DBB80;
+    --s1:0 1px 2px rgba(0,0,0,.4);--s2:0 2px 8px rgba(0,0,0,.45);--s3:0 14px 40px rgba(0,0,0,.6);
+    --os-flaeche:#131D2C;--os-flaeche-2:#1B2637;--os-flaeche-3:#26344A;
+    --os-hebung:#2A3A52;--os-grund:#0C1420;--os-trenner:#223044;
+    color-scheme:dark;
+  }
+  :root:not([data-theme]):not([data-weiss="1"]) body.crm-dashboard-design{
+    --blau-900:inherit;--blau-800:inherit;--blau-700:inherit;--blau-600:inherit;
+    --blau-500:inherit;--blau-400:inherit;--blau-300:inherit;--blau-200:inherit;
+    --blau-100:inherit;--blau-50:inherit;
+    --background:inherit;--surface:inherit;--surface-2:inherit;--surface-3:inherit;
+    --border:inherit;--border-stark:inherit;
+    --foreground:inherit;--text-secondary:inherit;--text-muted:inherit;
+    --primary:inherit;--primary-hover:inherit;--primary-soft:inherit;
+    --akzent:inherit;--akzent-flaeche:inherit;--akzent-rand:inherit;
+    --warning:inherit;--warning-flaeche:inherit;--info:inherit;--info-flaeche:inherit;
+    --stage-1:inherit;--stage-2:inherit;--stage-3:inherit;--stage-4:inherit;
+    --stage-5:inherit;--stage-6:inherit;--stage-7:inherit;--stage-8:inherit;
+    --s1:inherit;--s2:inherit;--s3:inherit;
+    --os-flaeche:inherit;--os-flaeche-2:inherit;--os-flaeche-3:inherit;
+    --os-hebung:inherit;--os-grund:inherit;--os-trenner:inherit;
+  }
+}
+
+/* Die Marken allein reichen nicht: Graphit malt an rund zwanzig Stellen mit
+   festen hellen Verläufen (crm.css:99–104, 714–800, 1163–1190, 1962), weil
+   `var(--surface)` dort selbst ein Verlauf und als Farbstopp ungültig wäre.
+   Diese Flächen blieben sonst weiße Kästen in einer dunklen Seite. Sie werden
+   hier flach auf die dunklen Marken gelegt — `--dunkel-*` steht als Kurzform,
+   damit die Liste lesbar bleibt. */
+:root[data-theme="dark"]:not([data-weiss="1"]) body.crm-dashboard-design :is(
+  .forecast,.signal,.zeitraum,.segmente,.lead-neu-wahl,.lead-neu-spalten,.lead-neu-fuer
+){background:var(--surface-2);box-shadow:none}
+:root[data-theme="dark"]:not([data-weiss="1"]) body.crm-dashboard-design :is(
+  .signal-icon,.leer-icon,.sparten-reiter a.aktiv,.lead-neu-wahl button.aktiv,.anruf-tabelle .anruf-akte
+){background:var(--surface-3);box-shadow:none}
+:root[data-theme="dark"]:not([data-weiss="1"]) body.crm-dashboard-design :is(
+  .tabelle-huelle,.spalte,.spalte.ziel,.heute-todo,.anruf-tabelle tbody tr,dialog
+){background:var(--surface);border-color:var(--border);box-shadow:var(--s1)}
+:root[data-theme="dark"]:not([data-weiss="1"]) body.crm-dashboard-design :is(
+  .anruf-tabelle thead th,.spalte-leer,.anruf-zeile:hover,.heute-todo:hover,.anruf-tabelle .anruf-akte:hover,.lead-branche:hover
+){background:var(--surface-2);border-color:var(--border);box-shadow:none}
+:root[data-theme="dark"]:not([data-weiss="1"]) body.crm-dashboard-design :is(
+  .anruf-tabelle .anruf-grund-frei,.lead-branche,.filter .such input,.filter select,dialog input,dialog select,dialog textarea
+){background-color:var(--surface-2);border-color:var(--border-stark);box-shadow:none}
+:root[data-theme="dark"]:not([data-weiss="1"]) body.crm-dashboard-design :is(
+  .filter .such input:focus,.filter select:focus
+){background-color:var(--surface);border-color:var(--primary);box-shadow:0 0 0 3px var(--blau-100)}
+:root[data-theme="dark"]:not([data-weiss="1"]) body.crm-dashboard-design .hinweis.info{
+  background:var(--info-flaeche);border:1px solid var(--border);box-shadow:none}
+/* Der Fokusring war im Graphit grau (crm.css:803) — im Dunkeln ist Grau auf
+   Dunkelgrau nicht zu sehen. */
+:root[data-theme="dark"]:not([data-weiss="1"]) body.crm-dashboard-design :is(button,a,input,select,textarea):focus-visible{
+  outline-color:var(--primary)}
+/* Zwei Karten sind auch im Hellen dunkel (Umsatz-Anker, Umsatz je Person).
+   Im Dunkeln bekommen sie einen Rand, sonst verschwinden sie im Grund. */
+:root[data-theme="dark"]:not([data-weiss="1"]) body.crm-dashboard-design :is(.karte-mitte,.karte-dunkel){
+  border:1px solid var(--border-stark)}
+
+/* =====================================================================
+   KOPFZEILE AUF SCHMALEN SCHIRMEN (05.09.2026)
+
+   Der Befund: Bei 390 px Breite scrollte JEDE Arbeitsseite waagerecht —
+   gemessen `document.documentElement.scrollWidth` 848 (/crm/kunden), 875
+   (/crm), 889 (/buchhaltung), 859 (/kalender). Die Seiteninhalte selbst
+   passten; breit war immer dasselbe Element: `.topbar-rechts` mit 713 px
+   (Datum-Chip, Stoppuhr mit „Pause" und „Feierabend", Glocke, Sonne, Weiß,
+   Name + Rolle, Avatar). crm.css:1385 verkleinert die Leiste unter 860 px
+   zwar, nimmt ihr aber nichts weg — sechs Bausteine nebeneinander passen
+   unter 640 px einfach nicht.
+
+   Die Regel: unter 640 px trägt die Kopfzeile nur noch, was man dort auch
+   braucht. Titel und Suche stehen untereinander, die Werkzeuge rechts
+   schrumpfen auf ihre Symbole, Name und Rolle stehen ohnehin in der Rail.
+   Alles additiv und mit `body:not(.jarvis)` — die Sprachbühne und die
+   Zentrale haben ihre eigene Kopfzeile. */
+@media (max-width:640px){
+  body:not(.jarvis) .topbar{flex-wrap:wrap;gap:8px 10px;padding:9px 12px;border-radius:16px;margin:10px 10px 0 0}
+  /* Der Titelblock darf umbrechen statt zu schieben. `:first-of-type` und
+     nicht `:first-child`: seit dem Zurück-Pfeil (05.09.2026) steht vor dem
+     Titelblock ein <a>, damit ist er nicht mehr das erste Kind — wohl aber
+     weiterhin das erste <div>. Mit `:first-child` griffen diese beiden Zeilen
+     auf jeder Arbeitsseite ins Leere, und der Titel schob die Kopfzeile wieder
+     auf. Ohne Pfeil (Zentrale, Sprachbühne) trifft `:first-of-type` denselben
+     Block wie vorher. */
+  body:not(.jarvis) .topbar>div:first-of-type{flex:1 1 auto;min-width:0}
+  body:not(.jarvis) .topbar-titel{font-size:15.5px;white-space:normal;overflow-wrap:anywhere}
+  body:not(.jarvis) .topbar>div:first-of-type .caption{white-space:normal}
+  /* Der Pfeil bleibt — er ist auf dem Telefon der wichtigste Knopf der Zeile
+     (Datum und „Feierabend" weichen weiter unten dafür). Nur enger. */
+  body:not(.jarvis) .topbar-zurueck{width:30px;height:30px;margin-right:-4px}
+  body:not(.jarvis) .topbar-zurueck svg{width:17px;height:17px}
+  /* Die Suche steht unter dem Titel statt daneben (crm.css:1385 blendet sie
+     unter 860 px aus — auf dem Telefon ist sie der schnellste Weg zu einem
+     Kunden, deshalb kommt sie hier zurück, nur ohne die ⌘K-Taste). */
+  body:not(.jarvis) .topbar-suche{display:block;order:3;flex:1 0 100%;max-width:none;margin:0}
+  body:not(.jarvis) .topbar-suche input{height:34px}
+  body:not(.jarvis) .topbar-suche .kbd{display:none}
+  body:not(.jarvis) .topbar-rechts{gap:8px;margin-left:auto;flex:0 0 auto}
+  /* Das Datum steht auf jeder Seite ohnehin im Inhalt. */
+  body:not(.jarvis) .datum-chip{display:none}
+  /* Die Stoppuhr bleibt — sie ist die Arbeitszeit — aber nur als Zeit mit
+     einem Knopf. „Feierabend" ist die seltenere Handlung und rutscht raus. */
+  body:not(.jarvis) .stoppuhr{gap:6px;padding:4px 5px 4px 10px}
+  body:not(.jarvis) .stoppuhr-zeit{font-size:12px;min-width:0}
+  body:not(.jarvis) .stoppuhr button{padding:4px 9px;font-size:11px}
+  body:not(.jarvis) .stoppuhr button.feierabend{display:none}
+  /* Name und Rolle stehen in der Rail; hier bleibt das Bild. */
+  body:not(.jarvis) .nutzer-block{display:none}
+  body:not(.jarvis) .avatar{width:32px;height:32px;font-size:12px}
+  body:not(.jarvis) .topbar .weiss-schalter{padding:5px 9px;font-size:11px}
+  body:not(.jarvis) .glocke svg,body:not(.jarvis) .thema-schalter svg{width:17px;height:17px}
+  /* Das Benachrichtigungsfenster war 300 px breit und schob die Seite auf. */
+  body:not(.jarvis) .glocke-popup{width:min(300px,calc(100vw - 28px));right:0}
+}
+/* Auf dem Telefon blendet sprache.js:289 die Leiste aus und setzt dafür einen
+   Menüknopf mit drei Strichen fest oben links (`.dreh-menue`, 14–58 px,
+   z-index 9999, Klassen `handy ohne-leiste` am <body>). Der lag bisher AUF dem
+   Seitentitel — gemessen am 05.09.2026 auf /buchhaltung bei 390 px: Titel ab
+   13 px, Knopf 14–58 px. Die Kopfzeile macht ihm links Platz; die Bedingung
+   sind die Klassen selbst, nicht eine zweite Breitengrenze, damit beides nicht
+   auseinanderlaufen kann. */
+body:not(.jarvis).handy.ohne-leiste .topbar{padding-left:64px}
+body:not(.jarvis).handy.ohne-leiste .topbar-suche{padding-left:0}
+/* Denselben Platz schafft sprache.js:233 schon einmal, aber nur für den Titel
+   (`.topbar-titel{padding-left:50px}`). Beides zusammen sind 114 px: gemessen
+   am 06.09.2026 auf /crm/firma/52 bei 390 px stand „Kundenakte" ab 151 px und
+   sah aus wie zentriert, und der Zurück-Pfeil klebte allein in der Lücke
+   davor. Die Kopfzeile schiebt jetzt als Ganzes — dazu gehört der Pfeil, der
+   sonst unter dem Menüknopf läge —, also darf der Titel seinen eigenen
+   Vorschub abgeben. sprache.js bleibt unangetastet; diese Regel ist mit dem
+   zusätzlichen `:not(.jarvis)` um eine Klasse spezifischer und gewinnt
+   unabhängig von der Ladereihenfolge. */
+body:not(.jarvis).handy.ohne-leiste .topbar-titel{padding-left:0}
+/* Ein einziges langes Wort schiebt sonst die ganze Seite auf: gemessen am
+   05.09.2026 auf /todos bei 1440 px — eine Aufgabe mit 300 „Ä" am Stück ergab
+   `.todo-titel` 3.932 px breit und `document.documentElement.scrollWidth`
+   4.121 px, zweieinhalb leere Bildschirme nach rechts. Solche Titel kommen aus
+   der Datenbank (Grenzfall-Test, aber auch eine echte lange URL oder
+   Rechnungsnummer tut das), deshalb steht die Sicherung hier und nicht auf der
+   To-do-Seite. `anywhere` statt `break-word`, weil nur `anywhere` auch die
+   Mindestbreite der Box senkt — sonst bricht der Text zwar um, die Box bleibt
+   aber breit und die Seite scrollt weiter. Vererbt sich auf den ganzen Inhalt;
+   Zellen mit `white-space:nowrap` (Zahlen, Daten) bleiben unberührt. */
+body:not(.jarvis) .inhalt{overflow-wrap:anywhere}
+
+/* Eine Auswahlliste ist so breit wie ihr längster Eintrag — und ein Formular
+   drumherum wächst mit. Gemessen am 05.09.2026 auf /buchhaltung/rechnungen:
+   ein Firmenname aus dem Grenzfall-Test machte das <select> 12.629 px breit,
+   die Seite 12.759 px. `width:100%` (crm.css:374) hilft dort nicht, weil eine
+   Box nicht unter ihre Mindestbreite schrumpft. In :where(), damit jede
+   Bereichsregel weiterhin gewinnt. */
+body:not(.jarvis) :where(select,form){max-width:100%}
+
+/* Letzte Sicherung: Ein einzelnes zu breites Kind darf die ganze Seite
+   waagerecht schieben — deshalb hält der Inhaltsbereich seine Breite. Wer
+   etwas Breites zeigt (Tafel, Tabelle, Kalenderraster), lässt es in seinem
+   eigenen Behälter scrollen (`overflow-x:auto`, siehe .os-tabelle-huelle). */
+@media (max-width:860px){
+  body:not(.jarvis) .inhalt{max-width:100%;min-width:0;overflow-x:clip}
+  /* Damit „hält seine Breite" nicht „schneidet ab" heißt: die Tabellenhülle
+     bekommt ihren eigenen Rollbalken. crm.css:437 setzt dort overflow:hidden
+     (wegen der runden Ecken) — unter 860 px wiegt Lesbarkeit schwerer.
+     Gemessen auf /buchhaltung: Tabelle 789 px in einem 366-px-Fenster. */
+  body:not(.jarvis) .tabelle-huelle{overflow-x:auto;-webkit-overflow-scrolling:touch}
+}
 
 /* ---------- Bewegung aus, wenn gewünscht ---------- */
 @media (prefers-reduced-motion:reduce){

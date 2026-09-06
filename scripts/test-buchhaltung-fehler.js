@@ -63,6 +63,13 @@ buch.exportVerlauf = async () => [];
 buch.saldoErinnerung = async () => ({ faellig: false, tageAlt: 1, angelegt: false });
 buch.einstellungen = async () => ({ steuer_mail: "", steuer_name: "", notiz: "" });
 crm.firmenListe = async () => [];
+// Seit 05.09.2026 holt die Uebersicht zusaetzlich die "Zu tun"-Zahlen und die
+// offenen Rechnungen aus dem Rechnungsmodul (Agent D1) — beides ohne Datenbank
+// beiseitegelegt, sonst liefe die Seite hier in einen Pool ohne DATABASE_URL.
+buch.zuTun = async () => ({ belegeUngeprueft: 0, belegeFehler: 0, einnahmenUeberfaellig: 0, einnahmenUeberfaelligSumme: 0,
+  ausgabenUeberfaellig: 0, ausgabenUeberfaelligSumme: 0, ausgabenBald: 0, kontostandTage: 1,
+  vormonat: { jahr: 2026, monat: 8, bewegungen: 0, abgeschlossen: false, geholt: false } });
+buch.rechnungenOffen = async () => ({ da: false, liste: [], summe: 0, anzahl: 0 });
 
 const app = express();
 // Statt einer echten Anmeldung: die Sitzung, die nurAdmin erwartet.

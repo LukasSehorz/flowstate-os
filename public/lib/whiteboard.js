@@ -1556,8 +1556,21 @@
       // Rest des Clients nur noch el.tafel kennt.
       if (!el.tafel) el.tafel = el.besitzer;
       if (!versatz.has(el.tafel)) return;                  // unbekanntes Board
-      if (quelle === "poll" && inArbeit.has(el.id)) return; // Finger drauf: nicht anfassen
+      if (quelle === "poll" && inArbeit.has(el.id)) {
+        // Finger drauf: nicht ersetzen. Aber was der Server NEU hat — meist
+        // eine Aufgabe, die die CRM-Bruecke gerade angehaengt hat —, kommt
+        // zusammengefuehrt herein: sonst liefe der naechste Tastendruck in
+        // 409 "veraltet", und der Vollabgleich ersetzte den Block samt dem,
+        // was hier gerade getippt wurde (Pruefung 05.09.2026).
+        const lokal = elemente.get(el.id);
+        if (lokal && lokal.art !== "strich" && el.art !== "strich"
+            && Number(el.version) > Number(lokal.version)) blockZusammenfuehren(lokal, el);
+        return;
+      }
       const alt = elemente.get(el.id);
+      // Der zuletzt vom Server gesehene Stand der Zeilen — die Basis fuers
+      // Zusammenfuehren (was kannten wir schon, was ist wirklich neu?).
+      if (el.inhalt && Array.isArray(el.inhalt.zeilen)) el.__serverSchluessel = zeilenSchluessel(el.inhalt.zeilen);
       // Wechselt ein Element das Board (kommt nur ueber einen Vollabgleich
       // vor), muss es aus der alten Strichliste bzw. Inhaltsebene heraus.
       if (alt && alt.tafel !== el.tafel) elementAusBoardNehmen(alt);
@@ -1577,6 +1590,143 @@
     } catch (fehler) {
       console.error("Whiteboard: Element uebersprungen:", el && el.id, fehler);
     }
+  }
+
+  // ----------------------------------------------------------------
+  // Zusammenfuehren statt ersetzen (05.09.2026)
+  //
+  // Zwei Haende in einem Block: Louis tippt in seinem Kunden-Block, und die
+  // CRM-Bruecke haengt im selben Augenblick eine neue Aufgabe an. Bisher
+  // hielt der Client den fokussierten Block vom Poll fern, der naechste
+  // Tastendruck lief in 409, der Vollabgleich holte den Serverstand und
+  // ERSETZTE den Block — das Getippte war weg. Jetzt werden beide Staende
+  // zusammengefuehrt:
+  //   - die Zeilen des Servers gelten (Haken, Antworten, neue Aufgaben-Zeilen),
+  //   - die Zeile, in der der Cursor steht, behaelt ihren lokalen Text,
+  //   - lokal neu getippte Zeilen bleiben,
+  //   - was der Server laut letztem bekannten Stand schon hatte und lokal
+  //     fehlt, wurde hier geloescht und kommt nicht zurueck; was lokal steht
+  //     und auf dem Server fehlt, obwohl er es kannte, wurde dort geloescht.
+  // Zeilen finden sich ueber ihren Aufgaben-Bezug, sonst ueber den Text; die
+  // Cursor-Zeile (ihr Text ist ja gerade in Bewegung) ueber ihre Stelle.
+  const kopie = (x) => JSON.parse(JSON.stringify(x));
+  const zeilenSchluesselVon = (z) =>
+    (Number(z && z.aufgabe) > 0 ? "a" + Number(z.aufgabe) : "t" + String((z && z.t) || ""));
+  const zeilenSchluessel = (zeilen) => new Set((zeilen || []).map(zeilenSchluesselVon));
+  const konflikte = new Map();   // id -> 409er hintereinander
+
+  // Ist der Text der Cursor-Zeile eine Fortschreibung des Servertextes?
+  // (Gleicher Anfang zu mindestens 60 % des kuerzeren — Tippen am Ende,
+  // Loeschen am Ende, ein Wort mittendrin.)
+  const fortschreibung = (a, b) => {
+    a = String(a || ""); b = String(b || "");
+    if (!a || !b) return true;
+    const kuerzer = Math.min(a.length, b.length);
+    let i = 0;
+    while (i < kuerzer && a[i] === b[i]) i++;
+    return i >= Math.ceil(kuerzer * 0.6);
+  };
+
+  function zeilenZusammenfuehren(lokal, server, caretIdx, bekannt) {
+    const basis = bekannt instanceof Set ? bekannt : new Set();
+    const benutzt = new Set();
+    const bezug = (z) => (Number(z && z.aufgabe) > 0 ? Number(z.aufgabe) : 0);
+    const finde = (z, i) => {
+      const b = bezug(z);
+      for (let k = 0; k < server.length; k++) {
+        if (benutzt.has(k)) continue;
+        if (b ? bezug(server[k]) === b : (!bezug(server[k]) && server[k].t === z.t)) return k;
+      }
+      if (!b && i === caretIdx && i < server.length && !benutzt.has(i)
+          && !bezug(server[i]) && fortschreibung(server[i].t, z.t)) return i;
+      return -1;
+    };
+    const ergebnis = [];
+    let naechster = 0, neue = 0, neueAufgaben = 0, caret = -1;
+    // Server-Zeilen vor der Stelle k ausgeben, die lokal keinen Partner
+    // haben: neu vom Server — es sei denn, wir kannten sie schon, dann sind
+    // sie hier geloescht worden und bleiben weg.
+    const serverBis = (k) => {
+      for (; naechster < k; naechster++) {
+        if (benutzt.has(naechster)) continue;
+        benutzt.add(naechster);
+        const s = server[naechster];
+        if (basis.has(zeilenSchluesselVon(s))) continue;
+        ergebnis.push(kopie(s)); neue++;
+        if (bezug(s)) neueAufgaben++;
+      }
+    };
+    lokal.forEach((z, i) => {
+      const k = finde(z, i);
+      if (k >= 0) {
+        serverBis(k);
+        benutzt.add(k);
+        if (naechster <= k) naechster = k + 1;
+        const s = kopie(server[k]);
+        if (i === caretIdx) {
+          s.t = z.t;
+          if (z.striche) s.striche = kopie(z.striche); else delete s.striche;
+          caret = ergebnis.length;
+        }
+        ergebnis.push(s);
+        return;
+      }
+      // Lokal, aber nicht auf dem Server: neu getippt (bleibt) — oder dort
+      // geloescht (kannten wir sie schon, faellt sie weg), ausser der Cursor
+      // steht gerade darin.
+      if (i !== caretIdx && basis.has(zeilenSchluesselVon(z))) return;
+      if (i === caretIdx) caret = ergebnis.length;
+      if (i === caretIdx || String(z.t || "").trim()) ergebnis.push(kopie(z));
+    });
+    serverBis(server.length);
+    return {
+      zeilen: ergebnis.length ? ergebnis : [{ t: "", erledigt: false, gestrichen: false }],
+      caret, neue, neueAufgaben,
+    };
+  }
+
+  // Den Serverstand eines Blocks in den lokalen einarbeiten — der Cursor
+  // bleibt, wo er war (Zeile und Stelle), auch wenn davor Zeilen dazukamen.
+  function blockZusammenfuehren(el, server) {
+    const knoten = elementKnoten.get(el.id);
+    const aktiv = document.activeElement;
+    const zeileEl = knoten && aktiv && aktiv.closest && knoten.contains(aktiv) ? aktiv.closest(".wb-zeile") : null;
+    const caretIdx = zeileEl ? zeilenIndex(zeileEl) : -1;
+    const span = zeileEl ? $(".wb-zeile-text", zeileEl) : null;
+    const offset = span ? caretOffset(span) : 0;
+    const serverZeilen = (server.inhalt && Array.isArray(server.inhalt.zeilen)) ? server.inhalt.zeilen : [];
+    const m = zeilenZusammenfuehren(el.inhalt.zeilen || [], serverZeilen, caretIdx, el.__serverSchluessel);
+    el.inhalt.zeilen = m.zeilen;
+    el.version = server.version;
+    el.geaendert = server.geaendert || el.geaendert;
+    el.__serverSchluessel = zeilenSchluessel(serverZeilen);
+    if (knoten) {
+      blockRendern(el);
+      if (m.caret >= 0) {
+        const neu = $$(".wb-zeile-text", knoten)[m.caret];
+        if (neu) caretSetzen(neu, offset);
+      }
+    }
+    return m;
+  }
+
+  // Den aktuellen Serverstand EINES Elements holen — ueber den Delta-Pfad
+  // seiner Tafel, ohne den Poll-Stand anzufassen. "weg", wenn der Server es
+  // als geloescht meldet; null, wenn nichts zu holen war.
+  async function elementVomServer(el) {
+    try {
+      const antwort = await fetch("/api/whiteboard/elemente?tafel=" + encodeURIComponent(tafelVon(el))
+        + "&seit=1970-01-01T00:00:00.000Z");
+      if (antwort.status === 401) { sitzungAbgelaufen(); return null; }
+      const daten = await antwort.json();
+      if (daten.anmeldung) { sitzungAbgelaufen(); return null; }
+      if (!daten.ok) return null;
+      if ((daten.geloescht || []).includes(el.id)) return "weg";
+      const s = (daten.elemente || []).find((e) => e.id === el.id);
+      if (!s) return null;
+      if (!s.tafel) s.tafel = s.besitzer;
+      return s;
+    } catch { return null; }
   }
 
   // Nur aus Zeichenliste bzw. DOM nehmen — ohne das Modell anzufassen.
@@ -2206,6 +2356,19 @@
       if (wartet) ab.title = "Wartet: " + antwort + " — Klick hakt trotzdem ab";
       else ab.removeAttribute("title");
     }
+    // Zeile aus dem CRM (05.09.2026): "aufgabe" ist die aufgaben.id. Sie
+    // haengt wie die Antwort AM KNOTEN, damit das mobile Blatt sie beim
+    // Zurueckschreiben wiederfindet — und der Text sagt beim Ueberfahren,
+    // woher die Zeile kommt und dass der Haken in der Liste mitlaeuft.
+    if (daten.aufgabe) {
+      z.dataset.aufgabe = String(daten.aufgabe);
+      z.classList.add("wb-aufgabe");
+      t.title = "Aufgabe aus dem CRM — der Haken gilt auch in der Aufgabenliste; die Kette öffnet die Kundenakte.";
+    } else {
+      delete z.dataset.aufgabe;
+      z.classList.remove("wb-aufgabe");
+      t.removeAttribute("title");
+    }
     linkAnkerSetzen(z, daten.link);
   }
 
@@ -2371,6 +2534,10 @@
       // gehen — sonst loeschte jeder Tastendruck die Antwort der Zeile.
       if (alt.link) zeile.link = alt.link;
       if (alt.antwort) zeile.antwort = alt.antwort;
+      // Ebenso der Aufgaben-Bezug (05.09.2026): "aufgabe" ist die aufgaben.id
+      // der CRM-Aufgabe, aus der die Zeile stammt — ohne ihn liefe der Haken
+      // nicht mehr in die Aufgabenliste.
+      if (alt.aufgabe) zeile.aufgabe = alt.aufgabe;
       // Die TEILSTRICHE dagegen kommen sehr wohl aus dem DOM: sie sind keine
       // reinen Metadaten, sondern haengen an bestimmten ZEICHEN. Wer ein Wort
       // davor einfuegt, verschiebt sie — gemerkte Zahlen wanderten dann ueber
@@ -2828,6 +2995,16 @@
       } else if (ev.target.closest(".wb-zeile-weg")) {
         ev.preventDefault();
         blockSerialisieren(el);
+        // Auch das Wegnehmen einer Zeile gehoert in den Undo-Stapel — aus
+        // demselben Grund wie die Toggles darueber, nur mit mehr Gewicht:
+        // hier geht TEXT verloren. Ohne Eintrag nahm Strg+Z stattdessen die
+        // letzte andere Aktion zurueck und die Zeile blieb weg (gemessen
+        // 05.09.2026: nach dem Tippen stand als oberster Eintrag das
+        // automatische Nachruecken des Blocks darunter — Rueckgaengig schob
+        // diesen fremden Block zurueck, die geloeschte Zeile nicht).
+        // Besonders bitter bei einer Zeile aus dem CRM: sie traegt den
+        // Aufgaben-Bezug, den man von Hand nicht wiederherstellen kann.
+        const vorherWeg = { inhalt: inhaltKopie() };
         el.inhalt.zeilen.splice(idx, 1);
         if (!el.inhalt.zeilen.length) { elementLoeschen([el.id]); return; }
         blockRendern(el);
@@ -2839,6 +3016,8 @@
           const ziel = spans[Math.min(idx, spans.length - 1)];
           if (ziel) caretSetzen(ziel, ziel.textContent.length);
         }
+        undoMerken({ typ: "aendern", id: el.id, vorher: vorherWeg,
+                     nachher: { inhalt: inhaltKopie() } });
         blockGeaendert(el, true);
       }
     });
@@ -5599,11 +5778,13 @@
     ausstehend.set(el.id, { pfad: "/api/whiteboard/anlegen", body });
     inArbeit.add(el.id);
     kette(el.id, async () => {
+      const gesendet = body.inhalt && Array.isArray(body.inhalt.zeilen) ? zeilenSchluessel(body.inhalt.zeilen) : null;
       try {
         const { status, daten } = await senden("/api/whiteboard/anlegen", body);
         ausstehend.delete(el.id);
         if (daten.ok) {
           el.version = daten.version || 1;
+          if (gesendet) el.__serverSchluessel = gesendet;
           speicherFehler = 0;
         } else if (status === 400 && daten.grund === "voll") {
           toast(tafelVon(el) === ich.id ? "Deine Tafel ist voll — erst etwas wegwischen."
@@ -5646,18 +5827,42 @@
     kette(el.id, async () => {
       if (!elemente.has(el.id)) { ausstehend.delete(el.id); return; }
       body.version = el.version; // die Kette kann aeltere Bodies ueberholen lassen
+      // Was jetzt hinausgeht, ist nach dem Erfolg der Serverstand — die
+      // Basis fuers naechste Zusammenfuehren.
+      const gesendet = body.inhalt && Array.isArray(body.inhalt.zeilen) ? zeilenSchluessel(body.inhalt.zeilen) : null;
       try {
         const { status, daten } = await senden("/api/whiteboard/aendern", body);
         ausstehend.delete(el.id);
         if (daten.ok) {
           el.version = daten.version;
+          if (gesendet) el.__serverSchluessel = gesendet;
+          konflikte.delete(el.id);
           speicherFehler = 0;
         } else if (status === 409) {
-          toast("In anderer Sitzung geändert — hole den aktuellen Stand.");
-          inArbeit.delete(el.id);
-          // Erst wenn der Abgleich wirklich durch ist, Entwarnung geben —
-          // sonst raetselt man, ob die Wand jetzt stimmt.
-          if (await vollAbgleich()) toast("Stand wurde aktualisiert.");
+          // Jemand hat zwischen zwei Tastendruecken in diesen Block
+          // geschrieben — meist die CRM-Bruecke mit einer neuen Aufgabe.
+          // Nicht ersetzen, sondern zusammenfuehren (zeilenZusammenfuehren)
+          // und mit der Server-Version noch einmal senden. Erst wenn das
+          // dreimal hintereinander schiefgeht, holt der Vollabgleich wie
+          // frueher den ganzen Stand.
+          const n = (konflikte.get(el.id) || 0) + 1;
+          konflikte.set(el.id, n);
+          const server = n <= 3 ? await elementVomServer(el) : null;
+          if (server && server !== "weg" && server.art === el.art && elemente.has(el.id)) {
+            const m = blockZusammenfuehren(el, server);
+            toast(m.neueAufgaben ? "Eine Aufgabe wurde hinzugefügt — dein Text bleibt."
+                                 : "Der Block wurde woanders geändert — zusammengeführt.");
+            aenderungSenden(el);
+          } else if (server === "weg") {
+            toast("Das Element wurde in einer anderen Sitzung gelöscht.");
+            elementEntfernen(el.id);
+          } else {
+            toast("Hole den aktuellen Stand.");
+            inArbeit.delete(el.id);
+            // Erst wenn der Abgleich wirklich durch ist, Entwarnung geben —
+            // sonst raetselt man, ob die Wand jetzt stimmt.
+            if (await vollAbgleich()) toast("Stand wurde aktualisiert.");
+          }
         } else if (status === 404) {
           toast("Das Element wurde in einer anderen Sitzung gelöscht.");
           elementEntfernen(el.id);
@@ -7052,6 +7257,8 @@
       // Die Antwort haengt am Zeilenknoten (zeileFuellen setzt sie dort) und
       // ueberlebt Umsortieren und Loeschen damit genauso wie Haken und Link.
       if (zeile.dataset.antwort) neu.antwort = zeile.dataset.antwort;
+      // Und der Aufgaben-Bezug aus dem CRM — aus demselben Grund.
+      if (zeile.dataset.aufgabe) neu.aufgabe = Number(zeile.dataset.aufgabe);
       zeilen.push(neu);
     }
     el.inhalt.zeilen = zeilen.length ? zeilen.slice(0, DATEN.grenzen.zeilen)

@@ -1,0 +1,169 @@
+/* =====================================================================
+   Flowstate — Rechnungen & Angebote (Praefix .rg-), 05.09.2026
+   Additive Schicht ueber crm.css. Nutzt nur die Tokens von dort
+   (--surface, --surface-2, --border, --foreground, --text-secondary,
+   --text-muted, --primary, --r-*, --s*, --tempo) — Hell, Dunkel, Graphit
+   und Weiss laufen damit von selbst.
+
+   ZWEI SCHICHTEN IN DIESER DATEI:
+   1. Rueckfall fuer die gemeinsamen os-Bausteine (.os-kopf, .os-kacheln,
+      .os-pille, .os-gruppe, .os-zeile, .os-segment, .os-blatt, .os-leer,
+      .os-hinweis, .os-fortschritt). Alle in :where() gehuellt, also mit
+      Spezifitaet 0 — sobald public/os-ui.css (Design-Leitfaden 01-design.md)
+      geladen ist, gewinnt es ohne einen einzigen !important. Bis dahin sehen
+      die Seiten trotzdem fertig aus.
+   2. Eigene Seitenregeln (.rg-…) fuer Liste, Formular und Vorgangsseite.
+   ===================================================================== */
+
+/* ---------- 1. Rueckfall fuer os-Bausteine ---------- */
+:where(.rg-seite .os-kopf){display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:18px}
+:where(.rg-seite .os-kopf-titel){font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1.15;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+:where(.rg-seite .os-kopf-unter){font-size:13.5px;color:var(--text-secondary);margin-top:4px}
+:where(.rg-seite .os-kopf-pillen){display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+:where(.rg-seite .os-kopf-aktionen){display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+:where(.rg-seite .os-werkzeugleiste){display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px}
+
+:where(.rg-seite .os-kacheln){display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:18px}
+:where(.rg-seite .os-kachel){background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px;box-shadow:var(--s1)}
+:where(.rg-seite .os-kachel-label){font-size:12.5px;font-weight:500;color:var(--text-secondary)}
+:where(.rg-seite .os-kachel-zahl){font-size:26px;font-weight:700;letter-spacing:-.03em;line-height:1.1;margin-top:6px;font-variant-numeric:tabular-nums}
+:where(.rg-seite .os-kachel-fuss){font-size:12px;color:var(--text-muted);margin-top:6px}
+
+:where(.rg-seite .os-pille){display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:99px;font-size:11.5px;font-weight:600;white-space:nowrap;background:var(--surface-2);color:var(--text-secondary);line-height:1.4}
+:where(.rg-seite .os-pille--blau){background:var(--info-flaeche);color:var(--info)}
+:where(.rg-seite .os-pille--gruen){background:var(--success-flaeche);color:var(--success)}
+:where(.rg-seite .os-pille--bernstein){background:var(--warning-flaeche);color:var(--warning)}
+:where(.rg-seite .os-pille--rot){background:var(--danger-flaeche);color:var(--danger)}
+
+:where(.rg-seite .os-gruppe){margin-bottom:18px}
+:where(.rg-seite .os-gruppe-titel){display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12.5px;font-weight:600;color:var(--text-secondary);padding:0 4px 8px}
+:where(.rg-seite .os-gruppe-rumpf){background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--s1);overflow:hidden}
+:where(.rg-seite .os-zeile){padding:10px 16px;border-bottom:1px solid var(--border)}
+:where(.rg-seite .os-zeile:last-child){border-bottom:0}
+:where(.rg-seite .os-zeile-label){display:block;font-size:12px;color:var(--text-secondary);margin-bottom:3px;font-weight:500}
+:where(.rg-seite .os-zeile-wert){font-size:14px;line-height:1.4;min-height:20px}
+:where(.rg-seite .os-zeile--eingabe input, .rg-seite .os-zeile--eingabe select, .rg-seite .os-zeile--eingabe textarea){border:0;background:transparent;padding:2px 0;font-size:14px;border-radius:0;box-shadow:none}
+:where(.rg-seite .os-zeile--eingabe input:focus, .rg-seite .os-zeile--eingabe select:focus, .rg-seite .os-zeile--eingabe textarea:focus){box-shadow:none;outline:0}
+:where(.rg-seite .os-zeile--eingabe:focus-within){background:var(--surface-2)}
+:where(.rg-seite .os-zeile--paar){display:grid;grid-template-columns:1fr 1fr;gap:16px}
+:where(.rg-seite .os-zeile--paar > .os-zeile-teil + .os-zeile-teil){border-left:1px solid var(--border);padding-left:16px}
+:where(.rg-seite .os-zeile--text .os-zeile-wert:empty::before){content:"—";color:var(--text-muted)}
+
+:where(.rg-seite .os-segment){display:inline-flex;gap:2px;background:var(--surface-2);padding:3px;border-radius:9px;max-width:100%;overflow-x:auto}
+:where(.rg-seite .os-segment a, .rg-seite .os-segment button){padding:6px 13px;border-radius:7px;font-size:13px;font-weight:500;color:var(--text-secondary);background:transparent;box-shadow:none;white-space:nowrap;border:0;cursor:pointer}
+:where(.rg-seite .os-segment a:hover, .rg-seite .os-segment button:hover){color:var(--foreground);text-decoration:none;background:transparent;box-shadow:none}
+:where(.rg-seite .os-segment a.aktiv, .rg-seite .os-segment button.aktiv){background:var(--surface);color:var(--foreground);box-shadow:var(--s1);font-weight:600}
+
+:where(.rg-seite .os-tabelle-huelle){background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:auto;box-shadow:var(--s1)}
+:where(.rg-seite table.os-tabelle){width:100%;border-collapse:collapse}
+:where(.rg-seite .os-tabelle th){text-align:left;padding:11px 16px;font-size:12px;font-weight:600;color:var(--text-secondary);border-bottom:1px solid var(--border);white-space:nowrap}
+:where(.rg-seite .os-tabelle td){padding:12px 16px;border-bottom:1px solid var(--border);font-size:13.5px;vertical-align:middle}
+:where(.rg-seite .os-tabelle tbody tr:hover){background:var(--surface-2)}
+:where(.rg-seite .os-tabelle tbody tr:last-child td){border-bottom:0}
+:where(.rg-seite .os-tabelle .rechts){text-align:right;font-variant-numeric:tabular-nums}
+
+:where(.rg-seite dialog.os-blatt){padding:0;max-width:520px}
+:where(.rg-seite .os-blatt-kopf){display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:22px 24px 14px}
+:where(.rg-seite .os-blatt-kopf h2){margin:0 0 2px;font-size:17px}
+:where(.rg-seite .os-blatt-kopf .sub){margin:0;font-size:13px;color:var(--text-secondary)}
+:where(.rg-seite .os-blatt-rumpf){padding:4px 24px 8px;max-height:60vh;overflow:auto}
+:where(.rg-seite .os-blatt-fuss){display:flex;gap:8px;justify-content:flex-end;padding:14px 24px 22px;border-top:1px solid var(--border)}
+
+:where(.rg-seite .os-leer){text-align:center;padding:52px 24px;background:var(--surface);border:1px dashed var(--border-stark);border-radius:var(--r-lg)}
+:where(.rg-seite .os-leer h3){font-size:15px;margin:0 0 6px}
+:where(.rg-seite .os-leer p){font-size:13.5px;color:var(--text-secondary);max-width:440px;margin:0 auto 14px}
+
+:where(.rg-seite .os-hinweis){border-radius:var(--r-md);padding:12px 16px;font-size:13px;display:flex;gap:10px;align-items:flex-start;margin-bottom:16px;background:var(--surface-2);color:var(--text-secondary)}
+:where(.rg-seite .os-hinweis--info){background:var(--info-flaeche);color:var(--info)}
+:where(.rg-seite .os-hinweis--warn){background:var(--warning-flaeche);color:var(--warning)}
+:where(.rg-seite .os-hinweis--erfolg){background:var(--success-flaeche);color:var(--success)}
+:where(.rg-seite .os-hinweis svg){width:17px;height:17px;flex-shrink:0;margin-top:1px}
+
+:where(.rg-seite .os-fortschritt){display:flex;align-items:center;gap:10px;margin-top:6px}
+:where(.rg-seite .os-fortschritt-balken){flex:1;height:6px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+:where(.rg-seite .os-fortschritt-balken > span){display:block;height:100%;background:var(--success);border-radius:99px}
+:where(.rg-seite .os-fortschritt-text){font-size:12px;color:var(--text-secondary);white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* ---------- 2. Eigene Seitenregeln ---------- */
+.rg-seite{max-width:1240px}
+.rg-betrag{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rg-nummer{font-weight:600;white-space:nowrap}
+.rg-sub{display:block;font-size:12px;color:var(--text-muted);margin-top:1px}
+.rg-zeile-link{color:inherit;text-decoration:none;display:block}
+.rg-zeile-link:hover{text-decoration:none}
+.rg-entwurf{color:var(--text-muted);font-style:italic}
+.rg-ueberfaellig{color:var(--danger);font-weight:600}
+
+/* Filterzeile: Segment links, Felder rechts, auf schmal untereinander */
+.rg-filter{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
+.rg-filter form{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto}
+.rg-filter select,.rg-filter input{width:auto;min-width:150px;padding:7px 10px;font-size:13px}
+.rg-filter input[type=search]{min-width:200px}
+
+/* Knoepfe als Links, im Stil der crm.css-Knoepfe */
+a.rg-knopf{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:var(--r-sm);font:600 13.5px/1.2 inherit;background:var(--primary);color:#fff;text-decoration:none;transition:background var(--tempo),box-shadow var(--tempo)}
+a.rg-knopf:hover{background:var(--primary-hover);box-shadow:var(--s2);text-decoration:none}
+a.rg-knopf.sekundaer{background:var(--surface);color:var(--foreground);border:1px solid var(--border-stark)}
+a.rg-knopf.sekundaer:hover{background:var(--surface-2)}
+a.rg-knopf.dunkel{background:var(--blau-800)}
+/* Jedes Icon im Bereich, nicht nur die in Knoepfen. Der Link "PDF
+   herunterladen" ueber der Vorschau ist ein blankes <a> — sein SVG hatte
+   keine Regel und wuchs auf 113 px, weil das viewBox ohne Groessenangabe
+   die Zeilenhoehe sprengt (Befund 10 des Pruefers, 05.09.2026). */
+.rg-seite a svg{width:16px;height:16px;flex-shrink:0;vertical-align:-3px}
+a.rg-knopf svg,.rg-seite button svg{width:16px;height:16px}
+.rg-seite form.rg-inline{display:inline}
+
+/* Formular: zwei Spalten (Empfaenger | Vorgang), Positionen darunter */
+.rg-form-raster{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+@media(max-width:900px){.rg-form-raster{grid-template-columns:1fr}}
+.rg-positionen{width:100%;border-collapse:collapse}
+.rg-positionen th{text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);padding:8px 8px 8px 0;border-bottom:1px solid var(--border)}
+.rg-positionen td{padding:8px 8px 8px 0;vertical-align:top;border-bottom:1px solid var(--border)}
+.rg-positionen tr:last-child td{border-bottom:0}
+.rg-positionen input,.rg-positionen select,.rg-positionen textarea{padding:7px 9px;font-size:13px}
+.rg-positionen textarea{min-height:52px;resize:vertical;font-family:inherit}
+.rg-positionen .rg-pos-nr{width:26px;color:var(--text-muted);font-size:12px;padding-top:15px}
+.rg-positionen .rg-pos-menge{width:72px}
+.rg-positionen .rg-pos-einheit{width:110px}
+.rg-positionen .rg-pos-preis{width:120px}
+.rg-positionen .rg-pos-gesamt{width:110px;text-align:right;font-variant-numeric:tabular-nums;padding-top:15px;white-space:nowrap}
+.rg-positionen .rg-pos-weg{width:34px;padding-top:9px}
+.rg-positionen input[inputmode=decimal]{text-align:right}
+.rg-summe{display:flex;justify-content:flex-end;align-items:baseline;gap:14px;padding:12px 4px 4px;font-size:14px}
+.rg-summe b{font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.rg-form-fuss{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}
+.rg-form-fuss .rg-links{display:flex;gap:8px;align-items:center}
+.rg-vorlage-wahl{margin:0 0 14px}
+@media(max-width:760px){
+  .rg-positionen thead{display:none}
+  .rg-positionen tr{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px 0}
+  .rg-positionen td{display:block;padding:0;border:0;width:auto!important}
+  .rg-positionen td.rg-pos-leistung{grid-column:1/-1}
+  .rg-positionen .rg-pos-nr{display:none}
+  /* Preis links, Gesamt daneben; das X sitzt rechts in der Menge-Zeile */
+  .rg-positionen td.rg-pos-gesamt{padding-top:9px;align-self:center}
+  .rg-positionen td.rg-pos-weg{grid-column:2;grid-row:2;justify-self:end;padding-top:0}
+  .rg-positionen td.rg-pos-menge{grid-column:1;grid-row:2}
+  .rg-positionen td.rg-pos-einheit{grid-column:1/-1;grid-row:3}
+  .rg-positionen td.rg-pos-preis{grid-column:1;grid-row:4}
+  .rg-positionen td.rg-pos-gesamt{grid-column:2;grid-row:4}
+}
+
+/* Vorgangsseite: Vorschau links, Zahlstand/Infos rechts */
+.rg-detail{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.8fr);gap:18px;align-items:start}
+@media(max-width:1000px){.rg-detail{grid-template-columns:1fr}}
+.rg-vorschau{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--s1);overflow:hidden}
+.rg-vorschau iframe{display:block;width:100%;height:78vh;min-height:560px;border:0;background:#fff}
+.rg-vorschau-kopf{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:12.5px;color:var(--text-secondary)}
+.rg-aktionen{display:flex;flex-wrap:wrap;gap:8px}
+.rg-aktionen form{display:inline}
+.rg-aktionen button,.rg-aktionen a.rg-knopf{padding:8px 13px;font-size:13px}
+.rg-zahlung{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.rg-zahlung small{color:var(--text-muted)}
+.rg-kette{display:flex;flex-direction:column;gap:0}
+.rg-kette a{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);color:inherit;text-decoration:none}
+.rg-kette a:last-child{border-bottom:0}
+.rg-kette a:hover{background:var(--surface-2);text-decoration:none}
+.rg-storno{white-space:pre-wrap}
+.rg-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--text-muted);word-break:break-all}

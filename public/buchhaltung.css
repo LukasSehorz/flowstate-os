@@ -1,0 +1,181 @@
+/* =====================================================================
+   Buchhaltung — eigene Bausteine (Praefix .buch-), 05.09.2026.
+
+   Liegt ueber crm.css und os-ui.css und aendert dort nichts. Alle Farben
+   kommen aus den Marken (--foreground, --success, --danger, --os-flaeche …),
+   damit Hell, Dunkel, Graphit und Weiss von selbst mitlaufen. Die alten
+   .bh-/.beleg-/.kasse-Regeln in crm.css bleiben unangetastet — sie werden
+   von den neuen Seiten schlicht nicht mehr benutzt.
+   ===================================================================== */
+
+.buch-seite{display:flex;flex-direction:column;gap:22px;min-width:0}
+.buch-seite>.os-hinweis{margin:0}
+.buch-seite .os-kacheln{margin:0}
+.buch-seite .os-werkzeugleiste{margin:0}
+.buch-hinweise{display:flex;flex-direction:column;gap:10px}
+.buch-hinweise:empty{display:none}
+.buch-rechts{margin-left:auto}
+
+/* ---------- Ablagezone (Uebersicht und Belege-Seite) ----------
+   Schmal und ruhig: eine Zeile mit Icon, Satz und Richtungswahl. Beim
+   Darueberziehen faerbt sie sich in der Primaerfarbe. */
+.buch-ablage{display:flex;align-items:center;gap:14px;padding:14px 18px;border:1.5px dashed var(--border-stark);
+  border-radius:var(--os-r,14px);background:var(--os-flaeche,var(--surface));cursor:pointer;
+  transition:border-color var(--tempo),background var(--tempo)}
+.buch-ablage:hover,.buch-ablage.bereit{border-color:var(--primary);background:var(--primary-soft)}
+.buch-ablage-icon{flex:0 0 auto;width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
+  background:var(--os-flaeche-2,var(--surface-2));color:var(--primary)}
+.buch-ablage-icon svg{width:19px;height:19px}
+.buch-ablage-text{flex:1 1 auto;min-width:0}
+.buch-ablage-text b{display:block;font-size:14px;font-weight:600}
+.buch-ablage-text span{display:block;font-size:12.5px;color:var(--text-secondary);margin-top:1px}
+.buch-ablage-richtung{flex:0 0 auto;display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-secondary)}
+.buch-ablage-richtung select{width:auto;height:32px;padding:0 28px 0 10px;font-size:13px}
+.buch-ablage input[type=file]{display:none}
+@media (max-width:700px){.buch-ablage{flex-wrap:wrap}.buch-ablage-richtung{width:100%}}
+
+/* ---------- Verlauf: zwei Balken je Monat, ruhig ---------- */
+.buch-verlauf{display:flex;align-items:flex-end;gap:8px;height:170px;padding:6px 4px 0}
+.buch-monat{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:7px;height:100%;min-width:0}
+.buch-paar{flex:1;display:flex;align-items:flex-end;justify-content:center;gap:3px;width:100%}
+.buch-paar span{flex:0 0 auto;width:10px;max-width:40%;border-radius:4px 4px 0 0;min-height:2px}
+.buch-ein{background:var(--success);opacity:.85}
+.buch-aus{background:var(--danger);opacity:.7}
+.buch-monat-label{font-size:11px;color:var(--text-muted);white-space:nowrap}
+.buch-legende{display:flex;gap:16px;margin-top:10px;padding-top:10px;border-top:1px solid var(--os-trenner,var(--border));
+  font-size:12px;color:var(--text-secondary)}
+.buch-legende span{display:inline-flex;align-items:center;gap:6px}
+.buch-legende i{width:9px;height:9px;border-radius:3px;display:inline-block}
+.buch-legende i.ein{background:var(--success)}
+.buch-legende i.aus{background:var(--danger)}
+
+/* Gruppe, deren Rumpf keine Zeilen, sondern ein Diagramm oder Balken traegt */
+.buch-gruppe-rumpf{padding:16px 18px;background:var(--os-flaeche,var(--surface));border:1px solid var(--border);
+  border-radius:var(--os-r,14px);box-shadow:var(--s1)}
+.buch-balken{display:flex;flex-direction:column;gap:10px}
+.buch-balken .os-fortschritt-text span:last-child{font-variant-numeric:tabular-nums}
+
+/* Kachel-Fussnote mit Zeilenumbruch */
+.buch-kachel-fuss{display:flex;flex-direction:column;gap:4px}
+.buch-kachel-fuss a{color:inherit}
+
+/* ---------- Betrag mit Richtung in Tabellen ---------- */
+.buch-betrag{font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.buch-betrag.einnahme{color:var(--success)}
+.buch-betrag.ausgabe{color:var(--danger)}
+.buch-still{color:var(--text-muted)}
+.buch-klein{font-size:12px;color:var(--text-secondary)}
+.buch-nowrap{white-space:nowrap}
+
+/* Inline-Formulare in Tabellenzellen (Bezahlt-Haken, Diesen Monat gebucht) */
+.buch-tat{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.buch-tat input[type=date]{width:auto;height:30px;padding:0 8px;font-size:12px}
+.buch-tat button{height:30px;padding:0 10px;font-size:12.5px}
+.buch-tat button.still{padding:0 8px}
+.buch-taten{display:flex;align-items:center;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.buch-taten .knopf,.buch-taten button{height:30px;padding:0 10px;font-size:12.5px}
+.buch-tabelle-icon{color:var(--text-muted);display:inline-flex}
+.buch-tabelle-icon svg{width:16px;height:16px}
+.buch-tabelle-icon:hover{color:var(--primary)}
+
+/* ---------- Belege-Seite: Filterzeile ---------- */
+.buch-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.buch-filter select,.buch-filter input[type=search]{width:auto;height:34px;padding:0 10px;font-size:13px}
+.buch-filter select{padding-right:26px}
+.buch-filter input[type=search]{min-width:200px;flex:1 1 200px;max-width:340px}
+.buch-quellen{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px;color:var(--text-secondary)}
+.buch-quellen .os-pille{font-weight:500}
+
+/* ---------- Beleg-Blatt: Vorschau links, Pruefmaske rechts ---------- */
+.buch-blatt-spalten{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:18px;align-items:start}
+@media (max-width:900px){.buch-blatt-spalten{grid-template-columns:1fr}}
+.buch-vorschau{position:sticky;top:0;background:var(--os-flaeche,var(--surface));border:1px solid var(--border);
+  border-radius:var(--os-r,14px);overflow:hidden;min-height:260px;display:flex;flex-direction:column}
+.buch-vorschau iframe{width:100%;height:520px;border:0;background:#fff}
+.buch-vorschau img{width:100%;height:auto;max-height:560px;object-fit:contain;background:var(--os-flaeche-2,var(--surface-2))}
+.buch-vorschau-fuss{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;
+  border-top:1px solid var(--os-trenner,var(--border));font-size:12px;color:var(--text-secondary)}
+.buch-vorschau-leer{flex:1;display:grid;place-items:center;padding:40px;color:var(--text-muted);font-size:13px}
+@media (max-width:900px){.buch-vorschau{position:static}.buch-vorschau iframe{height:360px}}
+.buch-blatt-fertig{display:flex;flex-direction:column;gap:6px}
+.buch-blatt .os-blatt-rumpf{padding-bottom:8px}
+.buch-radio{display:flex;gap:14px;flex-wrap:wrap;padding:2px 0}
+.buch-radio label{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--foreground);margin:0;font-weight:400;cursor:pointer}
+.buch-radio input{width:auto;height:auto;margin:0}
+
+/* ---------- Handy-Scan: gross, ein Daumen, ein Blick ---------- */
+.buch-scan{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px;width:100%}
+.buch-scan-knopf{display:flex;align-items:center;gap:14px;width:100%;min-height:76px;padding:14px 18px;
+  border-radius:16px;border:1px solid var(--border);background:var(--os-flaeche,var(--surface));color:var(--foreground);
+  font:600 16px/1.3 inherit;cursor:pointer;text-align:left;box-shadow:var(--s1);transition:background var(--tempo),transform var(--tempo)}
+.buch-scan-knopf:hover{background:var(--os-flaeche-2,var(--surface-2));box-shadow:var(--s1)}
+.buch-scan-knopf:active{transform:scale(.99)}
+.buch-scan-knopf--ausgabe{border-color:var(--danger);}
+.buch-scan-knopf--einnahme{border-color:var(--success);}
+.buch-scan-knopf .buch-scan-icon{flex:0 0 auto;width:46px;height:46px;border-radius:13px;display:grid;place-items:center}
+.buch-scan-knopf--ausgabe .buch-scan-icon{background:var(--danger-flaeche);color:var(--danger)}
+.buch-scan-knopf--einnahme .buch-scan-icon{background:var(--success-flaeche);color:var(--success)}
+.buch-scan-icon svg{width:24px;height:24px}
+.buch-scan-knopf small{display:block;font-size:12.5px;font-weight:400;color:var(--text-secondary);margin-top:2px}
+.buch-scan-knopf input{display:none}
+.buch-scan-nebenweg{display:flex;justify-content:center}
+.buch-scan-nebenweg label{font-size:13px;color:var(--primary);cursor:pointer;padding:6px 10px;border-radius:8px}
+.buch-scan-nebenweg label:hover{background:var(--os-flaeche-2,var(--surface-2))}
+.buch-scan-nebenweg input{display:none}
+.buch-scan-stand{font-size:13px;color:var(--text-secondary);min-height:20px;text-align:center}
+.buch-scan-liste{display:flex;flex-direction:column;gap:10px}
+.buch-scan-karte{background:var(--os-flaeche,var(--surface));border:1px solid var(--border);border-radius:14px;
+  padding:14px 16px;box-shadow:var(--s1);display:flex;flex-direction:column;gap:8px}
+.buch-scan-karte.fertig{border-color:var(--success)}
+.buch-scan-karte.fehler{border-color:var(--danger)}
+.buch-scan-kopf{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;color:var(--text-secondary)}
+.buch-scan-kopf b{color:var(--foreground);font-size:14px;overflow-wrap:anywhere}
+.buch-scan-werte{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:14px}
+.buch-scan-werte span{display:block;font-size:11.5px;color:var(--text-muted)}
+.buch-scan-werte b{font-weight:600}
+.buch-scan-hinweis{font-size:12.5px;color:var(--warning);display:flex;gap:6px;align-items:flex-start}
+.buch-scan-hinweis svg{width:14px;height:14px;flex:none;margin-top:2px}
+.buch-scan-taten{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:2px}
+.buch-scan-taten button,.buch-scan-taten a.knopf{height:38px;padding:0 14px}
+.buch-scan-fortschritt{height:4px;border-radius:99px;background:var(--os-flaeche-3,var(--surface-3));overflow:hidden}
+.buch-scan-fortschritt span{display:block;height:100%;background:var(--primary);width:0;transition:width .4s ease}
+.buch-scan-fortschritt.laeuft span{width:60%;animation:buch-puls 1.2s ease-in-out infinite alternate}
+@keyframes buch-puls{from{width:25%}to{width:85%}}
+@media (prefers-reduced-motion:reduce){.buch-scan-fortschritt.laeuft span{animation:none;width:60%}}
+
+/* ---------- Monatsabschluss ---------- */
+.buch-monate .os-tabelle td{white-space:nowrap}
+.buch-monate .os-tabelle td.buch-taten-zelle{white-space:normal}
+.buch-monat-laufend td{opacity:.75}
+.buch-kanzlei-zeile{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--text-secondary)}
+
+/* ---------- Kosten ---------- */
+.buch-mini-verlauf{display:flex;align-items:flex-end;gap:6px;height:90px;margin-top:14px;padding-top:12px;
+  border-top:1px solid var(--os-trenner,var(--border))}
+.buch-mini-verlauf div{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%;min-width:0}
+.buch-mini-verlauf i{display:block;width:100%;max-width:26px;border-radius:4px 4px 0 0;background:var(--danger);opacity:.65;margin-top:auto;min-height:2px}
+.buch-mini-verlauf small{font-size:10.5px;color:var(--text-muted);white-space:nowrap}
+
+/* Zu-tun-Zeilen: Zahl links fett, Satz daneben */
+.buch-zutun-zahl{display:inline-grid;place-items:center;min-width:34px;height:26px;padding:0 8px;border-radius:99px;
+  font-weight:650;font-size:13px;background:var(--os-flaeche-3,var(--surface-3));color:var(--foreground)}
+.buch-zutun-zahl.warn{background:var(--warning-flaeche);color:var(--warning)}
+.buch-zutun-zahl.rot{background:var(--danger-flaeche);color:var(--danger)}
+.buch-zutun-zahl.gruen{background:var(--success-flaeche);color:var(--success)}
+
+/* Kleine Datumsangabe im Kachel-Fuss oder in Zeilen */
+.buch-datum{font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* Druck: Blatt und Werkzeugleisten weg, Tabellen bleiben */
+@media print{.buch-ablage,.os-werkzeugleiste-aktionen,.buch-filter,.buch-taten{display:none!important}}
+
+/* ---------- Nachtrag aus dem QA-Lauf (05.09.2026) ----------
+   1) [hidden] muss gegen os-ui.css gewinnen: .os-zeile setzt display:flex mit
+      derselben Spezifitaet wie das [hidden] des Browsers — die Autorregel
+      gewinnt, und die Einnahme-Zeilen blieben im Pruef-Blatt sichtbar.
+   2) Icons ausserhalb von Knoepfen (Handy-Hinweis, Kanzlei-Zeile, Nebenweg
+      auf der Scan-Seite) bekommen sonst die volle Breite des Elternelements. */
+.buch-seite [hidden],.buch-blatt [hidden]{display:none!important}
+.buch-quellen svg,.buch-kanzlei-zeile svg,.buch-scan-nebenweg label svg,.buch-scan-kopf svg{
+  width:16px;height:16px;flex:0 0 auto;vertical-align:-3px}
+.buch-quellen>span,.buch-kanzlei-zeile{display:inline-flex;align-items:center;gap:6px}

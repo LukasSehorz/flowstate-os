@@ -1,0 +1,111 @@
+/* =====================================================================
+   Kundenakte 2 (05.09.2026) — Kategorien & Zeilen.
+   Praefix .akte2-. Die Bausteine (.os-gruppe, .os-zeile, .os-segment …)
+   kommen aus os-ui.css; hier steht nur, was die Akte zusaetzlich braucht:
+   Anordnung, das klebende Segment, die Aufgaben-/Verlaufszeilen mit Icon
+   und Haken, die Ablage in einer Zeile. Farben nur ueber Marken — Hell,
+   Dunkel, Graphit und Weiss laufen damit automatisch mit.
+   Die alten .akte-*-Regeln in crm.css bleiben unangetastet; die
+   Speicherleiste (.akte-speicherleiste) wird von dort weiterverwendet.
+   ===================================================================== */
+
+/* hidden gewinnt immer — os-ui setzt Zeilen und Panels auf flex/grid, und
+   ein display in einer Klasse wuerde das Attribut sonst aushebeln. Genau
+   daran haengt die ganze Zeilenwahl und der Kategorienwechsel. */
+.akte2 [hidden]{display:none!important}
+
+.akte2-kopf{margin-bottom:12px}
+.akte2-kopf .os-kopf-aktionen form{display:inline-flex;margin:0}
+.akte2-kopf .os-kopf-aktionen .knopf{display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+.akte2-kopf #speicher-hinweis-oben{align-self:center}
+
+.akte2-hinweise{display:flex;flex-direction:column;gap:8px;margin:0 0 14px}
+/* Das kleine Formular im Hinweis (Leadakte/Kundenakte anlegen): Auswahl und
+   Knopf in EINER Zeile rechts — die Auswahl darf nicht die ganze Breite
+   nehmen, sonst rutscht der Knopf darunter. */
+.akte2-hinweis-form{display:flex;align-items:center;gap:8px;flex:none;margin-left:auto;white-space:nowrap}
+.akte2-hinweis-form select,.akte2-hinweis-form input{height:var(--os-hoehe,36px);font-size:13px;width:auto;max-width:200px}
+
+/* Das Segment klebt unter dem Seitenkopf: Wer in "Auftrag & Geld" unten
+   scrollt, sieht oben weiter, wo er ist, und kommt mit einem Klick in die
+   naechste Kategorie. Der Grund dahinter ist die flache Seitenmarke, sonst
+   scheinen die Zeilen beim Scrollen durch die Schiene. */
+.akte2-segment{position:sticky;top:0;z-index:6;margin:0 0 22px;
+  box-shadow:0 8px 0 0 var(--os-grund,var(--background)),0 -8px 0 0 var(--os-grund,var(--background))}
+.akte2-segment small{font-size:11px;font-weight:600;color:var(--text-muted);margin-left:4px}
+.akte2-segment [role=tab].aktiv small{color:var(--primary)}
+
+.akte2-rumpf{margin:0}
+.akte2-rumpf .os-gruppe+.os-gruppe{margin-top:22px}
+.akte2-kategorie{display:block}
+
+/* Ueberblick */
+.akte2-kacheln{margin-bottom:12px}
+.akte2-fortschritt{margin:4px 0 12px}
+.akte2-abschlaege{margin-top:8px}
+.akte2-liste{margin:0;padding-left:18px;line-height:1.55}
+.akte2-liste li{margin:2px 0}
+
+/* Zeilen mit Icon links (Verlauf, Unterlagen) */
+/* flex-direction:row ausdruecklich — os-ui stellt .os-zeile auf column. */
+.akte2-verlauf,.akte2-dokument{display:flex;flex-direction:row;align-items:flex-start;gap:12px}
+.akte2-verlauf .os-zeile-wert,.akte2-dokument .os-zeile-wert{flex:1;min-width:0}
+.akte2-verlauf .os-zeile-icon,.akte2-dokument .os-zeile-icon{flex:none;margin-top:2px;color:var(--text-muted)}
+.akte2-verlauf .os-zeile-icon.blau{color:var(--info)}
+.akte2-verlauf .os-zeile-icon.gruen{color:var(--success)}
+.akte2-dokument form{flex:none;margin:0}
+.akte2-dokument a.os-zeile-wert{color:inherit;text-decoration:none}
+.akte2-dokument a.os-zeile-wert:hover{color:var(--primary)}
+
+/* Aufgaben: Haken links, Text, Frist rechts */
+.akte2-todo{display:flex;flex-direction:row;align-items:flex-start;gap:12px}
+.akte2-todo .os-zeile-wert{flex:1;min-width:0}
+.akte2-todo-haken{flex:none;margin:1px 0 0}
+.akte2-todo-haken .todo-haken{width:22px;height:22px}
+.akte2-todo.fertig .akte2-todo-titel{text-decoration:line-through;color:var(--text-muted)}
+.akte2-todo .os-zeile-neben{flex:none}
+.akte2-erledigt summary{cursor:pointer;list-style:none}
+.akte2-erledigt summary::-webkit-details-marker{display:none}
+.akte2-erledigt[open] summary .os-zeile-neben::after{content:" ▴"}
+.akte2-erledigt:not([open]) summary .os-zeile-neben::after{content:" ▾"}
+
+/* Eine Zeile, die nur einen Knopf und einen Satz traegt (Formular-Fuss in
+   einer Gruppe: Aufgabe anlegen, Notiz in den Verlauf). */
+.akte2-zeile-knopf{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.akte2-zeile-knopf .caption{flex:1;min-width:200px;line-height:1.45}
+
+/* Umgesetzt: Eintrag mit Entfernen-Knopf, darunter das Eintragen-Feld */
+.akte2-umgesetzt{display:flex;flex-direction:row;align-items:center;gap:12px}
+.akte2-umgesetzt .os-zeile-wert{flex:1}
+.akte2-umgesetzt form{margin:0;flex:none}
+.akte2-umgesetzt-neu .os-zeile-wert{display:flex;gap:10px;align-items:center}
+.akte2-umgesetzt-neu .os-zeile-wert input{flex:1;min-width:0}
+.akte2-umgesetzt-neu .os-zeile-wert button{flex:none}
+
+/* Ablage in einer Zeile: die Zone aus crm.css, nur ohne doppelten Rand */
+.akte2-ablage{margin:4px 0 0}
+.akte2-ablage+.ablage-liste{margin-top:8px}
+
+/* Zeilenwahl-Popover: "hat einen Wert" klein und ruhig */
+.akte2-popover .os-popover-liste label{display:flex;align-items:center;gap:8px}
+.akte2-zeilen-wert{margin-left:auto;font-size:11px;color:var(--text-muted);font-weight:400}
+.akte2-zeilen-stand{min-height:1em}
+.akte2-popover .os-popover-fuss{display:flex;align-items:center;justify-content:space-between;gap:10px}
+
+/* Speicherleiste: das Muster aus crm.css, nur ueber dem Segment (z-index) */
+.akte2-speicherleiste{z-index:20}
+
+/* Kopfzeile der Kategorie: das Zeilen-Werkzeug rechts */
+.akte2-kat-kopf{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin:-6px 0 10px}
+.akte2-popover-gruppe{font-size:11px;font-weight:600;color:var(--text-muted);padding:6px 0 2px}
+
+@media (max-width:700px){
+  /* os-ui setzt flex:0 0 auto auf die Aktionen — hier muss die Zeile umbrechen. */
+  .akte2-kopf .os-kopf-aktionen{flex:1 1 100%;flex-wrap:wrap}
+  /* Das Hinweis-Formular (Leadakte/Kundenakte anlegen) darf auf dem Handy
+     nicht in einer Zeile bleiben — es ragte sonst bis 459 px hinaus. */
+  .akte2-hinweise .os-hinweis{flex-wrap:wrap}
+  .akte2-hinweis-form{flex:1 1 100%;margin-left:0;white-space:normal;flex-wrap:wrap}
+  .akte2-hinweis-form select,.akte2-hinweis-form input{max-width:100%;flex:1 1 160px}
+  .akte2-zeile-knopf{align-items:flex-start;flex-direction:column}
+}
