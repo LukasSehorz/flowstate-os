@@ -161,6 +161,7 @@ const TESTS = [
   // rechnungen.js — ohne Netz, ohne Datenbank.
   "test-beleg-chat",
   "test-passwort-zuruecksetzen",
+  "test-umgebung-durchgereicht",
 ];
 
 // NICHT hier drin, mit Grund:

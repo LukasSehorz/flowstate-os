@@ -13,6 +13,26 @@ services:
       # in der .env, kam aber nie im Container an, und jeder Lauf endete in
       # "Dienstanmelden: 403".
       - DIENST_KONTO=${DIENST_KONTO}
+      # Die uebrigen Werte, die in .env.beispiel dokumentiert sind und im Code
+      # benutzt werden. Sie standen bis 07.09.2026 nicht hier — wer sie in die
+      # .env schrieb, sah nichts passieren, weil diese Liste sie nie
+      # durchreichte. Regel ab jetzt: Was in .env.beispiel steht, steht auch
+      # hier. Fehlt ein Wert in der .env, kommt er als leerer Text an, und der
+      # Code nimmt seine eigene Vorgabe.
+      - OS_URL=${OS_URL}
+      - MAIL_ABSENDER=${MAIL_ABSENDER}
+      - EIGENE_DOMAENEN=${EIGENE_DOMAENEN}
+      - MAIL_BELEGE_STUNDE=${MAIL_BELEGE_STUNDE}
+      - MAIL_BELEGE_SUCHE=${MAIL_BELEGE_SUCHE}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - BELEG_MODELL=${BELEG_MODELL}
+      - ANGEBOT_MODELL=${ANGEBOT_MODELL}
+      - DIKTAT_MODELL=${DIKTAT_MODELL}
+      - VERSAND_MODELL=${VERSAND_MODELL}
+      - BELEG_AUSGANG=${BELEG_AUSGANG}
+      - BELEG_LINK_BASIS=${BELEG_LINK_BASIS}
+      - STEUER_MODUS=${STEUER_MODUS}
+      - STEUER_MAX_ANHANG=${STEUER_MAX_ANHANG}
       - SESSION_SECRET=${SESSION_SECRET}
       - VAULT_PATH=/vault
       - DATA_PATH=/data
