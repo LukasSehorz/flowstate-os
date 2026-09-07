@@ -160,6 +160,7 @@ const TESTS = [
   // Arbeitsspeicher-Fassung von beleg_chat aus 0063) und den Datenzugriffen aus
   // rechnungen.js — ohne Netz, ohne Datenbank.
   "test-beleg-chat",
+  "test-passwort-zuruecksetzen",
 ];
 
 // NICHT hier drin, mit Grund:

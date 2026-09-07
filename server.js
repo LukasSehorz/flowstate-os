@@ -129,7 +129,11 @@ const BEREICH_JE_PFAD = {
   wissen: "wissen", agenten: "agenten", einstellungen: "einstellungen",
 };
 // Immer offen: Anmeldung, Abmeldung und was der Browser fuer die Seite braucht.
-const IMMER_OFFEN = new Set(["login", "logout", "bilder", "favicon.ico"]);
+const IMMER_OFFEN = new Set(["login", "logout", "bilder", "favicon.ico",
+  // "Passwort vergessen" muss offen sein — wer hier landet, kann sich ja
+  // gerade NICHT anmelden. Beide Seiten geben nichts preis: die eine
+  // antwortet immer gleich, die andere braucht einen Einmal-Schluessel.
+  "passwort-vergessen", "passwort-neu"]);
 
 app.use((req, res, next) => {
   const u = req.session && req.session.crm;
@@ -183,10 +187,114 @@ app.get("/login", (req, res) => {
         <input type="password" name="password" placeholder="Passwort" autocomplete="current-password" required>
         <button type="submit">Anmelden</button>
       </form>
+      <p class="small"><a href="/passwort-vergessen">Passwort vergessen?</a></p>
       <p class="muted small">Mit dem persönlichen Konto anmelden — damit ist auch das CRM offen.
         Ohne E-Mail gilt das gemeinsame Passwort (dann ohne CRM-Zugriff).</p>
       ${req.query.err ? '<p class="error">E-Mail oder Passwort stimmt nicht.</p>' : ""}
     </div>`));
+});
+
+// ---------------------------------------------------------------- Passwort vergessen
+//
+// Zwei Seiten, beide ohne Anmeldung erreichbar (siehe IMMER_OFFEN). Die Regeln
+// stehen in lib/passwort-zuruecksetzen.js; hier liegt nur, was man sieht.
+//
+// Die erste Seite antwortet IMMER gleich — auch bei einer Adresse, die es
+// nicht gibt. Sonst koennte man hier Adressen durchprobieren.
+const pwz = require("./lib/passwort-zuruecksetzen.js");
+
+const pwzSeite = (inhalt) => layoutBare("Passwort vergessen", `
+    <div class="login-box">
+      <h1>flowstate<span class="accent">OS</span></h1>
+      ${inhalt}
+    </div>`);
+
+app.get("/passwort-vergessen", (req, res) => {
+  if (req.query.ab) {
+    return res.send(pwzSeite(`
+      <p class="muted">Wenn es zu dieser Adresse ein Konto gibt, ist die Mail unterwegs.
+        Der Link darin gilt eine Stunde.</p>
+      <p class="small">Nichts angekommen? Sieh im Spam-Ordner nach, oder
+        <a href="/passwort-vergessen">versuch es noch einmal</a>.</p>
+      <p class="small"><a href="/login">Zurück zur Anmeldung</a></p>`));
+  }
+  res.send(pwzSeite(`
+      <p class="muted">Trag deine E-Mail-Adresse ein — du bekommst einen Link,
+        mit dem du dir ein neues Passwort setzen kannst.</p>
+      <form method="post" action="/passwort-vergessen">
+        <input type="email" name="email" placeholder="E-Mail" autocomplete="username" autofocus required>
+        <button type="submit">Link schicken</button>
+      </form>
+      <p class="small"><a href="/login">Zurück zur Anmeldung</a></p>`));
+});
+
+app.post("/passwort-vergessen", async (req, res) => {
+  // Die Antwort haengt NICHT davon ab, was dabei herauskam — deshalb wird das
+  // Ergebnis nur protokolliert, nie angezeigt.
+  try {
+    const basis = process.env.OS_URL || `${req.protocol}://${req.get("host")}`;
+    const r = await pwz.anfordern(req.body?.email, {
+      basisUrl: basis,
+      von: (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").toString().split(",")[0].trim(),
+    });
+    if (!r.gesendet) console.log(`Passwort vergessen: keine Mail (${r.grund})`);
+  } catch (e) { console.error("Passwort vergessen:", e.message); }
+  res.redirect("/passwort-vergessen?ab=1");
+});
+
+const PWZ_FEHLER = {
+  "kein-schluessel": "Der Link ist unvollständig. Bitte fordere einen neuen an.",
+  unbekannt: "Diesen Link kennen wir nicht. Bitte fordere einen neuen an.",
+  benutzt: "Dieser Link wurde schon benutzt. Bitte fordere einen neuen an.",
+  abgelaufen: "Der Link ist abgelaufen — er gilt eine Stunde. Bitte fordere einen neuen an.",
+  stillgelegt: "Dieses Konto ist stillgelegt. Bitte wende dich an Lukas oder Jannik.",
+  datenbank: "Da ist gerade etwas schiefgegangen. Bitte versuch es in ein paar Minuten noch einmal.",
+  "zu-kurz": `Das Passwort braucht mindestens ${pwz.MINDESTLAENGE} Zeichen.`,
+};
+
+const pwzFormular = (schluessel, fehler) => pwzSeite(`
+      <p class="muted">Such dir ein neues Passwort aus — mindestens ${pwz.MINDESTLAENGE} Zeichen.</p>
+      ${fehler ? `<p class="error">${esc(fehler)}</p>` : ""}
+      <form method="post" action="/passwort-neu">
+        <input type="hidden" name="schluessel" value="${esc(schluessel)}">
+        <input type="password" name="neu" placeholder="Neues Passwort" autocomplete="new-password"
+               minlength="${pwz.MINDESTLAENGE}" autofocus required>
+        <input type="password" name="neu2" placeholder="Noch einmal dasselbe" autocomplete="new-password"
+               minlength="${pwz.MINDESTLAENGE}" required>
+        <button type="submit">Passwort setzen</button>
+      </form>`);
+
+app.get("/passwort-neu", async (req, res) => {
+  if (req.query.fertig) {
+    return res.send(pwzSeite(`
+      <p class="muted">Das Passwort ist gesetzt. Du kannst dich jetzt damit anmelden.</p>
+      <p><a href="/login">Zur Anmeldung</a></p>`));
+  }
+  const gut = await pwz.pruefen(req.query.schluessel);
+  if (!gut.ok) {
+    return res.send(pwzSeite(`
+      <p class="error">${esc(PWZ_FEHLER[gut.grund] || PWZ_FEHLER.unbekannt)}</p>
+      <p><a href="/passwort-vergessen">Neuen Link anfordern</a></p>`));
+  }
+  res.send(pwzFormular(String(req.query.schluessel || ""), ""));
+});
+
+app.post("/passwort-neu", async (req, res) => {
+  const schluessel = String(req.body?.schluessel || "");
+  const neu = String(req.body?.neu || "");
+  if (neu !== String(req.body?.neu2 || "")) {
+    return res.send(pwzFormular(schluessel, "Die beiden Eingaben sind nicht gleich."));
+  }
+  const r = await pwz.setzen(schluessel, neu);
+  if (!r.ok) {
+    // Ein verbrauchter oder abgelaufener Schluessel bekommt kein Formular mehr —
+    // damit niemand dagegen weitertippt.
+    if (["zu-kurz"].includes(r.grund)) return res.send(pwzFormular(schluessel, PWZ_FEHLER[r.grund]));
+    return res.send(pwzSeite(`
+      <p class="error">${esc(PWZ_FEHLER[r.grund] || PWZ_FEHLER.unbekannt)}</p>
+      <p><a href="/passwort-vergessen">Neuen Link anfordern</a></p>`));
+  }
+  res.redirect("/passwort-neu?fertig=1");
 });
 
 // Eine Anmeldung fuer alles: das persoenliche Konto oeffnet OS und CRM zugleich.
@@ -2204,7 +2312,9 @@ app.get("/einstellungen", (req, res) => {
 app.post("/api/einstellungen/passwort", async (req, res) => {
   if (!req.session.crm) return res.json({ ok: false, hint: "Nur mit persönlichem Konto (E-Mail-Login) möglich." });
   const neu = String(req.body?.neu || "");
-  if (neu.length < 6) return res.json({ ok: false, hint: "Mindestens 6 Zeichen." });
+  // Dasselbe Mass wie beim Zuruecksetzen (lib/passwort-zuruecksetzen.js) —
+  // zwei Zahlen fuer dieselbe Sache waeren nur verwirrend.
+  if (neu.length < pwz.MINDESTLAENGE) return res.json({ ok: false, hint: `Mindestens ${pwz.MINDESTLAENGE} Zeichen.` });
   try {
     await require("./lib/crm.js").passwortAendern(req.session.crm.id, neu);
     res.json({ ok: true });
