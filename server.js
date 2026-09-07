@@ -322,7 +322,14 @@ app.post("/passwort-neu", async (req, res) => {
 // Das vergibt KEINE neuen Rechte: Der Prozess hat die Datenbank sowieso in der
 // Hand. Es macht nur sichtbar, ALS WEN er handelt — und laesst die Zeilenrechte
 // weiter greifen, statt sie zu umgehen.
-const DIENST_KONTO = process.env.DIENST_KONTO || "lukas.sehorz@flowstate-ai.net";
+// Ohne DIENST_KONTO nimmt der Server das AELTESTE aktive Admin-Konto aus der
+// Datenbank. Bis 07.09.2026 stand hier eine feste Adresse als Rueckfall
+// (lukas.sehorz@flowstate-ai.net) — die es in der Datenbank nie gab. Jeder
+// Hintergrundlauf endete darum in "Dienstanmelden: 403", und weil das nur
+// im Protokoll steht, ist es monatelang niemandem aufgefallen: Die
+// Rechnungen aus dem Postfach kamen einfach nicht herein. Eine Vorgabe, die
+// auf nichts zeigt, ist schlechter als gar keine.
+const DIENST_KONTO = process.env.DIENST_KONTO || "";
 app.post("/intern/dienst-anmelden", async (req, res) => {
   const her = String(req.socket.remoteAddress || "");
   const drinnen = her === "127.0.0.1" || her === "::1" || her === "::ffff:127.0.0.1";
@@ -332,8 +339,12 @@ app.post("/intern/dienst-anmelden", async (req, res) => {
     const { rows } = await require("./lib/crm.js").system(
       `select p.id, u.email, p.name, p.rolle, p.module
          from public.profiles p join auth.users u on u.id = p.id
-        where lower(u.email) = lower($1) and p.aktiv and p.rolle = 'admin'`, [DIENST_KONTO]);
-    if (!rows[0]) return res.status(403).json({ ok: false, hint: `Kein aktives Admin-Konto ${DIENST_KONTO}` });
+        where p.aktiv and p.rolle = 'admin'
+          and ($1 = '' or lower(u.email) = lower($1))
+        order by u.created_at nulls last, u.email
+        limit 1`, [DIENST_KONTO]);
+    if (!rows[0]) return res.status(403).json({ ok: false,
+      hint: DIENST_KONTO ? `Kein aktives Admin-Konto ${DIENST_KONTO}` : "Kein aktives Admin-Konto vorhanden" });
     req.session.crm = { ...rows[0], module: rows[0].module || [] };
     req.session.authed = true;
     // ERST SPEICHERN, DANN ANTWORTEN (07.08.). Die Sitzungen liegen als Dateien

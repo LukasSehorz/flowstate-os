@@ -8,6 +8,11 @@ services:
     restart: unless-stopped
     environment:
       - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD}
+      # Als wen die Hintergrundlaeufe handeln (Postfach-Belege 19 Uhr,
+      # Telegram-Belege). Fehlte hier bis 07.09.2026 — der Wert stand zwar
+      # in der .env, kam aber nie im Container an, und jeder Lauf endete in
+      # "Dienstanmelden: 403".
+      - DIENST_KONTO=${DIENST_KONTO}
       - SESSION_SECRET=${SESSION_SECRET}
       - VAULT_PATH=/vault
       - DATA_PATH=/data
