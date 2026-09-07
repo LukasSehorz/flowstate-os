@@ -60,7 +60,15 @@ function rufen(schluessel, req) {
   melde(alsChef.html.includes('id="ln-besitzer"'), "GF sieht die Auswahl „In wessen Liste?“");
   melde(alsChef.html.includes(`>${angestellt.name}<`) || alsChef.html.includes(angestellt.name),
     `GF findet ${angestellt.name} in der Auswahl`);
-  melde(!alsChef.html.includes(`value="${chef.id}"`), "GF steht nicht doppelt drin (nur als „meine eigene Liste“)");
+  // Nur IM Auswahlfeld des Dialogs nachsehen, nicht auf der ganzen Seite.
+  // Die Suche ueber das komplette HTML schlug seit dem Sammel-Balken falsch an:
+  // Dessen Feld "Zuweisen an" bietet absichtlich "<Name> (ich)" mit derselben
+  // id an — richtig so, aber ein anderes Feld. Der Test meldete deshalb einen
+  // Fehler, den es nicht gab (bemerkt am 07.09.2026).
+  const dialogFeld = alsChef.html.slice(
+    alsChef.html.indexOf('id="ln-besitzer"'),
+    alsChef.html.indexOf("</select>", alsChef.html.indexOf('id="ln-besitzer"')));
+  melde(!dialogFeld.includes(`value="${chef.id}"`), "GF steht nicht doppelt drin (nur als „meine eigene Liste“)");
 
   const alsAngestellter = await rufen("GET /crm/leads", { nutzer: angestellt, query: {} });
   melde(!alsAngestellter.html.includes('id="ln-besitzer"'),
@@ -169,6 +177,76 @@ function rufen(schluessel, req) {
 
   const leer = await rufen("POST /crm/leads/sammel", { nutzer: chef, query: {}, body: { ids: [] } });
   melde(leer.json && leer.json.ok === false, "Ohne Auswahl passiert nichts");
+
+  // ---------------------------------- Eine uebergebene Liste bleibt filterbar
+  // Der Fehler vom 07.09.2026: Jannik importiert eine Liste, die Leads gehen
+  // an Ioannis — und danach war die Liste bei Ioannis nicht mehr im
+  // Auswahlfeld. Seine 299 uebergebenen Leads lagen ununterscheidbar zwischen
+  // rund 600 Werbescreen-Leads, die in gar keiner Liste stehen.
+  //
+  // Warum das ohne Test wieder passiert: Es gibt zwei Personen an einer Liste
+  // — den Importeur (call_listen.besitzer) und den, der sie abtelefoniert
+  // (firmen.besitzer). Solange beide dieselbe Person sind, sieht jede der
+  // beiden Abfragen richtig aus. Erst das Zuweisen trennt sie. Genau das baut
+  // dieser Block nach.
+  const listenName = "ZZ Testliste Uebergabe " + process.pid;
+  const { rows: [uListe] } = await crm.system(
+    `insert into call_listen (name, besitzer) values ($1, $2) returning id`,
+    [listenName, chef.id]);
+  const uIds = [];
+  for (const i of [1, 2, 3]) {
+    const { rows: [f] } = await crm.system(
+      `insert into firmen (name, status, quelle, tags, besitzer)
+       values ($1, 'lead', 'Cold Calling', array['webdesign'], $2) returning id`,
+      [`ZZ Testfirma Uebergabe ${process.pid}-${i}`, chef.id]);
+    uIds.push(Number(f.id));
+    await crm.system(`insert into call_listen_eintraege (liste_id, firma_id) values ($1,$2)`,
+      [uListe.id, f.id]);
+  }
+  // Ein Lead OHNE Liste beim selben Empfaenger — der Werbescreen-Fall. Ohne
+  // ihn wuerde ein kaputter Filter, der einfach alles durchlaesst, hier
+  // trotzdem gruen.
+  const ohneListe = "ZZ Testfirma Werbescreen " + process.pid;
+  await crm.system(
+    `insert into firmen (name, status, quelle, tags, besitzer)
+     values ($1, 'lead', 'Werbescreen', array['webdesign'], $2)`,
+    [ohneListe, angestellt.id]);
+
+  // Jetzt die Uebergabe — ueber die echte Route, nicht per update.
+  await rufen("POST /crm/leads/sammel",
+    { nutzer: chef, query: {}, body: { ids: uIds, besitzer: angestellt.id } });
+
+  const drin = (rows) => rows.find((l) => l.name === listenName);
+  const beimEmpfaenger = drin(await crm.leadListen(chef, { leadBesitzer: angestellt.id }));
+  melde(!!beimEmpfaenger,
+    "Die uebergebene Liste steht im Auswahlfeld des neuen Verantwortlichen");
+  melde(beimEmpfaenger && beimEmpfaenger.offen === 3,
+    "…mit der Zahl der Leads, die dort jetzt wirklich liegen (3)");
+  melde(!drin(await crm.leadListen(chef, { leadBesitzer: chef.id })),
+    "…und nicht mehr beim Importeur, wo kein Lead mehr davon liegt");
+
+  // Dieselbe Frage aus dem Konto des Mitarbeiters. Das ist die zweite Haelfte
+  // des Fehlers: Die Rechteregeln aus 0002 kannten nur den Importeur, also war
+  // die Liste fuer ihn gar nicht vorhanden — Auswahlfeld leer, und in der
+  // Anrufliste stand bei seinen eigenen Leads keine Herkunft.
+  melde(!!drin(await crm.leadListen(angestellt, { leadBesitzer: angestellt.id })),
+    "Der Mitarbeiter sieht die Liste auch im eigenen Konto (Zeilenrechte)");
+
+  const gefiltert = await crm.firmenListe(angestellt,
+    { besitzer: angestellt.id, listeId: String(uListe.id), limit: 100 });
+  melde(gefiltert.length === 3 && gefiltert.every((f) => uIds.includes(Number(f.id))),
+    "Der Filter liefert im Konto des Mitarbeiters genau die 3 Leads der Liste");
+  melde(!gefiltert.some((f) => f.name === ohneListe),
+    "…und laesst den Werbescreen-Lead ohne Liste draussen");
+  melde(gefiltert.every((f) => f.liste_name === listenName),
+    "…und die Zeilen nennen ihre Herkunft, statt sie leer zu lassen");
+
+  // Ein Unbeteiligter darf durch die neuen Leseregeln nichts dazugewinnen.
+  const dritter = leute.find((p) => p.rolle !== "admin" && String(p.id) !== String(angestellt.id));
+  if (dritter) {
+    melde(!drin(await crm.leadListen(dritter, {})),
+      `${dritter.name} (unbeteiligt) sieht die fremde Liste nicht`);
+  }
 
   // ------------------------------------------------------------------ Aufraeumen
   const weg = await crm.system(`delete from firmen where name like 'ZZ Testfirma %'`);
