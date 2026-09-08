@@ -51,8 +51,10 @@ pruefe("Zeile auch bei Windows-Zeilenumbruechen erkannt",
 
 // --- Ganztags-Regel ---------------------------------------------------------
 console.log("\nZeitplan / Ganztags-Regel");
-gleich("Uhrzeit bekannt -> 45 Minuten", akte.zeitplan("2026-09-10T14:00"),
-  { ganztags: false, start: "2026-09-10T14:00", ende: "2026-09-10T14:45", tag: "2026-09-10", uhrzeit: "14:00" });
+// 30 Minuten seit 08.09.2026 (vorher 45) — ERSTGESPRAECH_DAUER_MIN.
+gleich("Uhrzeit bekannt -> 30 Minuten", akte.zeitplan("2026-09-10T14:00"),
+  { ganztags: false, start: "2026-09-10T14:00", ende: "2026-09-10T14:30", tag: "2026-09-10", uhrzeit: "14:00" });
+gleich("Vorgabe ist die Hauskonstante", akte.ERSTGESPRAECH_DAUER_MIN, 30);
 gleich("eigene Dauer", akte.zeitplan("2026-09-10T14:00", 90).ende, "2026-09-10T15:30");
 gleich("Mitternacht -> ganztaegig", akte.zeitplan("2026-09-10T00:00"),
   { ganztags: true, start: "2026-09-10", ende: "2026-09-10", tag: "2026-09-10", uhrzeit: "" });

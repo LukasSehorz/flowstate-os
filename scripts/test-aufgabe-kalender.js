@@ -15,6 +15,12 @@
 // 'erstgespraech'-Verknuepfung der Firma, nicht am Titel — der Titel ist
 // Anzeigetext (dieselbe Lehre wie in Migration 0066).
 //
+// Abschnitt 5 prueft die Platzsuche am Tag (08.09.2026): Follow-ups sind
+// 10-Minuten-Bloecke und keine Ganztagseintraege mehr, und sie legen sich in
+// das erste freie Fenster ab 9:00. Auch das ist reine Rechnerei —
+// ersterFreierPlatz() bekommt die Terminliste uebergeben und fragt Google
+// nicht selbst, genau damit es hier ohne Netz pruefbar ist.
+//
 // Abschnitt 4 prueft die andere Haelfte des Auftrags: dass die Aufgaben aus
 // einem Anrufergebnis in der fuenften Whiteboard-Kategorie "crm" landen und
 // von Hand angelegte weiterhin bei "kunden" — und dass die fuenf festen
@@ -36,7 +42,9 @@ const aufgabe = (extra = {}) => ({
 
 // ------------------------------------------------ 1. Wer bekommt einen Eintrag
 const p1 = crm.aufgabeKalenderPlan(aufgabe());
-melde(p1.eintrag === true && p1.ganztags === true, "Aufgabe mit Firma und Datum: ganztaegiger Eintrag");
+melde(p1.eintrag === true, "Aufgabe mit Firma und Datum: eigener Eintrag");
+melde(p1.ganztags === undefined, "kein Ganztagseintrag mehr (Lukas: nicht den ganzen Tag)");
+gleich(p1.dauerMin, 10, "Follow-up / Nochmal anrufen: 10 Minuten");
 gleich(p1.tag, "2026-09-12", "Tag kommt aus geplant_am");
 gleich(p1.titel, "CRM: Nochmal anrufen — Muster GmbH", "Titel: CRM: <Titel> — <Firma>");
 
@@ -74,7 +82,7 @@ melde(crm.aufgabeKalenderPlan(gebucht, { erstgespraechImKalender: false }).eintr
 melde(crm.aufgabeKalenderPlan(
   aufgabe({ anlass: "anruf:gebucht", titel: "Erstgespräch — Termin nachtragen" }),
   { erstgespraechImKalender: false }).eintrag === true,
-  "gebucht ohne Zeitpunkt: eigener ganztaegiger Eintrag");
+  "gebucht ohne Zeitpunkt: eigener kurzer Eintrag");
 // Die Sperre greift NUR beim Anlass 'anruf:gebucht'. Ein Follow-up bei einer
 // Firma, die vor Wochen schon ein Erstgespräch hatte, bekommt seinen eigenen.
 melde(crm.aufgabeKalenderPlan(aufgabe({ anlass: "anruf:follow-up" }),
@@ -94,6 +102,7 @@ melde(crm.aufgabeKalenderPlan(aufgabe({ titel: "x".repeat(300) }), {}).titel.len
 // Die Beschreibung: Notiz und Verantwortlicher. Die Akte-Zeile haengt
 // kalender-akte.beschreibungMitAkte danach an — sie ist dort geprueft.
 const text = crm.aufgabeKalenderText(aufgabe({ notiz: "Ruft ab 14 Uhr an" }), "Louis Tournier");
+melde(!/Hinweis:/.test(text), "ohne Hinweis keine Hinweiszeile");
 melde(/Aufgabe aus dem CRM: Nochmal anrufen/.test(text), "Beschreibung nennt die Aufgabe");
 melde(/Verantwortlich: Louis Tournier/.test(text), "Beschreibung nennt den Verantwortlichen");
 melde(/Notiz: Ruft ab 14 Uhr an/.test(text), "Beschreibung traegt die Notiz");
@@ -156,6 +165,95 @@ for (const k of bruecke.KATEGORIEN) {
   gleich(zahlen(y), bruecke.ORD_Y, "ORD_Y im Client = ORD_Y im Server");
   const katListe = (quelle.match(/wert: "([a-z]+)",/g) || []).map((t) => t.slice(7, -2));
   gleich(katListe, bruecke.KATEGORIEN, "Kategorien im Client = Kategorien im Server");
+}
+
+// ------------------------------------------------ 5. Wo am Tag steht der Block
+//
+// Lukas: "nicht den ganzen Tag, sondern Erstgespräch 30 Minuten und Follow-up
+// maximal 10 Minuten." Die Aufgabe hat nur ein Datum — die Uhrzeit sucht
+// ersterFreierPlatz(): erstes freies Fenster ab 9:00, Arbeitsfenster bis 18:00.
+const TAG = "2026-09-12";
+const t = (von, bis, extra = {}) => ({ id: "t" + von, start: `${TAG}T${von}`, ende: `${TAG}T${bis}`, ...extra });
+const platz = (termine, dauer = 10, o = {}) => crm.ersterFreierPlatz(termine, TAG, dauer, o);
+
+gleich(crm.ARBEIT_VON_MIN, 9 * 60, "Arbeitsfenster beginnt 9:00");
+gleich(crm.ARBEIT_BIS_MIN, 18 * 60, "Arbeitsfenster endet 18:00");
+gleich(crm.AUFGABE_DAUER_MIN, 10, "Aufgabenblock: 10 Minuten");
+
+// Leerer Tag: der frueheste Platz.
+gleich(platz([]).start, `${TAG}T09:00`, "leerer Tag: 9:00");
+gleich(platz([]).ende, `${TAG}T09:10`, "leerer Tag: 10 Minuten lang");
+melde(platz([]).voll === false && platz([]).ohneGoogle === false, "leerer Tag: kein Hinweis noetig");
+
+// 9:00-9:30 belegt -> direkt danach.
+gleich(platz([t("09:00", "09:30")]).uhrzeit, "09:30", "9:00-9:30 belegt: 9:30");
+
+// Mehrere Luecken: die erste, in die der Block PASST. Zwischen 9:35 und 9:40
+// sind nur fuenf Minuten — zu wenig, also erst nach dem zweiten Termin.
+gleich(platz([t("09:00", "09:35"), t("09:40", "10:00")]).uhrzeit, "10:00",
+  "zu kleine Luecke wird uebersprungen");
+// Passt die Luecke genau, wird sie genutzt.
+gleich(platz([t("09:00", "09:30"), t("09:40", "10:00")]).uhrzeit, "09:30",
+  "genau passende Luecke wird genutzt");
+// Reihenfolge der Antwort ist egal — sortiert wird hier.
+gleich(platz([t("09:40", "10:00"), t("09:00", "09:35")]).uhrzeit, "10:00",
+  "unsortierte Terminliste aendert nichts");
+
+// Mehrere Follow-ups an einem Tag stapeln sich HINTEREINANDER, nicht
+// uebereinander: der Eintrag von eben zaehlt als belegt.
+gleich(platz([t("09:00", "09:10"), t("09:10", "09:20")]).uhrzeit, "09:20",
+  "drittes Follow-up: 9:20 statt noch einmal 9:00");
+
+// Ganztaegige Fremdtermine (Urlaub, Feiertag, Geburtstag) blockieren NICHT —
+// sonst waere jeder Tag mit einem Feiertagseintrag verbaut.
+gleich(platz([{ id: "u", start: TAG, ende: "2026-09-13", titel: "Urlaub" }]).uhrzeit, "09:00",
+  "ganztaegiger Fremdtermin blockiert nicht");
+// Ein mehrtaegiger ganztaegiger genauso wenig.
+gleich(platz([{ id: "f", start: "2026-09-10", ende: "2026-09-20" }]).uhrzeit, "09:00",
+  "mehrtaegiger Ganztagstermin blockiert nicht");
+
+// Termine anderer Tage zaehlen nicht.
+gleich(platz([{ id: "x", start: "2026-09-11T09:00", ende: "2026-09-11T17:00" }]).uhrzeit, "09:00",
+  "Termin am Vortag zaehlt nicht");
+// Einer, der vom Vortag hereinragt, schon — ab 0:00 bis zu seinem Ende.
+gleich(platz([{ id: "n", start: "2026-09-11T22:00", ende: `${TAG}T09:20` }]).uhrzeit, "09:20",
+  "Nachtschicht vom Vortag belegt den Morgen");
+
+// Der eigene Termin der Aufgabe zaehlt beim Umplanen nicht mit — sonst
+// wanderte er bei jedem Speichern zehn Minuten weiter nach hinten.
+gleich(platz([t("09:00", "09:10", { id: "eigen" })], 10, { ausser: "eigen" }).uhrzeit, "09:00",
+  "eigener Termin blockiert sich beim Verschieben nicht selbst");
+gleich(platz([t("09:00", "09:10", { id: "eigen" })], 10, { ausser: "fremd" }).uhrzeit, "09:10",
+  "ein fremder Termin an derselben Stelle sehr wohl");
+
+// Voller Tag: 9:00 mit Hinweis. Lieber eine Ueberschneidung als kein Eintrag.
+const voll = platz([t("09:00", "18:00")]);
+melde(voll.voll === true, "voller Tag: als voll erkannt");
+gleich(voll.uhrzeit, "09:00", "voller Tag: trotzdem ein Eintrag, auf 9:00");
+melde(/ueberschneidet/.test(crm.platzHinweis(voll)), "voller Tag: Grund steht in der Beschreibung");
+// Der Block muss bis 18:00 fertig sein.
+gleich(platz([t("09:00", "17:50")]).uhrzeit, "17:50", "letzter Platz endet punkt 18:00");
+melde(platz([t("09:00", "17:55")]).voll === true, "fuenf Minuten Rest reichen nicht mehr");
+
+// Google nicht erreichbar (spanne hat kein ok geliefert): 9:00 mit Hinweis.
+const stumm = platz(null);
+melde(stumm.ohneGoogle === true && stumm.uhrzeit === "09:00", "Google stumm: 9:00 statt gar nichts");
+melde(/nicht erreichbar/.test(crm.platzHinweis(stumm)), "Google stumm: Grund steht in der Beschreibung");
+melde(crm.platzHinweis(platz([])) === "", "glatter Fall: keine Hinweiszeile");
+// Und der Hinweis landet wirklich im Text des Termins.
+melde(/Hinweis:/.test(crm.aufgabeKalenderText(aufgabe(), "", crm.platzHinweis(stumm))),
+  "Hinweis steht in der Terminbeschreibung");
+
+// Dauer 30 (Erstgespraech) gegen 10 (Follow-up).
+gleich(platz([], 30).ende, `${TAG}T09:30`, "30 Minuten: 9:00-9:30");
+gleich(platz([], 10).ende, `${TAG}T09:10`, "10 Minuten: 9:00-9:10");
+// Das Erstgespraech selbst legt nicht diese Funktion, sondern
+// kalender-akte.zeitplan() — mit der gebuchten Uhrzeit und 30 Minuten.
+{
+  const akte = require("../lib/kalender-akte.js");
+  gleich(akte.ERSTGESPRAECH_DAUER_MIN, 30, "Erstgespräch: 30 Minuten (vorher 45)");
+  gleich(akte.zeitplan("2026-09-12T10:00").ende, "2026-09-12T10:30",
+    "Erstgespräch um 10:00 endet 10:30");
 }
 
 console.log(fehler ? `\n${fehler} Fehler.` : "\nAlles gut.");
