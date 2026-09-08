@@ -11,7 +11,8 @@
 // Grenze, der Versionskonflikt, gleichzeitige Anlagen unter der Sperre, der
 // Haken Tafel -> Liste, das Nachziehen nach Rueckgaengig — und dass
 // pruefeElement (whiteboard-routes.js) den Aufgaben-Bezug und eigene Pfade
-// behaelt, javascript: aber verwirft.
+// behaelt, javascript: aber verwirft. Seit 08.09.2026 dazu Abschnitt 14: die
+// fuenfte Kategorie "CRM" und die fuenf festen Plaetze in drei Spalten.
 //
 // Das Gegenstueck MIT Datenbank (RLS mit Verantwortlichem, echte Route,
 // aufgabe_haken_auf_tafel) ist scripts/test-aufgaben-db.js.
@@ -295,6 +296,54 @@ const aufgabeX = (id, extra = {}) => ({ id, titel: "Aufgabe " + id, firma_id: 9,
     melde(!r0.ok && r0.grund === "aufgabe", "ohne Aufgaben-id: abgelehnt");
     const zeile = bruecke.zeileFuer({ id: 5, titel: "  Nur Titel  " });
     melde(zeile.t === "Nur Titel" && !("link" in zeile) && zeile.aufgabe === 5, "Zeile ohne Firma: nur der Titel, kein Link");
+  }
+
+  // ------------------------------------------------ 14. Die fuenfte Kategorie: CRM
+  //
+  // Seit 08.09.2026 traegt aufgabeAufTafel eine Kategorie. Aufgaben aus einem
+  // ANRUFERGEBNIS (lib/crm.js, aufgaben.anlass = 'anruf:*') gehen in den
+  // CRM-Block, von Hand angelegte weiterhin in den Kunden-Block. Beide duerfen
+  // sich NICHT vermischen: Sonst stuende die Zeile unter der falschen
+  // Ueberschrift und bekaeme beim Ordnen den falschen Platz.
+  {
+    const sp = speicherImArbeitsspeicher();
+    const crm1 = await bruecke.aufgabeAufTafel(LUKAS, aufgabeX(201, { titel: "Nochmal anrufen" }),
+      { speicher: sp, kategorie: "crm" });
+    let e = crm1.ok ? await sp.holen(LUKAS, crm1.element) : null;
+    melde(crm1.ok && crm1.neu && e && e.inhalt.kategorie === "crm",
+          "Anruf-Aufgabe: neuer Block mit Kategorie 'crm'");
+    melde(e && e.x === 900 && e.y === 760, "... am CRM-Platz (Spalte 2, untere Reihe: 900/760)");
+
+    // Eine Kunden-Aufgabe haengt sich NICHT an den CRM-Block, sondern legt
+    // ihren eigenen am Kunden-Platz an.
+    const kun = await bruecke.aufgabeAufTafel(LUKAS, aufgabeX(202, { titel: "Angebot schicken" }),
+      { speicher: sp });
+    e = kun.ok ? await sp.holen(LUKAS, kun.element) : null;
+    melde(kun.ok && kun.neu && kun.element !== crm1.element && e && e.inhalt.kategorie === "kunden",
+          "Kunden-Aufgabe haengt sich nicht an den CRM-Block");
+    melde(e && e.x === 130 && e.y === 100, "... sondern legt einen eigenen am Kunden-Platz an");
+
+    // Die zweite Anruf-Aufgabe haengt sich an den vorhandenen CRM-Block.
+    const crm2 = await bruecke.aufgabeAufTafel(LUKAS, aufgabeX(203, { titel: "Nachfassen" }),
+      { speicher: sp, kategorie: "crm" });
+    melde(crm2.ok && !crm2.neu && crm2.element === crm1.element,
+          "zweite Anruf-Aufgabe haengt sich an denselben CRM-Block");
+
+    // Ein unbekannter Name faellt auf die Vorgabe zurueck, statt einen Block
+    // ohne gueltige Kategorie anzulegen (pruefeElement wuerde ihn verwerfen).
+    const sp2 = speicherImArbeitsspeicher();
+    const wirr = await bruecke.aufgabeAufTafel(LUKAS, aufgabeX(204), { speicher: sp2, kategorie: "quatsch" });
+    e = wirr.ok ? await sp2.holen(LUKAS, wirr.element) : null;
+    melde(wirr.ok && e && e.inhalt.kategorie === "kunden", "unbekannte Kategorie -> Kunden-Block");
+
+    // Der CRM-Block legt sich UNTER den Vertriebs-Block derselben Spalte,
+    // statt ihn zu ueberdecken (Spalte 2 traegt Vertrieb oben und CRM unten).
+    const sp3 = speicherImArbeitsspeicher();
+    await sp3.anlegen(LUKAS, block(LUKAS.id, { x: 900, y: 100, hoehe: 800, kategorie: "vertrieb" }));
+    const unten = await bruecke.aufgabeAufTafel(LUKAS, aufgabeX(205), { speicher: sp3, kategorie: "crm" });
+    e = unten.ok ? await sp3.holen(LUKAS, unten.element) : null;
+    melde(unten.ok && e && e.x === 900 && e.y === 100 + 800 + 60,
+          "langer Vertriebs-Block schiebt den CRM-Block nach unten (y = 960)");
   }
 
   console.log(fehler ? `\n${fehler} Problem(e).` : "\nAlles gut.");

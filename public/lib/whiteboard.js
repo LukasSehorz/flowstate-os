@@ -74,21 +74,22 @@
   //
   // Ein Text- oder Notizblock darf eine Kategorie tragen. Die REIHENFOLGE
   // dieser Liste IST die Rangfolge — und sie steht seit dem 01.09.2026 auf
-  // 1 Kunden · 2 Vertrieb · 3 Content & Wissen · 4 Intern & System
-  // (Content bringt Umsatz, das Interne kann warten). Dieselben vier Namen
-  // in derselben Reihenfolge stehen im Server (KATEGORIEN in
+  // 1 Kunden · 2 Vertrieb · 3 Content & Wissen · 4 Intern & System, und seit
+  // dem 08.09.2026 5 CRM & Anrufe (Content bringt Umsatz, das Interne kann
+  // warten, und der Hoerer wird abgearbeitet, wenn der Tag es hergibt).
+  // Dieselben fuenf Namen in derselben Reihenfolge stehen im Server (KATEGORIEN in
   // whiteboard-routes.js) — was hier nicht steht, wirft er weg. Ohne
   // Kategorie bleibt ein Block liegen, wo er liegt: freies Kritzeln bleibt
   // frei, und genau das ist eine Tafel wert.
   //
-  // "farbe" sind KEINE neuen Werte, sondern die vier Marker-Tinten: rot fuer
-  // Kunden, orange fuer Vertrieb, gruen fuer Content, lila fuer Internes. So
-  // traegt die Wand weiterhin EINE Palette.
+  // "farbe" sind KEINE neuen Werte, sondern die Marker-Tinten: rot fuer
+  // Kunden, orange fuer Vertrieb, gruen fuer Content, lila fuer Internes und
+  // petrol fuer CRM. So traegt die Wand weiterhin EINE Palette.
   //
   // "kopf" ist dieselbe Farbe eine Stufe tiefer — sie traegt die Ueberschrift
   // IM Block. Warum nicht die Tinte selbst: die Tinten sind fuer STRICHE
   // gemischt, und Orange (#C26E1E) kommt als Schrift auf der (im Dunkelmodus
-  // entblendeten) Tafel nur auf 2,9:1. Die vier Werte hier sind gemessen und
+  // entblendeten) Tafel nur auf 2,9:1. Die Werte hier sind gemessen und
   // liegen auf jeder Tafelstelle in jedem Theme ueber 5:1 — die Tafel ist in
   // allen vier Themes hell, darum reicht EIN Satz Werte.
   const KATEGORIEN = [
@@ -100,6 +101,18 @@
       kopf: "#1F6B42", toast: "Als Content-Aufgabe eingeordnet." },
     { wert: "intern",   kurz: "Intern",   lang: "Intern & System",  farbe: "lila",
       kopf: "#613C96", toast: "Als interne Aufgabe eingeordnet." },
+    // 08.09.2026, Wunsch von Lukas: "Beim Whiteboard eine 5. Kategorie
+    // einfuegen mit To-Dos CRM — und die werden automatisch eingefuegt."
+    // Hier landet, was ein ANRUFERGEBNIS hinterlaesst (lib/crm.js,
+    // anrufAufgabe): das gebuchte Erstgespraech, das Nachfassen ohne Termin
+    // und das "Spaeter nochmal". Sie stehen bewusst NICHT mehr bei Kunden:
+    // Kunden ist die Arbeit AM Kunden, CRM die Arbeit AM HOERER — und die
+    // wird am Stueck abgetelefoniert, nicht zwischen Kundenaufgaben gesucht.
+    // Von Hand an einer Firma angelegte Aufgaben bleiben bei Kunden.
+    // Rang 5 (letzter): Ein Anruf, der heute nicht rausgeht, geht morgen
+    // raus; ein zugesagter Kundentermin nicht.
+    { wert: "crm",      kurz: "CRM",      lang: "CRM & Anrufe",     farbe: "petrol",
+      kopf: "#0B5A63", toast: "Als CRM-Aufgabe eingeordnet." },
   ];
   const kategorieVon = (wert) => KATEGORIEN.find((k) => k.wert === wert) || null;
   // Rang eines Elements: 0 = Kunden … 3 = Intern, -1 = nicht eingeordnet.
@@ -110,21 +123,39 @@
   // gerendert. Wer sie aendern will, aendert die Kategorie.
   const kategorieTitel = (k) => (KATEGORIEN.indexOf(k) + 1) + " · " + k.lang;
 
-  // ------------------------------------------------ Die vier festen Plaetze
+  // ------------------------------------------------ Die fuenf festen Plaetze
   //
   // Jede Kategorie hat EINEN Platz auf der Tafel (2400x1400), in Leserichtung:
-  //     1 Kunden  oben links       2 Vertrieb  oben rechts
-  //     3 Content unten links      4 Intern    unten rechts
+  //     1 Kunden   2 Vertrieb   3 Content      (obere Reihe)
+  //     4 Intern   5 CRM                       (untere Reihe)
   // Beim Einordnen und beim Ordnen rueckt der Kategorie-Block dorthin. Von
   // Hand darf man ihn weiterhin verschieben — er bleibt dann liegen, bis
   // wieder geordnet wird.
-  const ORD_X = [130, 1400];    // Spalte 1, Spalte 2
-  const ORD_Y = [100, 760];     // Reihe 1, Reihe 2
+  //
+  // WARUM DREI SPALTEN und nicht drei Reihen (08.09.2026, fuenfte Kategorie):
+  // Auf der Tafel ist die WAAGRECHTE die grosszuegige Achse und die SENKRECHTE
+  // die knappe. Ein Block ist 560 breit (BLOCK_BREITE in lib/aufgaben-tafel.js)
+  // und waechst nach UNTEN, Zeile fuer Zeile — in der Breite passiert nichts.
+  // Bei 2400 Breite steht neben zwei 560ern noch ein dritter bequem; bei 1400
+  // Hoehe abzueglich ORD_RAND blieben bei drei Reihen nur rund 413 px je Band,
+  // und ausgerechnet der CRM-Block ist der laengste (eine abtelefonierte Liste
+  // sind schnell zehn Zeilen). Drei Reihen haetten also die knappe Achse noch
+  // einmal gedrittelt und die grosszuegige verschenkt.
+  // Die Rechnung: 1670 + 560 = 2230 < 2400, Luecke zwischen den Spalten 210,
+  // Rand links 130 (unveraendert), rechts 170. Und die beiden BESTEHENDEN
+  // Plaetze der ersten Spalte (130/100 und 130/760) bleiben, wo sie waren —
+  // wer heute einen Kunden-Block hat, findet ihn morgen am selben Fleck.
+  const ORD_X = [130, 900, 1670];   // Spalte 1, 2, 3
+  const ORD_Y = [100, 760];         // Reihe 1, Reihe 2
+  const ORD_SPALTEN = ORD_X.length;
   const ORD_LUFT = 60;          // Abstand zwischen zwei Bloecken einer Spalte
   const ORD_RAND = 60;          // Sicherheitsabstand zur unteren Tafelkante
-  // Der Platz eines Rangs (0…3). Spalte = Rang gerade/ungerade, Reihe = obere
-  // bzw. untere Haelfte.
-  const platzVon = (rang) => ({ x: ORD_X[rang % 2], y: ORD_Y[rang < 2 ? 0 : 1] });
+  // Der Platz eines Rangs (0…4): Spalte = Rang modulo Spaltenzahl, Reihe =
+  // obere bzw. untere Haelfte. Der sechste Platz (Spalte 3, Reihe 2) bleibt
+  // frei — dort waechst die naechste Kategorie hinein, ohne dass sich etwas
+  // anderes verschiebt.
+  const platzVon = (rang) => ({ x: ORD_X[rang % ORD_SPALTEN],
+                                y: ORD_Y[rang < ORD_SPALTEN ? 0 : 1] });
 
   // Haftnotizen sind GEGENSTAENDE mit einer Groesse: aufziehbar, spaeter
   // skalierbar, innen scrollend. Darunter waere kein Zettel mehr zu lesen.
@@ -174,7 +205,14 @@
   // Dunkelmodus hell — das dunkle Haus-Blau #4B8DF8 ist fuer dunkle
   // Untergruende gedacht und faellt auf der hellen Tafel auf 2,5:1 ab
   // (gemessen). Das Chrom wechselt mit dem Theme, die Tinte nie.
-  const TINTE_HELL = { schwarz: "#2B3036", blau: "#2563EB", rot: "#C03B3B", gruen: "#2E8555", orange: "#C26E1E", lila: "#7A4FB6" };
+  // "petrol" (08.09.2026) ist KEINE Stiftfarbe — es steht bewusst nicht in
+  // FARBNAMEN. Es ist die Tinte der fuenften Kategorie "CRM" und faerbt nur
+  // deren Punkt, Schild und Ueberschrift. Warum kein Blau: #2563EB ist die
+  // HAUSFARBE (Knoepfe, Links, Auswahlrahmen) — ein Kategorie-Schild in genau
+  // diesem Blau saehe auf der Tafel aus wie ein Bedienelement. Petrol liegt
+  // weit genug von Rot/Orange/Gruen/Lila UND vom Hausblau entfernt und steht
+  // auf der (in jedem Theme hellen) Tafel bei 6,1:1.
+  const TINTE_HELL = { schwarz: "#2B3036", blau: "#2563EB", rot: "#C03B3B", gruen: "#2E8555", orange: "#C26E1E", lila: "#7A4FB6", petrol: "#0E6E7A" };
   const tinte = (name) => TINTE_HELL[name] || TINTE_HELL.schwarz;
 
   // ------------------------------------------------------------ Zustand
@@ -462,8 +500,8 @@
         ${/* Die Rangfolge steht hier, weil sie nirgends sonst als Ganzes zu
               sehen ist: im Werkzeugkasten waehlt man EINE Kategorie, der Kopf
               am Block zeigt EINE — welche vorgeht, sagt erst diese Zeile. Die
-              vier Punkte sind zugleich der Farbschluessel. */""}
-        <h3 class="wb-hilfe-rang-titel">Die vier Blöcke</h3>
+              fuenf Punkte sind zugleich der Farbschluessel. */""}
+        <h3 class="wb-hilfe-rang-titel">Die fünf Blöcke</h3>
         <p class="wb-hilfe-rang">Jede Kategorie hat EINEN Block mit eigener
           Überschrift und einen festen Platz auf der Tafel:</p>
         <ol class="wb-rangliste"></ol>
@@ -573,10 +611,10 @@
       b.setAttribute("aria-label", "Zettelfarbe " + name);
       zettel.appendChild(b);
     });
-    // Die vier Raenge in der Hilfe — Nummer, Farbpunkt, voller Name. Die
-    // Liste steht als 2x2-Raster (CSS) und ist damit zugleich die KARTE der
-    // Tafel: 1 oben links, 2 oben rechts, 3 unten links, 4 unten rechts —
-    // genau dort liegen die vier Bloecke auch wirklich.
+    // Die Raenge in der Hilfe — Nummer, Farbpunkt, voller Name. Die Liste
+    // steht als 3x2-Raster (CSS, seit 08.09.2026) und ist damit zugleich die
+    // KARTE der Tafel: 1-2-3 in der oberen Reihe, 4-5 in der unteren —
+    // genau dort liegen die fuenf Bloecke auch wirklich.
     const rang = $(".wb-rangliste");
     KATEGORIEN.forEach((k) => {
       const li = document.createElement("li");
@@ -1878,7 +1916,7 @@
       kopf.dataset.kategorie = kat.wert;
       kopf.style.setProperty("--kf", tinte(kat.farbe));
       kopf.style.setProperty("--kopf", kat.kopf);
-      kopf.title = kategorieTitel(kat) + " — Rang " + rang + " von 4. "
+      kopf.title = kategorieTitel(kat) + " — Rang " + rang + " von " + KATEGORIEN.length + ". "
         + "Die Überschrift kommt aus der Einordnung; ändern über den Werkzeugkasten.";
     }
 
@@ -1916,7 +1954,8 @@
         schild.dataset.kategorie = kat.wert;
         schild.style.setProperty("--kf", tinte(kat.farbe));
         schild.textContent = kat.kurz;
-        schild.title = kat.lang + " — Rang " + (KATEGORIEN.indexOf(kat) + 1) + " von 4";
+        schild.title = kat.lang + " — Rang " + (KATEGORIEN.indexOf(kat) + 1)
+          + " von " + KATEGORIEN.length;
       } else if (schild) schild.remove();
 
       let fahne = $(".wb-fahne", marken);
@@ -3121,7 +3160,7 @@
       zettel.appendChild(b);
     });
 
-    // Einordnen: "Ohne" plus die vier Kategorien — in der Reihenfolge, die
+    // Einordnen: "Ohne" plus die fuenf Kategorien — in der Reihenfolge, die
     // ihre Rangfolge IST. Wer hier klickt, sagt nur, WAS die Aufgabe ist;
     // WOHIN sie gehoert, weiss die Tafel danach selbst (nachRangOrdnen).
     const kategorien = document.createElement("div");
@@ -3931,9 +3970,10 @@
   //
   // Der Nutzer sagt, WAS eine Aufgabe ist (Kategorie im Werkzeugkasten) —
   // WOHIN sie gehoert, weiss die Tafel danach selbst. Seit dem 01.09.2026
-  // hat jede Kategorie ihren FESTEN PLATZ, in Leserichtung:
-  //     1 Kunden  oben links       2 Vertrieb  oben rechts
-  //     3 Content unten links      4 Intern    unten rechts
+  // hat jede Kategorie ihren FESTEN PLATZ, in Leserichtung (seit 08.09.2026
+  // in drei Spalten, siehe ORD_X):
+  //     1 Kunden   2 Vertrieb   3 Content     (obere Reihe)
+  //     4 Intern   5 CRM                      (untere Reihe)
   // Damit sieht jede Tafel im Haus gleich aus: man weiss, wo man hinschaut,
   // bevor man hinschaut.
   //
@@ -4029,13 +4069,16 @@
       return h;
     };
 
-    // ---- 3. Zwei Spalten, je zwei Gruppen: Spalte 0 traegt Rang 0 und 2,
-    // Spalte 1 die Raenge 1 und 3. Der erste Block einer Gruppe bekommt den
-    // festen Platz als Anker.
+    // ---- 3. Drei Spalten, je bis zu zwei Gruppen (08.09.2026): Spalte 0
+    // traegt Rang 0 und 3, Spalte 1 die Raenge 1 und 4, Spalte 2 den Rang 2
+    // (die untere Haelfte der dritten Spalte ist noch frei). Gerechnet wird
+    // ueber ORD_SPALTEN statt ueber feste Zahlen — dieselbe Regel wie in
+    // platzVon, damit eine sechste Kategorie nur EINE Zeile kostet.
+    // Der erste Block einer Gruppe bekommt den festen Platz als Anker.
     const ziele = [];
-    for (let spalte = 0; spalte < ORD_X.length; spalte++) {
+    for (let spalte = 0; spalte < ORD_SPALTEN; spalte++) {
       const eintraege = [];
-      for (const rang of [spalte, spalte + 2]) {
+      for (let rang = spalte; rang < KATEGORIEN.length; rang += ORD_SPALTEN) {
         gruppen[rang].forEach((el, i) => {
           eintraege.push({ el, h: hoeheVon(el),
                            anker: i === 0 ? platzVon(rang).y : undefined });
@@ -4145,7 +4188,7 @@
     // erzeugen kann, laeuft die Suche in Runden — gedeckelt, damit sie in
     // keinem Fall haengen bleibt.
     const drueber = [KATEGORIEN[rang].wert]
-      .concat(rang >= 2 ? [KATEGORIEN[rang - 2].wert] : []);
+      .concat(rang >= ORD_SPALTEN ? [KATEGORIEN[rang - ORD_SPALTEN].wert] : []);
     let y = platz.y;
     for (let runde = 0; runde < 6; runde++) {
       let gewichen = false;

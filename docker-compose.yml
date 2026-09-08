@@ -89,6 +89,9 @@ services:
       # Hauptkalender, also unveraendert. Nur fuer die Werbeaufnahmen zeigt das
       # auf einen zweiten Kalender desselben Kontos (siehe docs/dreh-umgebung.md).
       - KALENDER_ID=${KALENDER_ID:-}
+      # Ob CRM-Aufgaben (Anrufergebnis -> Aufgabe) zusaetzlich als ganztaegiger
+      # Termin im Google Kalender stehen. "aus" schaltet es ab. Vorgabe "an".
+      - KALENDER_AUFGABEN=${KALENDER_AUFGABEN:-an}
       # Monatsziel im CRM-Dashboard. Leer = 30.000 wie bisher.
       - UMSATZ_ZIEL=${UMSATZ_ZIEL:-}
       # Regie-Seite fuer die Werbeaufnahmen (/regie). Ohne die 1 existiert die

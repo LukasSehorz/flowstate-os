@@ -141,6 +141,12 @@ const TESTS = [
   // mit dem Arbeitsspeicher-Speicher, ganz ohne Datenbank. Das Gegenstueck
   // MIT Datenbank (RLS mit Verantwortlichem) ist scripts/test-aufgaben-db.js.
   "test-aufgaben-tafel",
+  // 08.09.2026: CRM-Aufgabe -> Google Kalender (lib/crm.js) und die fuenfte
+  // Whiteboard-Kategorie. Geprueft wird die ENTSCHEIDUNG: wer bekommt einen
+  // ganztaegigen Eintrag, an welchem Tag, unter welchem Titel — und dass ein
+  // gebuchtes Erstgespraech KEINEN zweiten bekommt. Dazu Anlass -> Kategorie
+  // und die fuenf festen Plaetze im Abgleich Client/Server.
+  "test-aufgabe-kalender",
   // 05.09.2026: Beleg-Diktat (lib/beleg-diktat.js) — die Nachpruefung dessen,
   // was das Sprachmodell aus einem hingeworfenen Satz macht: Betraege ausserhalb
   // der Spaltengrenze, Datum in der Zukunft, unbekannte Vorlage, Abschlag 150 %,
