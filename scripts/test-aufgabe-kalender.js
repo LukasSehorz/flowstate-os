@@ -204,6 +204,31 @@ melde(crm.anrufAufgabePlanen("follow-up", {}).uhrzeit === undefined,
 gleich(crm.anrufAufgabePlanen("keine-zeit", { termin: "2026-09-21T10:00" }).uhrzeit, "10:00",
   "Später nochmal: Uhrzeit geht ebenfalls mit");
 
+// DER REINE GESPRAECHSTEXT (14.09.2026).
+//
+// Die Leads-Maske schickt seit heute drei Felder getrennt: termin, person,
+// text. Vorher war alles ein String ("Termin <ISO> · <Person> · <Text>"), der
+// als Notiz in die Terminbeschreibung ging — im Google-Termin von KFZ Holzer
+// stand der Zeitstempel dreimal, und auf 40 Zeichen gekuerzt blieb auf der
+// Tafel genau er uebrig und vom Gespraech nichts.
+const verklebt = "Termin 2026-09-21T10:00 · Herr Alexander Holzer · Meldet sich am Freitag";
+gleich(crm.anrufAufgabePlanen("follow-up",
+  { termin: "2026-09-21T10:00", text: "Meldet sich am Freitag", notiz: verklebt }).titel,
+  "Nachfassen am 21.09. um 10:00 · Meldet sich am Freitag",
+  "Stichpunkt kommt aus dem reinen Text, nicht aus der Sammelfassung");
+// Ohne die getrennten Felder (alter Browser-Tab) bleibt die Sammelfassung —
+// besser als nichts, und genau das alte Verhalten.
+gleich(crm.anrufAufgabePlanen("follow-up",
+  { termin: "2026-09-21T10:00", notiz: verklebt }).titel,
+  "Nachfassen am 21.09. um 10:00 · Termin 2026-09-21T10:00 · Herr…",
+  "ohne text: Rueckfall auf die Sammelfassung");
+// Ein leerer Text ist eine Angabe ("nichts notiert"), kein fehlendes Feld:
+// dann steht der Titel ohne Stichpunkt da, statt die Sammelfassung zu holen.
+gleich(crm.anrufAufgabePlanen("follow-up",
+  { termin: "2026-09-21T10:00", text: "", notiz: verklebt }).titel,
+  "Nachfassen am 21.09. um 10:00",
+  "leerer Text: kein Stichpunkt, nicht der Rueckfall");
+
 // Die fuenf festen Plaetze — der Server (lib/aufgaben-tafel.js) muss dieselben
 // Zahlen kennen wie der Client (public/lib/whiteboard.js, platzVon/ORD_X/ORD_Y),
 // sonst legt er einen neuen Block woandershin, als der Client beim Ordnen.
