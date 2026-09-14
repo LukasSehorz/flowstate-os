@@ -160,6 +160,50 @@ gleich(fuNotiz.titel, "Nachfassen am 21.09. um 10:00 · Meldet sich Freitag",
 const szTermin = crm.anrufAufgabePlanen("keine-zeit", { termin: "2026-09-21T10:00", notiz: "" });
 gleich(szTermin.tag, "2026-09-21", "Später nochmal: Termin gewinnt vor drei Werktagen");
 
+// DIE VERABREDETE UHRZEIT (0068, 14.09.2026).
+//
+// Ohne geplant_um entscheidet ersterFreierPlatz() wie bisher (erstes freies
+// Fenster ab 9:00) — der Plan gibt dann gar kein "von" mit. Mit Uhrzeit wird
+// ab ihr gesucht: Bei KFZ Holzer war 10:00 verabredet, der Block landete
+// trotzdem auf 9:00, weil die Aufgabe die Uhrzeit nirgends tragen konnte.
+melde(crm.aufgabeKalenderPlan(aufgabe()).von === undefined,
+  "ohne geplant_um: kein Wunschfenster, ersterFreierPlatz entscheidet");
+gleich(crm.aufgabeKalenderPlan(aufgabe({ geplant_um: "10:00:00" })).von, 600,
+  "geplant_um aus der Datenbank (10:00:00) -> 600 Minuten");
+gleich(crm.aufgabeKalenderPlan(aufgabe({ geplant_um: "10:00" })).von, 600,
+  "geplant_um aus der Maske (10:00) -> 600 Minuten");
+gleich(crm.aufgabeKalenderPlan(aufgabe({ geplant_um: "14:27:00" })).von, 867,
+  "geplant_um 14:27 -> 867 Minuten");
+// Unsinn faellt auf null zurueck, statt den Block auf 0:00 zu legen.
+for (const murks of ["", null, "abc", "25:00", "99:99"])
+  melde(crm.aufgabeKalenderPlan(aufgabe({ geplant_um: murks })).von === undefined,
+    `geplant_um ${JSON.stringify(murks)}: kein Wunschfenster`);
+// Und die Platzwahl selbst: ab der Wunschzeit, nicht ab 9:00.
+// Eigener Tag hier — die Konstante TAG des Platz-Abschnitts steht weiter
+// unten und existiert an dieser Stelle noch nicht.
+const UHRTAG = "2026-09-21";
+gleich(crm.ersterFreierPlatz([], UHRTAG, 10, { von: 600 }).uhrzeit, "10:00",
+  "freie Wunschzeit: der Termin steht genau dort");
+// Belegt: die naechste Luecke DANACH — nicht in den bestehenden Termin hinein.
+gleich(crm.ersterFreierPlatz(
+  [{ id: "x", start: `${UHRTAG}T10:00`, ende: `${UHRTAG}T10:30` }], UHRTAG, 10, { von: 600 }).uhrzeit,
+  "10:30", "belegte Wunschzeit: rutscht dahinter, nicht hinein");
+// Ein Termin VOR der Wunschzeit blockiert sie nicht.
+gleich(crm.ersterFreierPlatz(
+  [{ id: "x", start: `${UHRTAG}T09:00`, ende: `${UHRTAG}T09:30` }], UHRTAG, 10, { von: 600 }).uhrzeit,
+  "10:00", "Termin vor der Wunschzeit stoert nicht");
+
+// Und der Weg von der Notiz bis zur Spalte: anrufAufgabePlanen gibt die
+// Uhrzeit mit hinaus, damit anrufAufgabe sie nach geplant_um schreiben kann.
+gleich(crm.anrufAufgabePlanen("follow-up", { termin: "2026-09-21T10:00" }).uhrzeit, "10:00",
+  "Follow-up: Plan traegt die Uhrzeit fuer geplant_um");
+melde(crm.anrufAufgabePlanen("follow-up", { termin: "2026-09-21T00:00" }).uhrzeit === undefined,
+  "Follow-up um Mitternacht: keine Uhrzeit (Tag ohne Zeit)");
+melde(crm.anrufAufgabePlanen("follow-up", {}).uhrzeit === undefined,
+  "Follow-up ohne Termin: keine Uhrzeit");
+gleich(crm.anrufAufgabePlanen("keine-zeit", { termin: "2026-09-21T10:00" }).uhrzeit, "10:00",
+  "Später nochmal: Uhrzeit geht ebenfalls mit");
+
 // Die fuenf festen Plaetze — der Server (lib/aufgaben-tafel.js) muss dieselben
 // Zahlen kennen wie der Client (public/lib/whiteboard.js, platzVon/ORD_X/ORD_Y),
 // sonst legt er einen neuen Block woandershin, als der Client beim Ordnen.
