@@ -13,6 +13,25 @@ services:
       # in der .env, kam aber nie im Container an, und jeder Lauf endete in
       # "Dienstanmelden: 403".
       - DIENST_KONTO=${DIENST_KONTO}
+      # ZEITZONE DES CONTAINERS (14.09.2026).
+      #
+      # node:22-bookworm-slim laeuft ohne diese Zeile auf UTC. Die Datenbank
+      # steht auf Europe/Berlin und liefert korrekt "2026-09-21 10:00+02" —
+      # aber jedes new Date(...).toLocaleString("de-DE") im Server rechnet das
+      # in UTC um und schreibt 08:00 auf die Seite. Genau so stand der Termin
+      # mit Herrn Krautschick (Fahrzeugtechnik Meisterbetrieb) auf der
+      # Pipeline-Karte: "21.09.2026, 08:00 Uhr", waehrend in der
+      # Gespraechsnotiz 10:00 vereinbart war.
+      #
+      # Eine Zeile hier statt timeZone an jedem einzelnen Aufruf: In
+      # lib/crm-routes.js allein rendern dreizehn Stellen Datum oder Uhrzeit
+      # ohne Zeitzonenangabe (datum(), zeit(), die Monatsnamen der
+      # Auswertungen). Wer eine davon beim naechsten Umbau vergisst, bekommt
+      # eine Karte, die zwei Stunden falsch geht — und das sieht man ihr nicht
+      # an. Die Stellen, die schon "timeZone: Europe/Berlin" mitgeben
+      # (lib/chronik.js, lib/computer.js, server.js), bleiben davon unberuehrt
+      # und richtig.
+      - TZ=${TZ:-Europe/Berlin}
       # Die uebrigen Werte, die in .env.beispiel dokumentiert sind und im Code
       # benutzt werden. Sie standen bis 07.09.2026 nicht hier — wer sie in die
       # .env schrieb, sah nichts passieren, weil diese Liste sie nie

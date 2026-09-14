@@ -131,6 +131,35 @@ const ohneDatum = crm.anrufAufgabePlanen("keine-zeit", {});
 const wochentag = new Date(ohneDatum.tag + "T12:00:00").getDay();
 melde(wochentag !== 0 && wochentag !== 6, "ohne Wiedervorlage: drei Werktage, kein Wochenende");
 
+// FOLLOW-UP MIT VERABREDETEM TERMIN (14.09.2026).
+//
+// Der Gespraechs-Dialog der Leads-Maske bietet das Terminfeld bei "gebucht"
+// UND "follow-up" an und schickt es immer als "termin" — nie als "datum".
+// anrufAufgabePlanen las bis heute nur extra.datum: Ein Follow-up, fuer das
+// eine Uhrzeit ausgehandelt war, stand trotzdem "in drei Werktagen" auf der
+// Tafel, und der Titel behauptete "kein Termin". Nachgemessen an echten
+// Daten: 15 Follow-up-Leads, 15 mit Deal, 0 mit Wiedervorlage.
+const fuTermin = crm.anrufAufgabePlanen("follow-up", { termin: "2026-09-21T10:00", notiz: "" });
+gleich(fuTermin.tag, "2026-09-21", "Follow-up: Tag kommt aus dem Termin, nicht aus drei Werktagen");
+gleich(fuTermin.titel, "Nachfassen am 21.09. um 10:00", "Follow-up: Uhrzeit steht im Titel");
+// Ohne Uhrzeit (Mitternacht gilt als keine, wie im Kalender): nur der Tag.
+const fuTag = crm.anrufAufgabePlanen("follow-up", { termin: "2026-09-21T00:00", notiz: "" });
+gleich(fuTag.titel, "Nachfassen am 21.09.", "Follow-up ohne Uhrzeit: Tag ohne Zeitangabe");
+// Ganz ohne Termin bleibt es bei der alten Aussage — sie ist dann richtig.
+const fuOhne = crm.anrufAufgabePlanen("follow-up", { notiz: "" });
+gleich(fuOhne.titel, "Nachfassen — kein Termin", "Follow-up ohne Termin: unveraendert");
+// extra.datum bleibt Rueckfall fuer Wege, die nur einen Tag kennen (Sprache, Akte).
+const fuDatum = crm.anrufAufgabePlanen("follow-up", { datum: "2026-09-18", notiz: "" });
+gleich(fuDatum.tag, "2026-09-18", "Follow-up: extra.datum wirkt weiterhin");
+// Und die Notiz haengt auch mit Termin hinten an.
+const fuNotiz = crm.anrufAufgabePlanen("follow-up", { termin: "2026-09-21T10:00", notiz: "Meldet sich Freitag" });
+gleich(fuNotiz.titel, "Nachfassen am 21.09. um 10:00 · Meldet sich Freitag",
+  "Follow-up: Termin und Notiz zusammen");
+// "Später nochmal" liest denselben Vorrang — der Dialog schickt dort zwar
+// keinen Termin, aber wenn doch, darf er nicht ignoriert werden.
+const szTermin = crm.anrufAufgabePlanen("keine-zeit", { termin: "2026-09-21T10:00", notiz: "" });
+gleich(szTermin.tag, "2026-09-21", "Später nochmal: Termin gewinnt vor drei Werktagen");
+
 // Die fuenf festen Plaetze — der Server (lib/aufgaben-tafel.js) muss dieselben
 // Zahlen kennen wie der Client (public/lib/whiteboard.js, platzVon/ORD_X/ORD_Y),
 // sonst legt er einen neuen Block woandershin, als der Client beim Ordnen.
