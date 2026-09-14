@@ -160,7 +160,7 @@ gleich(fuNotiz.titel, "Nachfassen am 21.09. um 10:00 · Meldet sich Freitag",
 const szTermin = crm.anrufAufgabePlanen("keine-zeit", { termin: "2026-09-21T10:00", notiz: "" });
 gleich(szTermin.tag, "2026-09-21", "Später nochmal: Termin gewinnt vor drei Werktagen");
 
-// DIE VERABREDETE UHRZEIT (0068, 14.09.2026).
+// DIE VERABREDETE UHRZEIT (0069, 14.09.2026).
 //
 // Ohne geplant_um entscheidet ersterFreierPlatz() wie bisher (erstes freies
 // Fenster ab 9:00) — der Plan gibt dann gar kein "von" mit. Mit Uhrzeit wird

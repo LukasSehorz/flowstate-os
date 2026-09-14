@@ -1,6 +1,6 @@
 -- =====================================================================
 -- Flowstate — Die verabredete Uhrzeit einer CRM-Aufgabe: aufgaben.geplant_um
--- (Migration 0068, 14.09.2026)
+-- (Migration 0069, 14.09.2026)
 --
 -- Wunsch Lukas, 14.09.2026: Ein Follow-up, fuer das am Telefon eine Uhrzeit
 -- ausgehandelt wurde, soll auch UM DIESE UHRZEIT im Google Kalender stehen.
@@ -51,5 +51,5 @@ alter table public.aufgaben add column if not exists geplant_um time;
 comment on column public.aufgaben.geplant_um is
   'Verabredete Uhrzeit als Wandzeit (z. B. 10:00 = 10:00 im Kalender, in dem '
   'der Termin steht). NULL = keine Uhrzeit vereinbart, dann sucht '
-  'ersterFreierPlatz() das erste freie Fenster ab 9:00 (lib/crm.js, 0068). '
+  'ersterFreierPlatz() das erste freie Fenster ab 9:00 (lib/crm.js, 0069). '
   'Der Tag steht in geplant_am — diese Spalte traegt bewusst kein Datum.';
