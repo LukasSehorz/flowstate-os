@@ -34,9 +34,14 @@ const melde = (ok, text) => { console.log((ok ? "✅" : "❌") + " " + text); if
 const gleich = (a, b, text) => melde(JSON.stringify(a) === JSON.stringify(b),
   text + (JSON.stringify(a) === JSON.stringify(b) ? "" : `  (war ${JSON.stringify(a)}, erwartet ${JSON.stringify(b)})`));
 
+// Die Beispielaufgabe traegt 'anruf:follow-up' und nicht mehr
+// 'anruf:keine-zeit' (16.09.2026): "Spaeter nochmal" bekommt seit heute
+// grundsaetzlich keinen Kalendereintrag, taugt hier also nicht als Trager fuer
+// die allgemeinen Faelle (Tag, Titel, Vorname). Der Titel bleibt "Nochmal
+// anrufen" — er ist nur Anzeigetext und in den Erwartungen unten verankert.
 const aufgabe = (extra = {}) => ({
   id: 7, titel: "Nochmal anrufen", firma_id: 42, firma_name: "Muster GmbH",
-  geplant_am: "2026-09-12", faellig: "2026-09-12", anlass: "anruf:keine-zeit",
+  geplant_am: "2026-09-12", faellig: "2026-09-12", anlass: "anruf:follow-up",
   erledigt: false, notiz: "", ...extra,
 });
 
@@ -88,6 +93,27 @@ melde(crm.aufgabeKalenderPlan(
 melde(crm.aufgabeKalenderPlan(aufgabe({ anlass: "anruf:follow-up" }),
   { erstgespraechImKalender: true }).eintrag === true,
   "Follow-up bei Firma mit altem Erstgespräch: eigener Eintrag");
+
+// "Spaeter nochmal" bekommt GAR KEINEN Eintrag — unabhaengig von Tag, Uhrzeit
+// und davon, ob fuer die Firma schon etwas im Kalender steht (16.09.2026).
+// Gemessen am 14.09.: 42 von 49 CRM-Kalendereintraegen kamen aus diesem einen
+// Ergebnis, und 34 davon hatte jemand per Hand wieder geloescht.
+gleich(crm.aufgabeKalenderPlan(aufgabe({ anlass: "anruf:keine-zeit" })).grund,
+  "kein-kalender-vorhaben", "Später nochmal: kein Kalendereintrag");
+melde(crm.aufgabeKalenderPlan(aufgabe({ anlass: "anruf:keine-zeit" })).eintrag === false,
+  "Später nochmal: eintrag false");
+melde(crm.aufgabeKalenderPlan(aufgabe({ anlass: "anruf:keine-zeit", geplant_um: "10:00" }))
+  .eintrag === false, "Später nochmal mit Uhrzeit: trotzdem kein Eintrag");
+// Die beiden anderen Anlaesse bleiben unberuehrt — sonst waere aus dem
+// Aufraeumen ein Abschalten geworden.
+melde(crm.aufgabeKalenderPlan(aufgabe({ anlass: "anruf:follow-up" })).eintrag === true,
+  "Follow-up: bekommt weiterhin einen Eintrag");
+melde(crm.aufgabeKalenderPlan(aufgabe({ anlass: "anruf:gebucht" }),
+  { erstgespraechImKalender: false }).eintrag === true,
+  "gebucht ohne Termin im Kalender: bekommt weiterhin einen Eintrag");
+// Von Hand angelegte Kundenaufgaben (kein anruf:*-Anlass) auch nicht.
+melde(crm.aufgabeKalenderPlan(aufgabe({ anlass: null })).eintrag === true,
+  "von Hand angelegt: bekommt weiterhin einen Eintrag");
 
 // ------------------------------------------------ 3. Wessen Kalender
 // Es gibt genau EINEN Google-Zugang (Lukas'). Aufgaben anderer landen darum
