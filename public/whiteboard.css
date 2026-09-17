@@ -711,10 +711,15 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
    die Breite (ihre Hoehe gehoert dem Text). --wb-anti2 haelt ihn auf dem
    Schirm konstant gross, wie die Zeilenwerkzeuge. */
 .wb-groesse-griff{
-  position:absolute;right:-2px;bottom:-2px;z-index:5;
+  /* Er sitzt AN der Ecke und waechst von ihr WEG (17.09.2026). Vorher hing er
+     mit right/bottom im Block und wuchs beim Gegen-Skalieren in ihn hinein:
+     bei 45 % Zoom ueberdeckte er das rechte Ende der unteren Zeilen — Klicks
+     dort trafen ihn statt den Text, und er nahm der Zeile den Hover weg (daran
+     verschwanden die Zeilenwerkzeuge, siehe dort). */
+  position:absolute;left:calc(100% - 3px);top:calc(100% - 3px);z-index:5;
   width:22px;height:22px;border-radius:6px;cursor:nwse-resize;
   display:none;place-items:center;
-  transform:scale(var(--wb-anti2,1));transform-origin:100% 100%;
+  transform:scale(var(--wb-anti2,1));transform-origin:0 0;
   background:var(--wb-chrom-flaeche);border:1px solid var(--wb-chrom-rand);
   box-shadow:var(--wb-schatten1);color:var(--wb-chrom-still);
 }
@@ -723,7 +728,8 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
    traegt ein data-tip ("Größe ändern"), und [data-tip]::after weiter unten
    im Blatt haette sie ueberschrieben (dieselbe Falle wie B-1; hier war sie
    still, weil eine unsichtbare Flaeche nicht auffaellt, wenn sie fehlt). */
-.wb-groesse-griff::before{content:"";position:absolute;inset:-9px}
+/* Nach innen (oben/links) nur 3 px — dort liegt der Block. */
+.wb-groesse-griff::before{content:"";position:absolute;inset:-3px -9px -9px -3px}
 .wb-el.wb-darf:hover>.wb-groesse-griff,
 .wb-el.wb-gewaehlt>.wb-groesse-griff,
 .wb-el.wb-fokus>.wb-groesse-griff{display:grid}
@@ -809,6 +815,7 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
    wartende Zeile muss ihr Zeichen aber IMMER zeigen, sonst gibt es beim
    Ueberfliegen nichts zu sehen. Gleiche Regel wie fuer erledigte Zeilen. */
 .wb-zeilen:not([data-liste="check"]) .wb-zeile:hover .wb-abhaken,
+.wb-zeilen:not([data-liste="check"]) .wb-zeile.wb-zeile-aktiv .wb-abhaken,
 .wb-zeilen:not([data-liste="check"]) .wb-zeile.wb-wartet .wb-abhaken,
 .wb-zeilen:not([data-liste="check"]) .wb-zeile.wb-erledigt .wb-abhaken{opacity:1}
 /* ------------------------------------- Der Griff zum ABGEBEN einer Zeile
@@ -833,7 +840,9 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 /* Unsichtbare Trefferflaeche — ein Griff, den man nur auf 12 px trifft,
    ist kein Griff. */
 .wb-zeile-griff::after{content:"";position:absolute;inset:-.34em}
-.wb-zeile:hover>.wb-zeile-griff{opacity:.8}
+.wb-zeile:hover>.wb-zeile-griff,
+.wb-zeile.wb-zeile-warm>.wb-zeile-griff,
+.wb-zeile.wb-zeile-aktiv>.wb-zeile-griff{opacity:.85}
 .wb-zeile-griff:hover{opacity:1;color:var(--wb-primaer)}
 .wb-zeile.wb-fliegt>.wb-zeile-griff{opacity:1;color:var(--wb-primaer);cursor:grabbing}
 /* Die Zeile, die gerade unterwegs ist, tritt zurueck — sie haengt ja am
@@ -990,7 +999,32 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   gap:max(4px,calc(42px - 1.35em));
   transform:scale(var(--wb-anti2,1));transform-origin:0 50%;
 }
-.wb-zeile:hover .wb-zeile-tools{display:inline-flex}
+/* DIE WERKZEUGE HAENGEN NICHT MEHR AM :hover (17.09.2026).
+   Lukas: "Man kann auf die Symbole gar nicht klicken, weil sobald man da
+   draufgeht, die wieder verschwinden." Gemessen: Auf dem Weg von der Zeile zu
+   den Knoepfen faehrt der Zeiger ueber den Groessen-Anfasser des Blocks — der
+   ist kein Kind der Zeile, :hover riss ab, display:none, weg waren sie. Bei
+   45 % Zoom lag seine Trefferflaeche rund 90 px breit IM Block.
+   Jetzt zwei Klassen aus whiteboard.js:
+     wb-zeile-aktiv  die Zeile mit dem Caret — ihre Werkzeuge stehen FEST,
+                     solange man in ihr schreibt ("reinklicken, dann kommen
+                     rechts die Symbole").
+     wb-zeile-warm   die ueberfahrene Zeile — bleibt nach dem Verlassen noch
+                     einen Moment warm, damit der Weg zu den Knoepfen reicht.
+   Steht der Caret in einem Block, zeigt NUR die aktive Zeile Werkzeuge: zwei
+   Knopfreihen auf verschiedenen Hoehen waeren ein Ratespiel, welche zu
+   welcher Zeile gehoert. */
+.wb-zeile.wb-zeile-warm .wb-zeile-tools,
+.wb-zeile.wb-zeile-aktiv .wb-zeile-tools{display:inline-flex}
+/* Die Bruecke ueber die Luecke zwischen Zeilenende und erstem Knopf. Sie ist
+   Teil der Werkzeuge (und damit der Zeile): wer darueber faehrt, bleibt in der
+   Zeile. Genau so breit wie der margin-left, nicht breiter — sonst finge sie
+   die Klicks am rechten Textende ab. Geteilt durch --wb-anti2, weil sie IM
+   gegen-skalierten Kasten liegt. */
+.wb-zeile-tools::before{
+  content:"";position:absolute;right:100%;top:-30%;bottom:-30%;
+  width:calc(.4em / var(--wb-anti2,1) + 1px);
+}
 .wb-zeile-tools{font-size:inherit}
 .wb-zeile-tools button{
   position:relative;
@@ -1021,7 +1055,11 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
    Graphit ein Verlauf ist und ein Verlauf als Farbe die ganze Deklaration
    verschluckt (siehe Kopfkommentar). */
 .wb-zeile.wb-hat-antwort .wb-zeile-tools{display:inline-flex}
-.wb-zeile.wb-hat-antwort:not(:hover) .wb-zeile-tools>:not(.wb-zeile-antwort){display:none}
+/* Beide ":not(warm):not(aktiv)"-Regeln haengen an .wb-el, also an der TAFEL. Im
+   Handy-Blatt (.wb-mobil, kein .wb-el) gibt es weder Hover noch warme Zeilen —
+   ohne diese Eingrenzung schlugen sie dort mit ihrer hoeheren Spezifitaet die
+   Blatt-Regeln und nahmen jeder beantworteten Zeile die Werkzeuge (17.09.2026). */
+.wb-el .wb-zeile.wb-hat-antwort:not(.wb-zeile-warm):not(.wb-zeile-aktiv) .wb-zeile-tools>:not(.wb-zeile-antwort){display:none}
 .wb-zeile.wb-hat-antwort .wb-zeile-tools button.wb-zeile-antwort{
   color:var(--wb-warte-chrom);
   background:color-mix(in srgb,var(--wb-warte-chrom) 15%,var(--wb-flaeche-fest));
@@ -1042,11 +1080,104 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
    Haelfte ist: das Kaestchen sagt "hier wartet etwas", er sagt nur "hier
    kannst du es aendern". In der Wandansicht war er vorher das Bunteste im
    Bild und zog den Blick vom Kaestchen weg. 3,2:1 auf der Tafel. */
-.wb-zeile.wb-hat-antwort:not(:hover) .wb-zeile-tools button.wb-zeile-antwort{
+.wb-el .wb-zeile.wb-hat-antwort:not(.wb-zeile-warm):not(.wb-zeile-aktiv) .wb-zeile-tools button.wb-zeile-antwort{
   color:var(--wb-warte);background:none;border-color:transparent;box-shadow:none;
   opacity:.85;transform:scale(.82);
 }
 .wb-el:not(.wb-darf) .wb-zeile-tools{display:none!important}
+
+/* ------------------------------------- Der Block, in dem man ist, liegt OBEN
+   Bloecke hatten keine Stapelfolge — es entschied die Reihenfolge im DOM.
+   Gemessen am 17.09.2026: Stand rechts neben einem Block ein zweiter, lagen
+   die Zeilenwerkzeuge des linken (sie ragen bei 45 % Zoom rund 230 px ueber
+   seine Kante) UNTER dem Text des rechten. Man sah die Knoepfe durchscheinen,
+   der Klick landete aber im Nachbarblock — und sobald der Zeiger dessen Zeile
+   beruehrte, verschwanden sie. Dasselbe galt fuer den Format-Kasten.
+   Wer gerade bedient wird (Caret, warme Zeile, Auswahl, Zug), liegt darum
+   ueber seinen Nachbarn. */
+.wb-el:has(.wb-zeile-warm){z-index:18}
+.wb-el.wb-gewaehlt{z-index:19}
+.wb-el.wb-fokus{z-index:20}
+.wb-el.wb-zieht,.wb-el.wb-skaliert{z-index:21}
+
+/* ------------------------------------------------- Die Zeile, in der man ist
+   Lukas (17.09.2026): "Wenn man gerade auf einer Zeile ist, soll man sehen, wo
+   man gerade ist — oben und unten ein Strich, ein uebersichtlicher Rand um die
+   Aufgabe." Die aktive Zeile (Caret) bekommt einen Rahmen in der Hausfarbe und
+   eine Spur Flaeche, die ueberfahrene nur die Flaeche. Beides OHNE Layout:
+   outline und box-shadow verschieben keinen Buchstaben — ein Rahmen, bei dem
+   der Text beim Anklicken huepft, waere schlimmer als keiner. Die Strichstaerke
+   laeuft ueber --wb-anti2, damit sie bei 45 % Zoom nicht zu einem Haar wird. */
+.wb-zeile{border-radius:.3em}
+/* Der Zeilentext bekommt KEINEN eigenen Fokusring. os-ui.css zeichnet global
+   einen um alles mit [tabindex] — das traf auch diese Spans (tabIndex -1) und
+   ergab in der aktiven Zeile einen zweiten, eckigen Rahmen im runden. Der
+   Rahmen der ZEILE ist hier der Fokus-Hinweis. */
+.wb-wurzel .wb-zeile-text:focus-visible,.wb-mobil .wb-zeile-text:focus-visible{outline:none}
+.wb-el.wb-darf .wb-zeile.wb-zeile-warm{
+  background:color-mix(in srgb,var(--wb-primaer) 5%,transparent);
+  box-shadow:0 0 0 .14em color-mix(in srgb,var(--wb-primaer) 5%,transparent);
+}
+.wb-el.wb-darf .wb-zeile.wb-zeile-aktiv{
+  background:color-mix(in srgb,var(--wb-primaer) 8%,transparent);
+  box-shadow:0 0 0 .14em color-mix(in srgb,var(--wb-primaer) 8%,transparent);
+  outline:calc(1.7px * var(--wb-anti2,1)) solid color-mix(in srgb,var(--wb-primaer) 78%,transparent);
+  outline-offset:.14em;
+}
+/* Der Papierkorb der Zeile ist ROT, sobald man ihn meint — damit er sich vom
+   "Block loeschen" im Kasten unterscheidet, mit dem er verwechselt wurde. */
+.wb-zeile-tools button.wb-zeile-weg:hover{
+  color:var(--wb-rot);border-color:color-mix(in srgb,var(--wb-rot) 45%,var(--wb-chrom-rand));
+  background:color-mix(in srgb,var(--wb-rot) 9%,var(--wb-flaeche-fest));
+}
+.wb-zeile-tools button.wb-zeile-einruecken:hover{color:var(--wb-primaer)}
+.wb-zeile.wb-unterpunkt .wb-zeile-tools button.wb-zeile-einruecken{
+  color:var(--wb-primaer);background:var(--wb-primaer-weich);
+}
+
+/* ------------------------------------------------------------- Unterpunkte
+   Lukas (17.09.2026): "Bei einem To-Do Stichpunkte darunter — nicht als neue
+   Aufgabe mit eigenem Kaestchen, sondern eingerueckt mit Bullet Points. Aber
+   man soll sie auch abhaken koennen."
+   Eine Zeile mit ebene 1 ist ein Unterpunkt: eingerueckt, etwas kleiner, und
+   ihr Kaestchen ist ein kleiner KREIS — der Punkt der Aufzaehlung, den man
+   antippen kann. Er zaehlt nicht als Aufgabe (Schild "x von y erledigt") und
+   nicht in der Nummerierung. Tab rueckt ein, Umschalt+Tab aus. */
+.wb-zeile.wb-unterpunkt{margin-left:1.55em;font-size:.86em;counter-increment:none}
+.wb-zeilen[data-liste] .wb-zeile.wb-unterpunkt::before{content:none}
+.wb-zeilen .wb-zeile.wb-unterpunkt .wb-abhaken{
+  position:relative;left:auto;top:.16em;opacity:1;width:.9em;height:.9em;
+}
+.wb-zeile.wb-unterpunkt .wb-kasten-rand{rx:7.5px;stroke-width:1.9}
+.wb-zeile.wb-unterpunkt .wb-warte-feld{rx:6.7px}
+.wb-zeilen .wb-zeile.wb-unterpunkt>.wb-zeile-griff{left:-1.5em}
+
+/* ------------------------------------------- Eine Zeile ZIEHEN und einfuegen
+   Der Strich zeigt, WOHIN die Zeile faellt, wenn man loslaesst — zwischen zwei
+   Zeilen desselben oder eines anderen Blocks. Er haengt am Block (nicht in der
+   Zeilenliste: zeilenIndex zaehlt deren Kinder) und wird von whiteboard.js in
+   Layout-px gesetzt. */
+.wb-einfuege-marke{
+  position:absolute;left:-.2em;right:-.2em;height:0;z-index:8;pointer-events:none;
+  border-top:calc(3px * var(--wb-anti2,1)) solid var(--wb-primaer);
+  border-radius:2px;
+}
+.wb-einfuege-marke::before{
+  content:"";position:absolute;border-radius:50%;background:var(--wb-primaer);
+  width:calc(9px * var(--wb-anti2,1));height:calc(9px * var(--wb-anti2,1));
+  left:calc(-5px * var(--wb-anti2,1));top:calc(-6px * var(--wb-anti2,1));
+}
+.wb-zeile.wb-fliegt-familie>.wb-zeile-text{opacity:.4}
+/* Gelandet: die Zeile blitzt einmal auf — man soll SEHEN, wo sie jetzt liegt. */
+.wb-zeile.wb-gelandet{animation:wb-gelandet 1.2s ease-out}
+@keyframes wb-gelandet{
+  0%{background:color-mix(in srgb,var(--wb-primaer) 28%,transparent);box-shadow:0 0 0 .14em color-mix(in srgb,var(--wb-primaer) 28%,transparent)}
+  100%{background:transparent;box-shadow:0 0 0 .14em transparent}
+}
+
+/* "Block loeschen" im Kasten traegt sein WORT — das Symbol allein sah genauso
+   aus wie der Papierkorb der Zeile, und der Klick nahm den ganzen Block mit. */
+.wb-kasten button.wb-kasten-weg{padding:0 9px;gap:6px;white-space:nowrap}
 
 /* Der Link HINTER dem Text: ein kleines Kettensymbol, das die Zeile
    nicht anfasst. Der Text selbst bleibt Text — waere er der Link,
@@ -1758,6 +1889,37 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 .wb-mobil-zeilen .wb-zeilen:not([data-liste="check"]) .wb-abhaken{position:static;opacity:1;left:auto}
 .wb-mobil-zeilen .wb-abhaken{width:30px;height:30px;top:0}
 .wb-mobil-zeilen .wb-zeile-tools button{width:38px;height:38px;font-size:16px}
+/* Seit dem 17.09.2026 sind es fuenf Knoepfe. Auf einem schmalen Telefon blieben
+   dem Text sonst keine 120 px: die Leiste darf umbrechen. Ein KURZER Text
+   ("Anrufen") behaelt sie neben sich, ein langer bekommt die ganze Reihe und
+   die Knoepfe ruecken darunter — statt ihn zu einem Wort je Reihe
+   zusammenzudruecken. Damit dann klar bleibt, zu WELCHER Zeile die Knoepfe
+   gehoeren (sie stehen zwischen zwei Texten), schliesst ein feiner Strich
+   jede Zeile nach unten ab. Die erste Zeile kann kein Unterpunkt sein — ihr
+   Einruecken-Knopf waere nur ein Knopf, der nichts tut. */
+.wb-mobil-zeilen .wb-zeile{
+  flex-wrap:wrap;row-gap:2px;padding:6px 0;
+  border-bottom:1px solid color-mix(in srgb,var(--wb-chrom-text) 13%,transparent);
+}
+.wb-mobil-zeilen .wb-zeile:last-child{border-bottom:0}
+.wb-mobil-zeilen .wb-zeile-text{flex:1 1 auto;min-width:0}
+.wb-mobil-zeilen .wb-zeile:first-child .wb-zeile-einruecken{display:none}
+.wb-mobil-zeilen .wb-zeile.wb-unterpunkt{margin-left:34px;font-size:.88em;min-height:40px}
+.wb-mobil-zeilen .wb-zeile.wb-unterpunkt .wb-abhaken{width:24px;height:24px;top:0}
+.wb-mobil-zeilen .wb-zeile.wb-unterpunkt .wb-zeile-einruecken{color:var(--wb-primaer)}
+/* Der Toast ("Zeile geloescht · Rueckgaengig") laege sonst UNTER dem Blatt
+   (z 30 gegen z 60) — und unten am Rand hinter der Bildschirmtastatur. Solange
+   das Blatt offen ist, steht er darum oben, direkt unter dem Blatt-Kopf. */
+.wb-wurzel:has(.wb-mobil) .wb-toasts{
+  position:fixed;z-index:70;bottom:auto;top:calc(env(safe-area-inset-top,0px) + 60px);
+}
+/* Am Telefon ueber die ganze Breite: mit left:50% bekam der Behaelter nur die
+   HALBE Breite zum Schrumpfen (390 px -> 195 px), und "Aufgabe mit 2
+   Unterpunkten geloescht." brach mitten im Wort um. */
+@media (max-width:860px){
+  .wb-toasts{left:12px;right:12px;transform:none;max-width:none}
+  .wb-toast{max-width:100%}
+}
 
 /* ------------------------------------- Aufgabe abgeben: der Zug quer ueber
    die Wand. Der Geist haengt am Zeiger und sagt ZWEI Dinge: was man in der
@@ -1903,7 +2065,7 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   .wb-rangliste{grid-template-columns:1fr}
   /* Der Anfasser wird zum Daumenziel; der Zettel bleibt am Telefon
      ueber das Vollbild-Blatt bearbeitbar, die GROESSE aber hier. */
-  .wb-groesse-griff{width:34px;height:34px;right:-6px;bottom:-6px}
+  .wb-groesse-griff{width:34px;height:34px}
   .wb-groesse-griff svg{width:16px;height:16px}
   /* Am Telefon ist die Blase ein DAUMENZIEL, kein Mauszeigerziel: 46 px hoch
      und breiter gepolstert. Sie weicht dort ausserdem nach unten aus (JS),

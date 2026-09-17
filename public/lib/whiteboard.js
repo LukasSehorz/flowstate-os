@@ -347,6 +347,9 @@
     // Der kleine Pfeil VOR der Antwort: Ecke nach unten und rechts — das
     // gelernte Bild fuer "das gehoert zur Zeile darueber".
     antwortPfeil: S('<path d="M6 5v6a3 3 0 0 0 3 3h9"/><path d="m14.5 10.5 4 3.5-4 3.5"/>'),
+    // Einruecken: drei Zeilen, die unteren beiden nach rechts versetzt, davor
+    // der kleine Pfeil — "das hier gehoert UNTER die Zeile darueber".
+    einruecken: S('<path d="M4 6h16M11 12h9M11 18h9"/><path d="m4 12.2 3 2.8-3 2.8"/>'),
     pfeil: S('<path d="m14.5 5.5-6 6.5 6 6.5"/>'),
     ecke: S('<path d="M20 10v10H10"/><path d="M20 20 12.5 12.5"/>'),
     // Ordnen: von lang nach kurz, daneben der Pfeil nach unten — das
@@ -495,7 +498,10 @@
           ${/* Der Griff links an der Zeile ist die einzige Stelle, an der man
                 eine EINZELNE Aufgabe anfassen kann — ohne diesen Satz findet
                 ihn niemand, weil er erst beim Ueberfahren erscheint. */""}
-          <dt>Aufgabe abgeben</dt><dd>Griff links ziehen → fremde Tafel</dd>
+          <dt>Zeile verschieben</dt><dd>Griff <b>⠿</b> links ziehen → andere Stelle, anderer Block, fremde Tafel</dd>
+          <dt>Unterpunkt ein- / ausrücken</dt><dd><kbd>Tab</kbd> / <kbd>Umschalt</kbd>+<kbd>Tab</kbd></dd>
+          <dt>Leere Zeile entfernen</dt><dd><kbd>⌫</kbd> in der leeren Zeile</dd>
+          <dt>Nur diese Zeile löschen</dt><dd>In die Zeile klicken → Papierkorb rechts</dd>
         </dl>
         ${/* Die Rangfolge steht hier, weil sie nirgends sonst als Ganzes zu
               sehen ist: im Werkzeugkasten waehlt man EINE Kategorie, der Kopf
@@ -785,7 +791,9 @@
         if (el.art !== "strich" && kategorieRang(el) >= 0 && darfBearbeiten(el)) ordenbar++;
         if (el.art === "text" || el.art === "notiz") {
           if (el.inhalt.liste === "check") {
-            for (const z of el.inhalt.zeilen) { gesamt++; if (z.erledigt) erledigt++; }
+            // Unterpunkte zaehlen nicht: sie gliedern EINE Aufgabe, sie sind
+            // keine eigenen ("x von y erledigt" meint Aufgaben).
+            for (const z of el.inhalt.zeilen) { if (z.ebene === 1) continue; gesamt++; if (z.erledigt) erledigt++; }
           }
           // Wartende Zeilen werden ueber ALLE Bloecke gezaehlt, nicht nur
           // ueber die ☐-Listen wie der Fortschritt. Grund: eine Antwort
@@ -1973,6 +1981,10 @@
     // und Caret bei jedem Rendern ueberleben wuerden (der Poll meidet
     // fokussierte Bloecke ohnehin, aber Vorsicht kostet hier nichts).
     const zeilen = el.inhalt.zeilen;
+    // Ueber der ersten Zeile steht nichts, wozu sie gehoeren koennte — ein
+    // Unterpunkt an der Spitze (nach dem Loeschen oder Wegziehen seiner
+    // Aufgabe) wird wieder eine eigene Zeile.
+    if (zeilen[0] && zeilen[0].ebene) delete zeilen[0].ebene;
     const daKnoten = Array.from(zeilenEl.children);
     for (let i = 0; i < zeilen.length; i++) {
       let z = daKnoten[i];
@@ -2277,7 +2289,7 @@
       const griff = document.createElement("span");
       griff.className = "wb-zeile-griff";
       griff.setAttribute("aria-hidden", "true");
-      griff.title = "Ziehen: die Aufgabe an eine andere Tafel abgeben";
+      griff.title = "Ziehen: Zeile verschieben — in diesem Block, in einen anderen oder auf eine andere Tafel";
       griff.innerHTML = ICON.griff;
       z.appendChild(griff);
       zeileGriffAnbinden(griff);
@@ -2339,16 +2351,28 @@
       const kette = document.createElement("button");
       kette.type = "button"; kette.className = "wb-zeile-kette"; kette.tabIndex = -1;
       kette.setAttribute("aria-label", "Verknüpfen");
+      kette.title = "Link anhängen";
       kette.innerHTML = ICON.kette;
+      // Unterpunkt (17.09.2026): die Zeile rueckt UNTER die Aufgabe darueber —
+      // als Stichpunkt mit kleinem Kreis, nicht als eigene Aufgabe. Derselbe
+      // Knopf rueckt sie wieder aus; die Tastatur kann es mit Tab / Umschalt+Tab.
+      const einr = document.createElement("button");
+      einr.type = "button"; einr.className = "wb-zeile-einruecken"; einr.tabIndex = -1;
+      einr.setAttribute("aria-label", "Als Unterpunkt einrücken");
+      einr.innerHTML = ICON.einruecken;
       const streich = document.createElement("button");
       streich.type = "button"; streich.className = "wb-zeile-streichen"; streich.tabIndex = -1;
       streich.setAttribute("aria-label", "Durchstreichen");
+      streich.title = "Zeile durchstreichen";
       streich.innerHTML = ICON.strich;
       const weg = document.createElement("button");
       weg.type = "button"; weg.className = "wb-zeile-weg"; weg.tabIndex = -1;
       weg.setAttribute("aria-label", "Zeile löschen");
+      // Der Titel sagt ausdruecklich DIESE ZEILE: der Papierkorb im Kasten
+      // darueber loescht den ganzen Block, und die beiden wurden verwechselt.
+      weg.title = "Nur diese Zeile löschen";
       weg.innerHTML = ICON.weg;
-      tools.append(antwort, kette, streich, weg);
+      tools.append(antwort, kette, einr, streich, weg);
       z.appendChild(tools);
     }
     return z;
@@ -2375,6 +2399,17 @@
     // (wb-wartet: blasse Zeile + Bernstein-Pause im Kaestchen) wird nur die
     // Zeile, auf die man wirklich gerade wartet.
     z.classList.toggle("wb-hat-antwort", !!antwort);
+    // Unterpunkt: ebene 1. Haengt wie Antwort und Aufgaben-Bezug AM KNOTEN,
+    // damit das mobile Blatt ihn beim Zurueckschreiben wiederfindet.
+    const unter = daten.ebene === 1;
+    z.classList.toggle("wb-unterpunkt", unter);
+    if (unter) z.dataset.ebene = "1"; else delete z.dataset.ebene;
+    const einr = $(".wb-zeile-einruecken", z);
+    if (einr) {
+      einr.title = unter ? "Wieder ausrücken — eigene Aufgabe (Umschalt+Tab)"
+                         : "Als Unterpunkt einrücken — gehört dann zur Zeile darüber (Tab)";
+      einr.setAttribute("aria-label", unter ? "Ausrücken" : "Als Unterpunkt einrücken");
+    }
     const wartet = !!antwort && !daten.erledigt && !daten.gestrichen;
     z.classList.toggle("wb-wartet", wartet);
     // Das mobile Blatt liest seinen Stand aus dem DOM zurueck (siehe
@@ -2577,6 +2612,10 @@
       // der CRM-Aufgabe, aus der die Zeile stammt — ohne ihn liefe der Haken
       // nicht mehr in die Aufgabenliste.
       if (alt.aufgabe) zeile.aufgabe = alt.aufgabe;
+      // Und die Einrueckung (Unterpunkt) — reine Metadaten wie der Haken. Die
+      // erste Zeile eines Blocks kann kein Unterpunkt sein: ueber ihr steht
+      // nichts, wozu sie gehoeren koennte.
+      if (alt.ebene === 1 && i > 0) zeile.ebene = 1;
       // Die TEILSTRICHE dagegen kommen sehr wohl aus dem DOM: sie sind keine
       // reinen Metadaten, sondern haengen an bestimmten ZEICHEN. Wer ein Wort
       // davor einfuegt, verschiebt sie — gemerkte Zahlen wanderten dann ueber
@@ -2611,6 +2650,59 @@
     schilderAuffrischen();
   }
 
+  // ------------------------------------------- Aktive und warme Zeile
+  //
+  // Welche Zeile zeigt ihre Werkzeuge (Antwort, Link, Einruecken, Streichen,
+  // Papierkorb) und den Rahmen? Bis 17.09.2026 entschied das allein :hover —
+  // und genau daran scheiterte es: Auf dem Weg von der Zeile zu den Knoepfen
+  // verlaesst der Zeiger die Zeile (er streift den Groessen-Anfasser, die
+  // Nachbarzeile, die Luecke), :hover reisst ab, die Knoepfe verschwinden,
+  // bevor man sie trifft. Lukas: "Man kann auf die Symbole gar nicht klicken."
+  //
+  // Jetzt zwei Zustaende, beide als Klasse an der Zeile:
+  //   AKTIV  die Zeile mit dem Caret. Ihre Werkzeuge stehen fest, solange man
+  //          in ihr ist — "reinklicken, dann kommen rechts die Symbole".
+  //   WARM   die ueberfahrene Zeile, wenn in ihrem Block gerade niemand
+  //          schreibt. Sie bleibt nach dem Verlassen noch kurz warm
+  //          (WARM_NACHLAUF_MS), und eine ANDERE Zeile uebernimmt erst nach
+  //          WARM_WECHSEL_MS — wer schraeg zu den Knoepfen faehrt, streift die
+  //          Nachbarzeile, und die Knoepfe sollen ihm dabei nicht wegspringen.
+  let aktiveZeile = null, warmeZeile = null, warmTimer = 0;
+  const WARM_NACHLAUF_MS = 700, WARM_WECHSEL_MS = 140;
+  function zeileWarmSetzen(z) {
+    clearTimeout(warmTimer); warmTimer = 0;
+    const neu = z && z.isConnected ? z : null;
+    if (warmeZeile === neu) return;
+    if (warmeZeile) warmeZeile.classList.remove("wb-zeile-warm");
+    warmeZeile = neu;
+    if (neu) neu.classList.add("wb-zeile-warm");
+  }
+  function zeileAktivSetzen(z) {
+    const neu = z && z.isConnected ? z : null;
+    if (aktiveZeile !== neu) {
+      if (aktiveZeile) aktiveZeile.classList.remove("wb-zeile-aktiv");
+      aktiveZeile = neu;
+      if (neu) neu.classList.add("wb-zeile-aktiv");
+    }
+    // Wer schreibt, braucht keine zweite, nur ueberfahrene Zeile mit Knoepfen.
+    if (neu) zeileWarmSetzen(null);
+  }
+  function zeileUeberfahren(zeile) {
+    if (zeile === warmeZeile) { clearTimeout(warmTimer); warmTimer = 0; return; }
+    if (!warmeZeile) { zeileWarmSetzen(zeile); return; }
+    clearTimeout(warmTimer);
+    warmTimer = setTimeout(() => zeileWarmSetzen(zeile), zeile ? WARM_WECHSEL_MS : WARM_NACHLAUF_MS);
+  }
+  // Wie viele Unterpunkte haengen direkt unter dieser Hauptzeile? (0 bei
+  // einem Unterpunkt selbst.) Loeschen und Ziehen nehmen sie mit — sie sind
+  // die Gliederung DIESER Aufgabe und unter einer anderen sinnlos.
+  function zeileFamilie(zeilen, idx) {
+    if (!zeilen[idx] || zeilen[idx].ebene === 1) return 0;
+    let n = 0;
+    for (let i = idx + 1; i < zeilen.length && zeilen[i].ebene === 1; i++) n++;
+    return n;
+  }
+
   function blockInteraktionAnbinden(knoten) {
     // ---- Fokus rein/raus: inArbeit schuetzt vor dem Poll; leerer Block
     // verschwindet beim Verlassen (eine leere Notiz ist Muell am Board).
@@ -2623,7 +2715,20 @@
       // Der Chip zieht mit dem Cursor um: er gehoert immer zu der Zeile,
       // in der gerade geschrieben wird.
       chipAnZeile(ev.target.closest && ev.target.closest(".wb-zeile"));
+      // ... und mit ihm Rahmen und Werkzeuge (siehe zeileAktivSetzen).
+      zeileAktivSetzen(ev.target.closest && ev.target.closest(".wb-zeile"));
     });
+    // ---- Ueberfahren: die warme Zeile. Nur mit Maus/Stift — ein Finger
+    // "ueberfaehrt" nichts, dort entscheidet das Antippen (= aktiv).
+    knoten.addEventListener("pointerover", (ev) => {
+      if (ev.pointerType === "touch" || abgabe) return;
+      // Schreibt jemand in diesem Block, gehoeren die Werkzeuge der aktiven
+      // Zeile allein: zwei Knopfreihen auf zwei Hoehen waeren ein Ratespiel.
+      if (aktiveZeile && knoten.contains(aktiveZeile)) { zeileWarmSetzen(null); return; }
+      const zeile = ev.target.closest && ev.target.closest(".wb-zeile");
+      zeileUeberfahren(zeile && knoten.contains(zeile) ? zeile : null);
+    });
+    knoten.addEventListener("pointerleave", () => { if (warmeZeile && knoten.contains(warmeZeile)) zeileUeberfahren(null); });
     knoten.addEventListener("focusout", (ev) => {
       if (ev.relatedTarget && knoten.contains(ev.relatedTarget)) return;
       // Render-Waechter (siehe rendernLaeuft): dieses focusout kommt vom
@@ -2636,6 +2741,7 @@
       const el = elVonKnoten(knoten);
       knoten.classList.remove("wb-fokus");
       chipWeg();
+      zeileAktivSetzen(null);
       if (!el) return;
       blockSerialisieren(el);
       const leer = el.inhalt.zeilen.every((z) => !z.t.trim());
@@ -2797,6 +2903,57 @@
       } catch { return span.textContent.length; }
     }
 
+    // ---- Unterpunkt ein/aus (Tab, Umschalt+Tab, Knopf). Der getippte Stand
+    // zaehlt (serialisieren), der Schritt landet im Rueckgaengig-Stapel, und
+    // der Caret bleibt, wo er war.
+    function ebeneSetzen(el, idx, unter) {
+      blockSerialisieren(el);
+      const z = el.inhalt.zeilen[idx];
+      if (!z) return false;
+      if (unter && idx === 0) {
+        toast("Die erste Zeile kann kein Unterpunkt sein — über ihr steht nichts, wozu sie gehören könnte.");
+        return false;
+      }
+      if ((z.ebene === 1) === !!unter) return false;
+      const vorher = { inhalt: JSON.parse(JSON.stringify(el.inhalt)) };
+      if (unter) z.ebene = 1; else delete z.ebene;
+      const spanAlt = $$(".wb-zeile-text", knoten)[idx];
+      const hatFokus = !!spanAlt && document.activeElement === spanAlt;
+      const pos = hatFokus ? caretOffset(spanAlt) : 0;
+      blockRendern(el);
+      if (hatFokus) caretSetzen($$(".wb-zeile-text", knoten)[idx], pos);
+      undoMerken({ typ: "aendern", id: el.id, vorher,
+                   nachher: { inhalt: JSON.parse(JSON.stringify(el.inhalt)) } });
+      blockGeaendert(el, true);
+      return true;
+    }
+
+    // ---- Zeilen wegnehmen — EIN Weg fuer Papierkorb, Backspace und Entf.
+    // Bleibt nichts uebrig, gilt dieselbe Regel wie beim Verlassen eines
+    // leeren Blocks: Ein loser Textblock verschwindet; eine Haftnotiz und ein
+    // eingeordneter Block (mit Ueberschrift) bleiben mit einer leeren Zeile
+    // stehen — leer heisst dort "nichts offen", nicht "gibt es nicht".
+    // caret: {idx, pos} | null. pos -1 = Zeilenende.
+    function zeilenWeg(el, idx, anzahl, caret) {
+      const vorher = { inhalt: JSON.parse(JSON.stringify(el.inhalt)) };
+      el.inhalt.zeilen.splice(idx, anzahl);
+      if (!el.inhalt.zeilen.length) {
+        if (el.art !== "notiz" && !el.inhalt.kategorie) { elementLoeschen([el.id]); return; }
+        el.inhalt.zeilen = [{ t: "", erledigt: false, gestrichen: false }];
+      }
+      blockRendern(el);
+      if (knoten.classList.contains("wb-fokus") || caret) {
+        const spans = $$(".wb-zeile-text", knoten);
+        const zi = klemm(caret ? caret.idx : idx, 0, spans.length - 1);
+        const ziel = spans[zi];
+        if (ziel) caretSetzen(ziel, caret && caret.pos >= 0 ? Math.min(caret.pos, ziel.textContent.length)
+                                                          : ziel.textContent.length);
+      }
+      undoMerken({ typ: "aendern", id: el.id, vorher,
+                   nachher: { inhalt: JSON.parse(JSON.stringify(el.inhalt)) } });
+      blockGeaendert(el, true);
+    }
+
     // ---- Tastenlogik je Zeile.
     knoten.addEventListener("keydown", (ev) => {
       const span = ev.target.closest(".wb-zeile-text");
@@ -2818,9 +2975,26 @@
         return;
       }
 
+      // Tab rueckt die Zeile als Unterpunkt ein, Umschalt+Tab wieder aus. Tab
+      // lief hier vorher aus dem Text hinaus in die Werkzeugleiste — wer
+      // wirklich hinaus will, nimmt Esc.
+      if (ev.key === "Tab" && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+        ev.preventDefault();
+        if (ev.isComposing) return;
+        ebeneSetzen(el, idx, !ev.shiftKey);
+        return;
+      }
+
       if (ev.key === "Enter") {
         ev.preventDefault();
         if (ev.isComposing) return;
+        // Enter auf einem LEEREN Unterpunkt beendet die Stichpunkte: die Zeile
+        // rueckt aus, statt einen weiteren leeren Punkt zu erzeugen — so, wie
+        // es jede Gliederung macht.
+        if (!span.textContent.trim() && el.inhalt.zeilen[idx] && el.inhalt.zeilen[idx].ebene === 1) {
+          ebeneSetzen(el, idx, false);
+          return;
+        }
         if (el.inhalt.zeilen.length >= DATEN.grenzen.zeilen) { toast("Mehr als " + DATEN.grenzen.zeilen + " Zeilen passen nicht auf einen Block."); return; }
         blockSerialisieren(el);
         const pos = caretOffset(span);
@@ -2833,6 +3007,8 @@
         el.inhalt.zeilen[idx].t = text.slice(0, pos);
         stricheAblegen(el.inhalt.zeilen[idx], stricheSchneiden(geteilt, 0, pos));
         const neueZeile = { t: text.slice(pos), erledigt: false, gestrichen: false };
+        // Unter einem Unterpunkt geht es mit Unterpunkten weiter.
+        if (el.inhalt.zeilen[idx].ebene === 1) neueZeile.ebene = 1;
         stricheAblegen(neueZeile, stricheSchneiden(geteilt, pos, text.length));
         el.inhalt.zeilen.splice(idx + 1, 0, neueZeile);
         blockRendern(el);
@@ -2843,9 +3019,30 @@
       }
 
       if (ev.key === "Backspace" && caretOffset(span) === 0 && fensterKollabiert()) {
-        if (idx === 0) return; // Anfang des Blocks: nichts zu mergen
-        ev.preventDefault();
         blockSerialisieren(el);
+        const dieZeile = el.inhalt.zeilen[idx];
+        // 1. Ein Unterpunkt rueckt erst einmal AUS — der zweite Druck loescht.
+        if (dieZeile && dieZeile.ebene === 1) { ev.preventDefault(); ebeneSetzen(el, idx, false); return; }
+        // 2. Die ERSTE Zeile (17.09.2026). Hier stand "return — nichts zu
+        //    mergen", und das war der Fehler: Wer den Text der ersten Aufgabe
+        //    herausloeschte, behielt ein leeres Kaestchen, das sich mit nichts
+        //    mehr entfernen liess. Eine LEERE erste Zeile geht jetzt weg, der
+        //    Caret steht danach am Anfang der naechsten.
+        if (idx === 0) {
+          if (dieZeile && !dieZeile.t.trim() && el.inhalt.zeilen.length > 1) {
+            ev.preventDefault();
+            zeilenWeg(el, 0, 1, { idx: 0, pos: 0 });
+          }
+          return;
+        }
+        ev.preventDefault();
+        // 3. Steht DARUEBER eine leere Zeile, geht die leere — nicht diese
+        //    hier in ihr auf: beim Verschmelzen gewinnt die obere Zeile, und
+        //    Haken, Link und CRM-Bezug dieser Zeile waeren sonst verloren.
+        if (!el.inhalt.zeilen[idx - 1].t.trim() && dieZeile && dieZeile.t.trim()) {
+          zeilenWeg(el, idx - 1, 1, { idx: idx - 1, pos: 0 });
+          return;
+        }
         const vorherText = el.inhalt.zeilen[idx - 1].t;
         // Metadaten der VORZEILE ueberleben den Merge — wer eine erledigte
         // Zeile hochzieht, will ihren Haken nicht verlieren.
@@ -2869,6 +3066,9 @@
         if (idx >= el.inhalt.zeilen.length - 1) return;
         ev.preventDefault();
         blockSerialisieren(el);
+        // Eine LEERE Zeile geht selbst — die naechste behaelt Haken, Link und
+        // CRM-Bezug (beim Verschmelzen gewaenne sonst die leere obere).
+        if (!el.inhalt.zeilen[idx].t.trim()) { zeilenWeg(el, idx, 1, { idx, pos: 0 }); return; }
         const eigenerText = el.inhalt.zeilen[idx].t;
         // Wie beim Backspace-Merge: die Bereiche der unteren Zeile wandern um
         // die Laenge der oberen nach hinten.
@@ -3011,6 +3211,12 @@
         return;
       }
 
+      if (ev.target.closest(".wb-zeile-einruecken")) {
+        ev.preventDefault();
+        ebeneSetzen(el, idx, !(z.ebene === 1));
+        return;
+      }
+
       if (ev.target.closest(".wb-abhaken")) {
         ev.preventDefault();
         const vorher = { inhalt: inhaltKopie() };
@@ -3043,21 +3249,15 @@
         // diesen fremden Block zurueck, die geloeschte Zeile nicht).
         // Besonders bitter bei einer Zeile aus dem CRM: sie traegt den
         // Aufgaben-Bezug, den man von Hand nicht wiederherstellen kann.
-        const vorherWeg = { inhalt: inhaltKopie() };
-        el.inhalt.zeilen.splice(idx, 1);
-        if (!el.inhalt.zeilen.length) { elementLoeschen([el.id]); return; }
-        blockRendern(el);
-        // Stand das Caret in der geloeschten (letzten) Zeile, haengt der
-        // Fokus jetzt an einem entfernten Knoten — auf die Nachbarzeile
-        // setzen, damit Tippen, wb-fokus und inArbeit nahtlos weitergehen.
-        if (knoten.classList.contains("wb-fokus")) {
-          const spans = $$(".wb-zeile-text", knoten);
-          const ziel = spans[Math.min(idx, spans.length - 1)];
-          if (ziel) caretSetzen(ziel, ziel.textContent.length);
-        }
-        undoMerken({ typ: "aendern", id: el.id, vorher: vorherWeg,
-                     nachher: { inhalt: inhaltKopie() } });
-        blockGeaendert(el, true);
+        // Eine Aufgabe nimmt ihre Unterpunkte mit (zeileFamilie) — und sagt
+        // es dazu, mit "Rueckgaengig" gleich am Hinweis: Wer den falschen
+        // Papierkorb erwischt, soll nicht nach Strg+Z suchen muessen.
+        const familie = zeileFamilie(el.inhalt.zeilen, idx);
+        const warFokus = knoten.classList.contains("wb-fokus");
+        zeilenWeg(el, idx, 1 + familie, warFokus ? { idx, pos: -1 } : null);
+        toast(familie ? "Aufgabe mit " + familie + (familie === 1 ? " Unterpunkt" : " Unterpunkten") + " gelöscht."
+                      : "Zeile gelöscht.",
+              { aktion: () => undoAusfuehren(), aktionText: "Rückgängig" });
       }
     });
 
@@ -3178,7 +3378,7 @@
     KATEGORIEN.forEach((k, i) => katKnopf(k.wert, k.kurz, (i + 1) + ". " + k.lang, k.farbe));
 
     const weg = document.createElement("button");
-    weg.type = "button"; weg.className = "wb-kasten-weg"; weg.innerHTML = ICON.weg;
+    weg.type = "button"; weg.className = "wb-kasten-weg"; weg.innerHTML = ICON.weg + "<span>Block löschen</span>";
     weg.setAttribute("data-tip", "Block löschen"); weg.setAttribute("aria-label", "Block löschen");
 
     const trenner = () => { const t = document.createElement("div"); t.className = "wb-kasten-trenner"; return t; };
@@ -3611,10 +3811,16 @@
     const daten = el.inhalt.zeilen[idx];
     if (!daten) return;
     inArbeit.add(el.id);
-    abgabe = { el, idx, zeileKnoten, zeiger: ev.pointerId,
+    // Eine Aufgabe nimmt ihre Unterpunkte mit (zeileFamilie).
+    const familie = zeileFamilie(el.inhalt.zeilen, idx);
+    abgabe = { el, idx, zeileKnoten, zeiger: ev.pointerId, familie,
                kat: el.inhalt.kategorie || "", von: tafelVon(el),
-               ziel: null, zielBlock: null, x: ev.clientX, y: ev.clientY };
+               modus: null, ziel: null, zielBlock: null, einfuegeIdx: -1,
+               x: ev.clientX, y: ev.clientY };
     zeileKnoten.classList.add("wb-fliegt");
+    for (let n = zeileKnoten.nextElementSibling, i = 0; n && i < familie; n = n.nextElementSibling, i++)
+      n.classList.add("wb-fliegt-familie");
+    zeileWarmSetzen(null);
     raum.classList.add("wb-abgabe-laeuft");
     if (!abgabeGeist) {
       abgabeGeist = document.createElement("div");
@@ -3624,7 +3830,8 @@
       raum.appendChild(abgabeGeist);
     }
     $(".wb-abgabe-zeile", abgabeGeist).textContent =
-      String(daten.t || "").trim() || "leere Zeile";
+      (String(daten.t || "").trim() || "leere Zeile")
+      + (familie ? "  + " + familie + (familie === 1 ? " Unterpunkt" : " Unterpunkte") : "");
     abgabeGeist.hidden = false;
     abgabeNachziehen();
     window.addEventListener("pointermove", abgabeZeiger, true);
@@ -3663,12 +3870,35 @@
     abgabeGeist.classList.toggle("wb-hoch",
       abgabe.y + hoeheGeist / 2 > r.bottom - 8);
     const tafelId = boardAnPunkt(ereignisZuWelt({ clientX: abgabe.x, clientY: abgabe.y }));
-    // Die eigene Tafel ist kein Ziel: dort liegt die Zeile schon.
-    const gueltig = !!tafelId && tafelId !== abgabe.von;
-    const zielBlock = gueltig ? abgabeZielBlock(tafelId, abgabe.kat) : null;
+    // WOHIN FAELLT DIE ZEILE? (17.09.2026) Bis heute gab es genau ein Ziel:
+    // eine ANDERE Tafel. Lukas: "Wenn man eine einzelne Aufgabe aus dem Block
+    // zu einem anderen rueberziehen will, geht es aktuell nicht." Jetzt drei
+    // Antworten, in dieser Reihenfolge:
+    //   einfuegen  Der Zeiger steht ueber (oder knapp neben) einem Block, den
+    //              ich aendern darf — auch dem eigenen. Die Zeile landet
+    //              ZWISCHEN dessen Zeilen, der blaue Strich zeigt wo. Damit
+    //              geht auch das Umsortieren innerhalb eines Blocks.
+    //   abgeben    Fremde Tafel, kein Block getroffen: wie bisher in den
+    //              Kategorie-Block dort bzw. einen eigenen daneben.
+    //   neu        Freie Flaeche derselben Tafel: die Zeile wird ein eigener
+    //              Block an dieser Stelle — "herausziehen".
+    let modus = null, zielBlock = null, einfuegeIdx = -1;
+    const getroffen = abgabeBlockUnterZeiger(abgabe.x, abgabe.y);
+    if (getroffen) { modus = "einfuegen"; zielBlock = getroffen.el; einfuegeIdx = getroffen.idx; }
+    else if (tafelId && tafelId !== abgabe.von) { modus = "abgeben"; zielBlock = abgabeZielBlock(tafelId, abgabe.kat); }
+    else if (tafelId) modus = "neu";
+    // Auf sich selbst fallen lassen ist kein Zug.
+    const aufSichSelbst = modus === "einfuegen" && zielBlock === abgabe.el
+      && einfuegeIdx >= abgabe.idx && einfuegeIdx <= abgabe.idx + 1 + abgabe.familie;
+    // Ein Block, der NUR aus dieser Zeile besteht, laesst sich nicht aus sich
+    // selbst "herausziehen" — den verschiebt man als Block.
+    const nurDieseZeile = modus === "neu" && abgabe.el.inhalt.zeilen.length <= 1 + abgabe.familie;
+    if (nurDieseZeile) modus = null;
+    const gueltig = !!modus && !aufSichSelbst;
+    abgabeMarkeSetzen(modus === "einfuegen" ? getroffen : null);
     for (const p of team) {
       const k = boardKnoten.get(p.id);
-      if (k) k.wrap.classList.toggle("wb-zieltafel", gueltig && p.id === tafelId);
+      if (k) k.wrap.classList.toggle("wb-zieltafel", modus === "abgeben" && p.id === tafelId);
     }
     if (abgabe.zielBlock !== zielBlock) {
       const alt = abgabe.zielBlock && elementKnoten.get(abgabe.zielBlock.id);
@@ -3677,12 +3907,72 @@
       if (neu) neu.classList.add("wb-zielblock");
       abgabe.zielBlock = zielBlock;
     }
+    abgabe.modus = gueltig ? modus : null;
+    abgabe.einfuegeIdx = einfuegeIdx;
     abgabe.ziel = gueltig ? tafelId : null;
     const kat = kategorieVon(abgabe.kat);
-    $(".wb-abgabe-ziel", abgabeGeist).textContent = gueltig
-      ? "zu " + vorname(tafelId) + (kat ? " · " + kategorieTitel(kat) : "")
-      : "auf eine andere Tafel ziehen";
+    let wort = "auf einen Block oder eine Tafel ziehen";
+    if (gueltig && modus === "einfuegen") {
+      const zk = kategorieVon(zielBlock.inhalt.kategorie);
+      wort = zielBlock === abgabe.el ? "hierhin verschieben"
+        : "in diesen Block" + (zk ? " · " + kategorieTitel(zk) : "");
+    } else if (gueltig && modus === "abgeben") {
+      wort = "zu " + vorname(tafelId) + (kat ? " · " + kategorieTitel(kat) : "");
+    } else if (gueltig && modus === "neu") wort = "als eigenen Block ablegen";
+    else if (aufSichSelbst) wort = "liegt schon hier";
+    $(".wb-abgabe-ziel", abgabeGeist).textContent = wort;
     abgabeGeist.classList.toggle("wb-gueltig", gueltig);
+  }
+
+  // Der Block, in den die gezogene Zeile fallen wuerde — samt der Stelle.
+  // NACHSICHTIG: Ein Block ist so hoch wie seine Zeilen und oft nur zwei davon;
+  // wer 15 px daneben loslaesst, meint ihn trotzdem. Darum zaehlt ein Rand von
+  // 22 Bildschirm-px mit, und bei mehreren Kandidaten gewinnt der, dessen
+  // Mitte naeher liegt.
+  function abgabeBlockUnterZeiger(x, y) {
+    const RAND = 22;
+    let bester = null;
+    for (const [id, k] of elementKnoten) {
+      const el = elemente.get(id);
+      if (!el || (el.art !== "text" && el.art !== "notiz") || !darfBearbeiten(el)) continue;
+      if (k.classList.contains("wb-altkopf") || !k.isConnected) continue;
+      const r = k.getBoundingClientRect();
+      if (!r.width || x < r.left - RAND || x > r.right + RAND || y < r.top - RAND || y > r.bottom + RAND) continue;
+      const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+      if (!bester || d < bester.d) bester = { el, k, d };
+    }
+    if (!bester) return null;
+    const knoten = $$(".wb-zeilen > .wb-zeile", bester.k);
+    let idx = knoten.length;
+    for (let i = 0; i < knoten.length; i++) {
+      const r = knoten[i].getBoundingClientRect();
+      if (y < r.top + r.height / 2) { idx = i; break; }
+    }
+    // Eine HAUPTZEILE faellt nie mitten in eine fremde Familie: stuende sie
+    // zwischen einer Aufgabe und deren Unterpunkten, gehoerten die ploetzlich
+    // ihr. Sie rutscht ans Ende der Familie.
+    const kopf = abgabe && abgabe.el.inhalt.zeilen[abgabe.idx];
+    if (kopf && kopf.ebene !== 1) {
+      const z = bester.el.inhalt.zeilen;
+      while (idx < z.length && z[idx] && z[idx].ebene === 1) idx++;
+    }
+    return { el: bester.el, k: bester.k, idx, knoten };
+  }
+
+  // Der blaue Strich an der Einfuegestelle. Er haengt am BLOCK, nicht in der
+  // Zeilenliste — zeilenIndex zaehlt deren Kinder, ein Fremdknoten dort
+  // verschoebe jede Zeile dahinter um eins.
+  let abgabeMarke = null;
+  function abgabeMarkeSetzen(treffer) {
+    if (!treffer || !treffer.knoten.length) { if (abgabeMarke) abgabeMarke.remove(); return; }
+    if (!abgabeMarke) { abgabeMarke = document.createElement("div"); abgabeMarke.className = "wb-einfuege-marke"; }
+    if (abgabeMarke.parentElement !== treffer.k) treffer.k.appendChild(abgabeMarke);
+    const kr = treffer.k.getBoundingClientRect();
+    const skala = treffer.k.offsetWidth ? kr.width / treffer.k.offsetWidth : 1;
+    const n = treffer.knoten;
+    const y = treffer.idx < n.length ? n[treffer.idx].getBoundingClientRect().top
+                                     : n[n.length - 1].getBoundingClientRect().bottom;
+    abgabeMarke.style.top = ((y - kr.top) / (skala || 1)).toFixed(1) + "px";
   }
 
   // Am Bildrand faehrt die Wand mit. Ohne das ginge die Abgabe nur in der
@@ -3710,7 +4000,7 @@
 
   function abgabeLos(ev) {
     if (!abgabe || ev.pointerId !== abgabe.zeiger) return;
-    abgabeBeenden(ev.type === "pointercancel" ? null : abgabe.ziel);
+    abgabeBeenden(ev.type === "pointercancel" ? null : abgabe.modus);
   }
   function abgabeTaste(ev) {
     if (!abgabe || ev.key !== "Escape") return;
@@ -3737,9 +4027,111 @@
       if (k) k.classList.remove("wb-zielblock");
     }
     if (a.zeileKnoten) a.zeileKnoten.classList.remove("wb-fliegt");
+    for (const n of $$(".wb-fliegt-familie", raum)) n.classList.remove("wb-fliegt-familie");
+    if (abgabeMarke) abgabeMarke.remove();
     if (!istInBearbeitung(a.el.id)) inArbeit.delete(a.el.id);
-    if (zielTafel) { geistWeg(false); abgabeAusfuehren(a, zielTafel); }
-    else geistWeg(true, a);
+    // "zielTafel" heisst der Parameter noch von frueher; er traegt heute den
+    // MODUS (null = abgebrochen). Ausgefuehrt wird nur, was abgabeNachziehen
+    // zuletzt als gueltig befunden hat.
+    const modus = zielTafel ? a.modus : null;
+    let geklappt = false;
+    if (modus === "einfuegen") geklappt = zeileEinfuegen(a);
+    else if (modus === "abgeben" && a.ziel) { abgabeAusfuehren(a, a.ziel); geklappt = true; }
+    else if (modus === "neu") geklappt = zeileAlsBlock(a);
+    geistWeg(!geklappt, a);
+  }
+
+  // Zeilen aus dem Quellblock nehmen — Teil eines laufenden Sammel-Vorgangs
+  // (der Aufrufer oeffnet und schliesst ihn). Bleibt nichts uebrig, gilt die
+  // Regel vom 01.09.: Ein loser Textblock verschwindet, eine Haftnotiz und ein
+  // eingeordneter Block bleiben mit einer leeren Zeile stehen.
+  function quelleAbziehen(el, idx, anzahl) {
+    if (el.inhalt.zeilen.length <= anzahl && el.art !== "notiz" && !el.inhalt.kategorie) {
+      undoMerken({ typ: "loeschen", kopien: [Object.assign({}, el, { inhalt: tiefeKopie(el.inhalt) })] });
+      elementLoeschen([el.id], { ohneUndo: true });
+      return;
+    }
+    const vorher = { inhalt: tiefeKopie(el.inhalt) };
+    el.inhalt.zeilen.splice(idx, anzahl);
+    if (!el.inhalt.zeilen.length) el.inhalt.zeilen = [{ t: "", erledigt: false, gestrichen: false }];
+    undoMerken({ typ: "aendern", id: el.id, vorher, nachher: { inhalt: tiefeKopie(el.inhalt) } });
+    blockRendern(el);
+    blockGeaendert(el, true);
+  }
+
+  // Die gelandeten Zeilen blitzen kurz auf — man soll SEHEN, wo sie jetzt sind.
+  function zeilenAufblitzen(el, idx, anzahl) {
+    const k = elementKnoten.get(el.id);
+    if (!k) return;
+    const knoten = $$(".wb-zeilen > .wb-zeile", k).slice(idx, idx + anzahl);
+    for (const n of knoten) { n.classList.remove("wb-gelandet"); void n.offsetWidth; n.classList.add("wb-gelandet"); }
+    setTimeout(() => { for (const n of knoten) n.classList.remove("wb-gelandet"); }, 1300);
+  }
+
+  // Die Zeile (samt Unterpunkten) an die gezeigte Stelle legen — im selben
+  // Block (umsortieren) oder in einem anderen. EIN Rueckgaengig-Schritt.
+  function zeileEinfuegen(a) {
+    const quelle = a.el, ziel = a.zielBlock;
+    if (!ziel || !elemente.has(quelle.id) || !elemente.has(ziel.id) || !quelle.inhalt.zeilen[a.idx]) return false;
+    const anzahl = 1 + a.familie;
+    let ti = a.einfuegeIdx;
+    if (ziel === quelle) {
+      if (ti >= a.idx && ti <= a.idx + anzahl) return false;
+      const vorher = { inhalt: tiefeKopie(quelle.inhalt) };
+      const teil = quelle.inhalt.zeilen.splice(a.idx, anzahl);
+      if (ti > a.idx) ti -= anzahl;
+      ti = klemm(ti, 0, quelle.inhalt.zeilen.length);
+      quelle.inhalt.zeilen.splice(ti, 0, ...teil);
+      blockRendern(quelle);
+      undoMerken({ typ: "aendern", id: quelle.id, vorher, nachher: { inhalt: tiefeKopie(quelle.inhalt) } });
+      blockGeaendert(quelle, true);
+      zeilenAufblitzen(quelle, ti, anzahl);
+      return true;
+    }
+    // In einen anderen Block. Wird dort gerade getippt, zaehlt der getippte Stand.
+    const zk = elementKnoten.get(ziel.id);
+    if (zk && zk.classList.contains("wb-fokus")) blockSerialisieren(ziel);
+    const zielLeer = ziel.inhalt.zeilen.every((z) => !String(z.t || "").trim());
+    if (!zielLeer && ziel.inhalt.zeilen.length + anzahl > DATEN.grenzen.zeilen) {
+      toast("Mehr als " + DATEN.grenzen.zeilen + " Zeilen passen nicht auf einen Block.");
+      return false;
+    }
+    const teil = tiefeKopie(quelle.inhalt.zeilen.slice(a.idx, a.idx + anzahl));
+    sammelnBeginnen();
+    try {
+      quelleAbziehen(quelle, a.idx, anzahl);
+      const vorher = { inhalt: tiefeKopie(ziel.inhalt) };
+      if (zielLeer) { ziel.inhalt.zeilen = teil; ti = 0; }
+      else { ti = klemm(ti, 0, ziel.inhalt.zeilen.length); ziel.inhalt.zeilen.splice(ti, 0, ...teil); }
+      blockRendern(ziel);
+      undoMerken({ typ: "aendern", id: ziel.id, vorher, nachher: { inhalt: tiefeKopie(ziel.inhalt) } });
+      blockGeaendert(ziel, true);
+    } finally { sammelnAbschliessen(); }
+    schilderAuffrischen();
+    zeilenAufblitzen(ziel, ti, anzahl);
+    toast(anzahl > 1 ? "Aufgabe mit Unterpunkten verschoben." : "Zeile verschoben.",
+          { aktion: () => undoAusfuehren(), aktionText: "Rückgängig" });
+    return true;
+  }
+
+  // "Herausziehen": auf freier Flaeche losgelassen, wird die Zeile ein eigener,
+  // loser Block an dieser Stelle (ohne Kategorie — die gibt man ihm im Kasten).
+  function zeileAlsBlock(a) {
+    const quelle = a.el;
+    if (!elemente.has(quelle.id) || !quelle.inhalt.zeilen[a.idx]) return false;
+    const anzahl = 1 + a.familie;
+    if (quelle.inhalt.zeilen.length <= anzahl) return false;
+    const teil = tiefeKopie(quelle.inhalt.zeilen.slice(a.idx, a.idx + anzahl));
+    let neu = null;
+    sammelnBeginnen();
+    try {
+      quelleAbziehen(quelle, a.idx, anzahl);
+      neu = abgabeBlockAnlegen(Object.assign({}, a, { kat: "" }), a.von, teil);
+    } finally { sammelnAbschliessen(); }
+    schilderAuffrischen();
+    if (neu) zeilenAufblitzen(neu, 0, anzahl);
+    toast("Als eigener Block abgelegt.", { aktion: () => undoAusfuehren(), aktionText: "Rückgängig" });
+    return true;
   }
 
   // Kein gueltiges Ziel: der Geist springt zur Zeile zurueck — sichtbar,
@@ -3768,30 +4160,21 @@
   function abgabeAusfuehren(a, zielTafel) {
     const el = a.el;
     if (!elemente.has(el.id) || !el.inhalt.zeilen[a.idx]) return;
-    const zeileKopie = tiefeKopie(el.inhalt.zeilen[a.idx]);
-    const quelleKopie = Object.assign({}, el, { inhalt: tiefeKopie(el.inhalt) });
+    // Die Aufgabe geht MIT ihren Unterpunkten (a.familie).
+    const anzahl = 1 + (a.familie || 0);
+    const zeileKopie = tiefeKopie(el.inhalt.zeilen.slice(a.idx, a.idx + anzahl));
     const ziel = abgabeZielBlock(zielTafel, a.kat);
     let gelandet = null;
     sammelnBeginnen();
     try {
-      // ---- 1. Bei mir weg. War es die letzte Zeile, geht der ganze Block.
-      if (el.inhalt.zeilen.length <= 1) {
-        undoMerken({ typ: "loeschen", kopien: [quelleKopie] });
-        elementLoeschen([el.id], { ohneUndo: true });
-      } else {
-        const vorher = { inhalt: tiefeKopie(el.inhalt) };
-        el.inhalt.zeilen.splice(a.idx, 1);
-        undoMerken({ typ: "aendern", id: el.id,
-                     vorher, nachher: { inhalt: tiefeKopie(el.inhalt) } });
-        blockRendern(el);
-        blockGeaendert(el, true);
-      }
+      // ---- 1. Bei mir weg (quelleAbziehen kennt die Regel fuer den Rest).
+      quelleAbziehen(el, a.idx, anzahl);
       // ---- 2. Drueben hin.
       if (ziel) {
         const vorher = { inhalt: tiefeKopie(ziel.inhalt) };
         const zielLeer = ziel.inhalt.zeilen.every((z) => !String(z.t || "").trim());
         ziel.inhalt.zeilen = (zielLeer ? [] : ziel.inhalt.zeilen)
-          .concat([zeileKopie]).slice(0, DATEN.grenzen.zeilen);
+          .concat(zeileKopie).slice(0, DATEN.grenzen.zeilen);
         undoMerken({ typ: "aendern", id: ziel.id,
                      vorher, nachher: { inhalt: tiefeKopie(ziel.inhalt) } });
         blockRendern(ziel);
@@ -3849,7 +4232,7 @@
       y: Math.round(klemm(y, 0, BOARD_H - 120)),
       breite: breiteNeu, hoehe: 60, version: 1,
       inhalt: {
-        zeilen: [zeile],
+        zeilen: Array.isArray(zeile) ? zeile : [zeile],
         // Eine abgegebene Aufgabe ist zum Abhaken da — darum die Checkliste,
         // wenn die Quelle keine eigene Form vorgibt.
         liste: quelle.inhalt.liste === "keine" ? "check" : quelle.inhalt.liste,
@@ -7174,12 +7557,43 @@
         antwortWegOeffnen(zeile);
         return;
       }
+      // Dieselben Regeln wie am Schreibtisch (17.09.2026), nur ohne Tab — ein
+      // Telefon hat keine Tab-Taste, dafuer den Einruecken-Knopf an der Zeile.
+      const istUnter = zeile.classList.contains("wb-unterpunkt");
+      const ausruecken = () => { zeile.classList.remove("wb-unterpunkt"); delete zeile.dataset.ebene; };
       if (ev.key === "Enter") {
         ev.preventDefault();
+        // Enter auf einem LEEREN Unterpunkt beendet die Stichpunkte: er wird
+        // zur normalen Aufgabe, statt noch einen leeren Punkt anzuhaengen.
+        if (istUnter && !span.textContent) { ausruecken(); return; }
         const neue = zeileBauen(true);
-        zeileFuellen(neue, { t: "", erledigt: false, gestrichen: false }, true);
+        // Wer in Stichpunkten schreibt, schreibt in Stichpunkten weiter.
+        zeileFuellen(neue, Object.assign({ t: "", erledigt: false, gestrichen: false }, istUnter ? { ebene: 1 } : {}), true);
         zeile.after(neue);
         caretSetzen($(".wb-zeile-text", neue), 0);
+      } else if (ev.key === "Backspace" && caretOffset(span) === 0 && istUnter && window.getSelection().isCollapsed) {
+        // Erst ausruecken, dann (beim naechsten Druck) verbinden — wie in jeder
+        // Textverarbeitung.
+        ev.preventDefault();
+        ausruecken();
+      } else if (ev.key === "Backspace" && caretOffset(span) === 0 && !span.textContent
+          && !zeile.previousElementSibling && zeile.nextElementSibling) {
+        // Die LEERE ERSTE Zeile: darueber ist nichts, womit sie sich verbinden
+        // koennte — frueher blieb ihr leeres Kaestchen deshalb fuer immer stehen.
+        ev.preventDefault();
+        const danach = zeile.nextElementSibling;
+        zeile.remove();
+        mobilErsteGerade();
+        caretSetzen($(".wb-zeile-text", danach), 0);
+      } else if (ev.key === "Backspace" && caretOffset(span) === 0 && zeile.previousElementSibling
+          && window.getSelection().isCollapsed
+          && !$(".wb-zeile-text", zeile.previousElementSibling).textContent) {
+        // Die Zeile DARUEBER ist leer: sie geht, diese bleibt — mit Haken, Link
+        // und Antwort. Verbinden hiesse, all das der leeren Zeile zu opfern.
+        ev.preventDefault();
+        zeile.previousElementSibling.remove();
+        mobilErsteGerade();
+        caretSetzen(span, 0);
       } else if (ev.key === "Backspace" && caretOffset(span) === 0 && zeile.previousElementSibling) {
         ev.preventDefault();
         const davor = $(".wb-zeile-text", zeile.previousElementSibling);
@@ -7240,9 +7654,37 @@
       } else if (ev.target.closest(".wb-zeile-streichen")) {
         zeile.classList.toggle("wb-gestrichen");
         wartenNachziehen();
+      } else if (ev.target.closest(".wb-zeile-einruecken")) {
+        // Unterpunkt ein/aus — im Blatt lebt auch das an Klasse und data-ebene
+        // (mobilUebernehmen liest es von dort). Die erste Zeile bleibt, was sie ist.
+        const wird = !zeile.classList.contains("wb-unterpunkt") && zeile !== liste.firstElementChild;
+        zeile.classList.toggle("wb-unterpunkt", wird);
+        if (wird) zeile.dataset.ebene = "1"; else delete zeile.dataset.ebene;
       } else if (ev.target.closest(".wb-zeile-weg")) {
-        if (liste.children.length > 1) zeile.remove();
-        else {
+        // Wie am Schreibtisch: eine Aufgabe nimmt ihre Unterpunkte mit — und
+        // sagt es. Das Blatt kennt kein Strg+Z, also haengt das Zurueckholen
+        // direkt am Toast: dieselben Knoten kommen an dieselbe Stelle.
+        const weg = [zeile];
+        if (!zeile.classList.contains("wb-unterpunkt")) {
+          for (let n = zeile.nextElementSibling; n && n.classList.contains("wb-unterpunkt"); n = n.nextElementSibling) weg.push(n);
+        }
+        if (liste.children.length > weg.length) {
+          const davor = weg[weg.length - 1].nextElementSibling;
+          weg.forEach((n) => n.remove());
+          mobilErsteGerade();
+          const blattJetzt = blatt;
+          toast(weg.length > 1
+            ? "Aufgabe mit " + (weg.length - 1) + (weg.length === 2 ? " Unterpunkt" : " Unterpunkten") + " gelöscht."
+            : "Zeile gelöscht.", {
+            aktionText: "Rückgängig",
+            aktion: () => {
+              if (!mobilOffen || mobilOffen.blatt !== blattJetzt) return;
+              const vor = davor && davor.parentNode === liste ? davor : null;
+              weg.forEach((n) => liste.insertBefore(n, vor));
+              mobilErsteGerade();
+            },
+          });
+        } else {
           // Letzte Zeile: sie bleibt, wird aber wirklich LEER — mit der
           // Aufgabe geht auch ihre Antwort, sonst haenge die Antwort an
           // einer Zeile, die es nicht mehr gibt.
@@ -7259,6 +7701,15 @@
       ev.preventDefault();
       antwortWegOeffnen(antwort.closest(".wb-zeile"));
     });
+    // Die erste Zeile ist nie ein Unterpunkt (es gaebe nichts, worunter sie
+    // stuende). Rutscht einer nach oben, wird er zur Aufgabe — sichtbar sofort,
+    // nicht erst nach "Fertig".
+    function mobilErsteGerade() {
+      const erste = liste.firstElementChild;
+      if (!erste || !erste.classList.contains("wb-unterpunkt")) return;
+      erste.classList.remove("wb-unterpunkt");
+      delete erste.dataset.ebene;
+    }
     $(".wb-mobil-fertig", blatt).addEventListener("click", mobilSchliessen);
     // Wie am Board: Abhaken/Zeilenwerkzeuge klauen der aktiven Zeile
     // nicht den Fokus (Tastatur bliebe sonst nicht offen). Die Antwort steht
@@ -7302,6 +7753,8 @@
       if (zeile.dataset.antwort) neu.antwort = zeile.dataset.antwort;
       // Und der Aufgaben-Bezug aus dem CRM — aus demselben Grund.
       if (zeile.dataset.aufgabe) neu.aufgabe = Number(zeile.dataset.aufgabe);
+      // Unterpunkt bleibt Unterpunkt (nur nicht als allererste Zeile).
+      if (zeile.dataset.ebene === "1" && zeilen.length > 0) neu.ebene = 1;
       zeilen.push(neu);
     }
     el.inhalt.zeilen = zeilen.length ? zeilen.slice(0, DATEN.grenzen.zeilen)
