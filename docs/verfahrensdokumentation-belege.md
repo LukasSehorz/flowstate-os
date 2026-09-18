@@ -313,6 +313,12 @@ Freigabe (Token-Datei). Eine Mail-Adresse der eigenen Domänen
 (flowstate-ai.net, svhconsult.de) wird nie als Lieferant übernommen: Was von
 dort kommt, ist eine gestellte Rechnung, keine Ausgabe.
 
+**Weitere Postfächer, bestimmte Absender.** Neben Google-Postfächern kann
+ein Outlook.com-/Hotmail-Postfach angeschlossen werden (Microsoft Graph, eigene
+Freigabe des Kontoinhabers). Für ein privates Postfach, in dem nur einzelne
+geschäftliche Ausgaben ankommen, lässt sich eine Absenderliste hinterlegen:
+Dann werden ausschließlich Mails dieser Absender übernommen.
+
 **Was als Rechnung gilt.** Nur Mails mit PDF-Anhang, bei denen Betreff,
 Absender **oder Dateiname des PDFs** nach Rechnung klingen (Rechnung, Invoice,
 Receipt, Beleg, Quittung, Zahlungsbestätigung, Payment, Billing, Abrechnung).
@@ -320,8 +326,10 @@ Alles andere bleibt im Postfach und wird bei Bedarf von Hand hochgeladen.
 
 **Rückschau.** Auf der Belege-Seite lässt sich der Import ab einem frei
 gewählten Tag anstoßen („Alle Rechnungen seit … holen"). Vorgabe ist der
-26.07.2026, der Beginn dieser Buchführung (Abschnitt 8); für frühere Zeiträume
-ist Lexware Office maßgeblich. Die Rückschau läuft im Hintergrund, verarbeitet
+26.07.2026, der Beginn dieser Buchführung (Abschnitt 8). Am 18.09.2026 wurde
+die Rückschau auf Anweisung der Geschäftsführung bis zum 01.03.2026
+ausgeführt; Belege aus der Zeit vor dem 26.07.2026 können zusätzlich in
+Lexware Office vorliegen und sind vor der Buchung auf Doppelung zu prüfen. Die Rückschau läuft im Hintergrund, verarbeitet
 je Postfach bis zu 500 Mails und markiert jede übernommene Mail im Postfach.
 Dieselbe Datei wird auch bei wiederholter Rückschau nur einmal abgelegt
 (Prüfsumme, Abschnitt 2.1).

@@ -11,6 +11,14 @@ const gmail = require("../lib/gmail-direkt.js");
   const konten = [];
   if (gmail.bereit()) konten.push(gmail.haupt); else console.log("Hauptkonto: kein Zugang (" + gmail.haupt.tokenPfad + ")");
   for (const k of gmail.postfaecher()) konten.push(k);
+  try {
+    const outlook = require("../lib/outlook-direkt.js");
+    const path = require("path"), fs = require("fs");
+    for (const n of fs.readdirSync(gmail.POSTFAECHER).sort()) {
+      const k = outlook.konto(path.join(gmail.POSTFAECHER, n, "outlook.json"), n + " (Outlook)");
+      if (k.bereit()) konten.push(k);
+    }
+  } catch { /* kein Ordner */ }
   if (!konten.length) { console.log("Kein Postfach angeschlossen. Ordner für weitere: " + gmail.POSTFAECHER); process.exit(1); }
   for (const k of konten) {
     const adresse = await k.adresse();

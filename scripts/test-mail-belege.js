@@ -107,6 +107,19 @@ POSTFACH = [
   pruefe("Eigene Absender landen auch nicht bei den unklaren", !k.unklar.some((x) => x.id === "c"));
   pruefe("Rückschau holt mehr Mails als der Tageslauf", m2.MAX_RUECKSCHAU > m2.MAX_TAEGLICH);
 
+  // --- Nur bestimmte Absender (Hotmail, 18.09.2026) -------------------------
+  //
+  // Ein privates Postfach liefert nur, was von gelisteten Absendern kommt —
+  // und die brauchen kein "Rechnung" im Betreff, ein PDF genuegt.
+  const h = await m.kandidaten({ erlaubt: ["amazon.de", "billing@hetzner.com"], suchen: async () => [
+    { id: "x", from: "Amazon.de <bestellung@amazon.de>", subject: "Ihre Bestellung" },
+    { id: "y", from: "Hetzner <billing@hetzner.com>", subject: "Invoice 2026-08" },
+    { id: "z", from: "Zalando <news@zalando.de>", subject: "Rechnung zu Ihrer Bestellung" },
+  ] }, { tage: 30 });
+  pruefe("Absenderliste: nur Gelistete, und die gelten als sicher",
+    h.sicher.map((x) => x.id).join() === "x,y" && h.unklar.length === 0, JSON.stringify(h));
+  pruefe("Ohne Liste bleibt alles beim Alten", m.absenderErlaubt({ from: "irgendwer@x.de" }, []) === true);
+
   // Die Rueckschau laeuft nur einmal gleichzeitig — und braucht ein Datum.
   pruefe("Rückschau ohne Datum wird abgewiesen", m2.rueckschauStarten({ dash: async () => ({}), seit: "" }).grund === "seit");
 
