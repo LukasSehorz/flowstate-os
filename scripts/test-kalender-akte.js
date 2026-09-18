@@ -231,6 +231,37 @@ console.log("\nVertrag: wirft nie");
   pruefe("spanneVoll ohne gws-cli/Token -> { ok:false } statt Absturz", sv && sv.ok === false, JSON.stringify(sv).slice(0, 120));
   gleich("terminNachId ohne Direktweg -> null", await akte.terminNachId("e1"), null);
 
+  // --- Jeder in seinen eigenen Kalender (18.09.2026) ----------------------
+  // Lukas: "kann man das fixen, dass die Termine von Jannik auch in seinen
+  // Kalender gebucht werden?" Zugeordnet wird ueber die Anmelde-Mail; die
+  // Konten heissen genauso wie die Kalender.
+  //
+  // Geprueft wird hier der RUECKFALL, denn er entscheidet, ob im Zweifel ein
+  // Termin ausfaellt: Ohne gws-cli (wie in dieser Pruefung) bleibt die
+  // Kalenderliste unbekannt, und dann MUSS der Hauptkalender genommen werden.
+  // Wuerde hier ok:false herauskommen, entstuenden bei einem Google-Aussetzer
+  // stillschweigend gar keine Termine mehr — schlimmer als der Zustand, den
+  // die Aenderung behebt.
+  const kid = require("../lib/kalender-id.js");
+  const ohneGoogle = await kid.kalenderFuer("jannikvomhofe@svhconsult.de");
+  pruefe("Kalenderliste unbekannt -> Hauptkalender, Termin faellt nicht aus",
+    ohneGoogle.ok === true && ohneGoogle.args.length === 0, JSON.stringify(ohneGoogle));
+  const ohneMail = await kid.kalenderFuer("");
+  pruefe("ohne Mail -> Hauptkalender", ohneMail.ok === true && ohneMail.args.length === 0,
+    JSON.stringify(ohneMail));
+  pruefe("Unsinn statt Mail -> Hauptkalender",
+    (await kid.kalenderFuer("keine-mail")).grund === "keine-mail", "");
+  // Waehrend der Werbeaufnahmen zeigt KALENDER_ID auf den Drehkalender. Dann
+  // muss ALLES dorthin, auch fremde Aufgaben — sonst stehen echte Termine im Bild.
+  const altKal = process.env.KALENDER_ID;
+  process.env.KALENDER_ID = "dreh@example.com";
+  const dreh = await kid.kalenderFuer("jannikvomhofe@svhconsult.de");
+  pruefe("KALENDER_ID gewinnt (Drehkulisse)",
+    dreh.ok === true && dreh.args[1] === "dreh@example.com", JSON.stringify(dreh));
+  gleich("kalenderArgs mit KALENDER_ID", kid.kalenderArgs(), ["-c", "dreh@example.com"]);
+  if (altKal === undefined) delete process.env.KALENDER_ID; else process.env.KALENDER_ID = altKal;
+  gleich("kalenderArgs ohne KALENDER_ID: leer", kid.kalenderArgs(), []);
+
   // --- Beschreibung des Erstgespraechs (16.09.2026) -----------------------
   // Zwei Wuensche von Lukas an derselben Stelle: KEIN Akte-Link mehr im
   // Termin, und die Gespraechsnotiz soll vollstaendig drinstehen. Vorher war
