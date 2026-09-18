@@ -7091,7 +7091,19 @@
       const b = span.getBoundingClientRect();
       ende = { right: b.left, top: b.top, height: b.height || zr.height };
     }
-    const luft = 8;                       // Layout-px Abstand zum letzten Wort
+    // Der Abstand zum letzten Wort wird in BILDSCHIRM-px gedacht und erst
+    // dann in Layout-px umgerechnet. Warum das der Punkt ist (18.09.2026,
+    // gemeldet von Lukas: "der verdeckt immer die letzten zwei Buchstaben,
+    // wenn ich alles rauskopieren will"): Der Chip selbst haelt sich ueber
+    // --wb-anti2 bildschirmgross, die Luft aber wuchs mit dem Zoom MIT nach
+    // unten. Gemessen in der Tafel-Ansicht (45 %): aus 8 px wurden 3,5 px auf
+    // dem Schirm — der Chip lag ueber dem letzten Zeichen und liess sich
+    // weder lesen noch mit der Maus einfangen. Derselbe Gegenmassstab wie beim
+    // Chip (--wb-anti2, gedeckelt), damit die Luecke bei jedem Zoom gleich
+    // breit aussieht. Der Boden von 8 Layout-px bleibt: naeher als bisher soll
+    // er auch beim Hineinzoomen nie stehen.
+    const gegen = Number(getComputedStyle(buehne).getPropertyValue("--wb-anti2")) || 1;
+    const luft = Math.max(8, 14 * gegen);
     const links = Math.max(0, (ende.right - zr.left) / skala + luft);
     // Der Chip GEHT MIT — er steht nie im Text. Bis zum 04.09. wurde er an
     // der rechten Blockkante festgehalten (Math.min gegen clientWidth):

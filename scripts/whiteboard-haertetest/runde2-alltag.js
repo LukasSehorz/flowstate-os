@@ -109,6 +109,62 @@ const warte = (ms) => new Promise((r) => setTimeout(r, ms));
     p("… und steht auf der fremden Tafel", alle.length === 1, alle.join(", ") || wort);
   }
 
+  console.log("\n— E. Der Antwort-Chip haelt Abstand vom Text");
+  {
+    // Gemeldet am 18.09.2026 (Lukas): "Der orangene Pfeil rechts ist zu nah am
+    // Text dran. Wenn ich alles rauskopieren will, verdeckt es immer die letzten
+    // zwei Buchstaben." Ursache: Der Chip haelt sich ueber --wb-anti2
+    // bildschirmgross, sein Abstand zum Wort wurde aber in Layout-px gerechnet
+    // und schrumpfte beim Herauszoomen mit — in der Tafel-Ansicht auf 3,5 px.
+    // Geprueft wird deshalb in BILDSCHIRM-px und bei mehreren Zoomstufen, und
+    // zwar das, was Lukas wirklich tut: Zeile markieren und kopieren.
+    const idC = uuid(), adresse = "https://github.com/jannikvomhofe83-tech/fliesen-weinhold";
+    await s.evaluate(async (id, url) => {
+      await fetch("/api/whiteboard/anlegen", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, art: "text", x: 150, y: 1150, breite: 620, hoehe: 190,
+          inhalt: { liste: "check", farbe: "schwarz", groesse: 28, zeilen: [
+            { t: "Fliesen Weinhold Netflify + Google Drive -->", erledigt: false, gestrichen: false },
+            { t: url, erledigt: false, gestrichen: false, link: url }] } }) });
+    }, idC, adresse);
+    await s.reload({ waitUntil: "networkidle2" });
+    await s.waitForFunction("window.__wb");
+    await warte(300);
+
+    const messen = () => s.evaluate((id) => {
+      const sp = document.querySelectorAll(`.wb-el[data-id="${id}"] .wb-zeile-text`)[1];
+      sp.focus();
+      const r = document.createRange(); r.selectNodeContents(sp);
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      const chip = document.querySelector(".wb-zeile-chip");
+      const kaesten = r.getClientRects(); const letzte = kaesten[kaesten.length - 1];
+      if (!chip || !letzte) return null;
+      // Liegt ueber einem der letzten Zeichen ein Bedienelement?
+      const verdeckt = [];
+      for (const dx of [2, 8, 16, 24]) {
+        const oben = document.elementFromPoint(letzte.right - dx, letzte.top + letzte.height / 2);
+        const stoerer = oben && oben.closest && oben.closest(".wb-zeile-chip,.wb-zeile-link,.wb-zeile-tools");
+        if (stoerer) verdeckt.push(dx + "px");
+      }
+      return { luecke: chip.getBoundingClientRect().left - letzte.right,
+               zoom: window.__wb.ansicht.s, verdeckt, markiert: String(getSelection()) };
+    }, idC);
+
+    let m = await messen();
+    p("Markiert ist die ganze Adresse", !!m && m.markiert === adresse, m ? JSON.stringify(m.markiert.slice(-20)) : "kein Chip");
+    p("Der Chip haelt in der Tafel-Ansicht mind. 10 Bildschirm-px Abstand", !!m && m.luecke >= 10,
+      m ? "Zoom " + m.zoom.toFixed(2) + ": " + m.luecke.toFixed(1) + " px" : "kein Chip");
+    p("Nichts verdeckt die letzten Zeichen", !!m && m.verdeckt.length === 0, m ? (m.verdeckt.join(",") || "frei") : "");
+
+    // Naeher heranfahren: der Abstand darf auch dort nicht zusammenfallen.
+    await s.evaluate(() => document.activeElement.blur());
+    await s.mouse.move(600, 400);
+    for (let i = 0; i < 4; i++) { await s.mouse.wheel({ deltaY: -120 }); await warte(120); }
+    await warte(300);
+    m = await messen();
+    p("… und auch nah herangezoomt", !!m && m.luecke >= 10 && m.verdeckt.length === 0,
+      m ? "Zoom " + m.zoom.toFixed(2) + ": " + m.luecke.toFixed(1) + " px, " + (m.verdeckt.join(",") || "frei") : "kein Chip");
+  }
+
   p("Keine Seitenfehler", seitenfehler.length === 0, seitenfehler.slice(0, 2).join(" | "));
   await b.close();
   console.log("\n" + (fehler ? fehler + " von " + nr + " offen." : "Alle " + nr + " Prüfungen grün."));
