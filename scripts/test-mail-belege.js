@@ -33,6 +33,9 @@ POSTFACH = [
   // Das ist die gefaehrliche: Lukas' eigene, gestellte Rechnung.
   { id: "4", from: "lukas sehorz <lukas.sehorz@flowstate-ai.net>", subject: "Rechnung CRM & Webseite" },
   { id: "5", from: "Jannik <jannikvomhofe@flowstate-ai.net>", subject: "Angebot Rechnung Entwurf" },
+  // Seit 18.09.2026 ist das angeschlossene Postfach lukas.sehorz@svhconsult.de —
+  // eine Weiterleitung von Jannik aus derselben Domaene ist ebenfalls keine Ausgabe.
+  { id: "9", from: "Jannik vom Hofe <jannikvomhofe@svhconsult.de>", subject: "Fwd: Rechnung an Kunde Müller" },
   // Kein Rechnungsbezug — darf nicht mit.
   { id: "6", from: "Newsletter <news@irgendwas.de>", subject: "Unsere Neuigkeiten im August" },
   { id: "7", from: "Kunde <info@mueller.de>", subject: "Fotos vom Termin" },
@@ -51,6 +54,8 @@ POSTFACH = [
   pruefe("Lukas' eigene gestellte Rechnung bleibt draußen", !ids.includes("4"),
     "Sie ist eine Forderung, keine Ausgabe — im Belegeingang verschiebt sie das Ergebnis um den doppelten Betrag.");
   pruefe("Auch Janniks Mail von der Firmenadresse bleibt draußen", !ids.includes("5"));
+  pruefe("svhconsult.de zählt ohne Einstellung als eigene Domäne", !ids.includes("9"),
+    "DIENST_KONTO ist lukas.sehorz@svhconsult.de — eine eigene Rechnung von dort darf keine Ausgabe werden.");
   pruefe("Newsletter ohne Rechnungsbezug bleibt draußen", !ids.includes("6"));
   pruefe("Mail ohne Rechnungsbezug bleibt draußen", !ids.includes("7"));
 
@@ -78,6 +83,32 @@ POSTFACH = [
   const t2 = await m2.suchen(2);
   pruefe("Eine zweite eigene Domäne lässt sich nachtragen", !t2.map((x) => x.id).includes("8"),
     t2.map((x) => x.id).join(","));
+
+  // --- Rueckschau und Dateiname (18.09.2026) --------------------------------
+  //
+  // "Alle Rechnungen, die wir bis jetzt bekommen haben": Die Anfrage bekommt
+  // ein festes Startdatum statt "letzte N Tage", und ein PDF, das selbst
+  // "Rechnung" heisst, zaehlt auch dann, wenn der Betreff nur "Ihre Bestellung" sagt.
+  const frage = m2.frageBauen({ seit: "2026-07-26" });
+  pruefe("Rückschau fragt ab einem festen Tag", /after:2026\/07\/26/.test(frage) && !/newer_than/.test(frage), frage);
+  pruefe("Ein kaputtes Datum fällt auf die Tagesregel zurück", /newer_than:2d/.test(m2.frageBauen({ seit: "gestern", tage: 2 })));
+  for (const [name, soll] of [
+    ["Rechnung_4711.pdf", true], ["invoice-2026-08.PDF", true], ["Receipt 123.pdf", true],
+    ["Angebot_Webseite.pdf", false], ["Vertrag.pdf", false], ["Rechnung.docx", false], ["", false],
+  ]) pruefe(`Dateiname ${JSON.stringify(name)} -> ${soll ? "Rechnung" : "keine"}`, m2.passtDateiname(name) === soll);
+
+  const k = await m.kandidaten({ suchen: async () => [
+    { id: "a", from: "Shop <shop@laden.de>", subject: "Ihre Bestellung 4711" },
+    { id: "b", from: "Paddle <help@paddle.com>", subject: "Ihre Rechnung" },
+    { id: "c", from: "Lukas <lukas.sehorz@svhconsult.de>", subject: "Ihre Bestellung" },
+  ] }, { seit: "2026-07-26" });
+  pruefe("Sichere Treffer und unklare (nur PDF dabei) werden getrennt",
+    k.sicher.map((x) => x.id).join() === "b" && k.unklar.map((x) => x.id).join() === "a", JSON.stringify(k));
+  pruefe("Eigene Absender landen auch nicht bei den unklaren", !k.unklar.some((x) => x.id === "c"));
+  pruefe("Rückschau holt mehr Mails als der Tageslauf", m2.MAX_RUECKSCHAU > m2.MAX_TAEGLICH);
+
+  // Die Rueckschau laeuft nur einmal gleichzeitig — und braucht ein Datum.
+  pruefe("Rückschau ohne Datum wird abgewiesen", m2.rueckschauStarten({ dash: async () => ({}), seit: "" }).grund === "seit");
 
   console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Fälle bestanden.");
   process.exit(fehler ? 1 : 0);

@@ -263,6 +263,8 @@ sich jederzeit über die Monatsordner-Funktion bereitstellen, auch rückwirkend.
 |---|---|
 | 26.07.2026 | Erstfassung. Umstellung von Lexware Office auf eigene Ablage. Belegarchiv mit Laufnummer, Prüfsumme und Unveränderbarkeit eingeführt (Migrationen 0024, 0025). Monatsordner-Export eingeführt. Maschinelles Vorausfüllen der Belegwerte eingeführt. |
 | 26.07.2026 | **Inbetriebnahme, Nullstellung des Archivs** — siehe Abschnitt 8. |
+| 07.08.2026 | Eingangsweg **Postfach** eingeführt: Rechnungen mit PDF-Anhang werden täglich aus dem Google-Postfach in den Belegeingang übernommen (Etikett „Flowstate/verbucht" im Postfach, Prüfsumme in der Ablage). Gebucht wird weiterhin nur nach Bestätigung. |
+| 18.09.2026 | **Zweites Postfach, Rückschau, Sammelbuchung** — siehe Abschnitt 9. |
 
 ---
 
@@ -298,3 +300,40 @@ je erforderlich werden, ist er hier zu dokumentieren.
 **Vor der Umstellung:** Belege wurden bis zum 26.07.2026 zusätzlich an Lexware
 Office übertragen. Die dort abgelegten Belege bleiben dort erhalten und sind
 Bestandteil der Aufbewahrung für den betroffenen Zeitraum.
+
+---
+
+## 9. Postfach-Import: zwei Postfächer, Rückschau, Sammelbuchung (18.09.2026)
+
+**Postfächer.** Eingangsrechnungen kommen an zwei Adressen an:
+lukas.sehorz@svhconsult.de und jannikvomhofe@svhconsult.de. Beide Postfächer
+werden vom System durchsucht — das erste über den bestehenden Google-Zugang,
+jedes weitere über eine eigene, vom jeweiligen Kontoinhaber erteilte
+Freigabe (Token-Datei). Eine Mail-Adresse der eigenen Domänen
+(flowstate-ai.net, svhconsult.de) wird nie als Lieferant übernommen: Was von
+dort kommt, ist eine gestellte Rechnung, keine Ausgabe.
+
+**Was als Rechnung gilt.** Nur Mails mit PDF-Anhang, bei denen Betreff,
+Absender **oder Dateiname des PDFs** nach Rechnung klingen (Rechnung, Invoice,
+Receipt, Beleg, Quittung, Zahlungsbestätigung, Payment, Billing, Abrechnung).
+Alles andere bleibt im Postfach und wird bei Bedarf von Hand hochgeladen.
+
+**Rückschau.** Auf der Belege-Seite lässt sich der Import ab einem frei
+gewählten Tag anstoßen („Alle Rechnungen seit … holen"). Vorgabe ist der
+26.07.2026, der Beginn dieser Buchführung (Abschnitt 8); für frühere Zeiträume
+ist Lexware Office maßgeblich. Die Rückschau läuft im Hintergrund, verarbeitet
+je Postfach bis zu 500 Mails und markiert jede übernommene Mail im Postfach.
+Dieselbe Datei wird auch bei wiederholter Rückschau nur einmal abgelegt
+(Prüfsumme, Abschnitt 2.1).
+
+**Sammelbuchung.** Belege aus dem Eingang werden nach wie vor nur auf
+Bestätigung gebucht. Neu ist, dass die Bestätigung für mehrere Belege in einem
+Schritt erfolgen kann („sauber gelesene buchen"). Zugelassen sind dafür
+ausschließlich Ausgabebelege, bei denen das maschinelle Vorausfüllen Betrag,
+Datum, Lieferant und Kategorie ermittelt hat **und keinen Hinweis** hinterlassen
+hat (kein „schlecht lesbar", kein Verdacht auf Kundenrechnung). Alle anderen
+bleiben zur Einzelprüfung liegen. Trägt eine Rechnung ein noch nicht
+verstrichenes Zahlungsziel, wird sie als **offen** gebucht (ohne Zahltag, unter
+„Noch zu zahlen"); sonst gilt das Belegdatum als Zahltag wie bei jeder
+Ausgabe. Wer gebucht hat und wann, steht wie bisher an der Buchung.
+
