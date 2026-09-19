@@ -62,10 +62,11 @@ echo "== 4. Alten Stack anhalten und sichern (nichts wird geloescht)"
 if [ -f "$ALT/docker-compose.yml" ]; then
   (cd "$ALT" && docker compose stop >/dev/null 2>&1 || true)
   if ! ls /docker/hermes-agent-pocv-archiv-*.tgz >/dev/null 2>&1; then
-    tar -czf "/docker/hermes-agent-pocv-archiv-$STAMP.tgz" -C /docker hermes-agent-pocv \
-      --exclude='hermes-agent-pocv/data/vault' --exclude='hermes-agent-pocv/data/node_modules' \
-      --exclude='hermes-agent-pocv/data/lazy-packages' --exclude='hermes-agent-pocv/data/cache' \
-      --exclude='hermes-agent-pocv/data/image_cache' --exclude='hermes-agent-pocv/data/audio_cache'
+    # --exclude MUSS vor den Pfaden stehen (GNU tar wertet spaetere Optionen nicht mehr).
+    tar --exclude='hermes-agent-pocv/data/vault' --exclude='hermes-agent-pocv/data/node_modules' \
+        --exclude='hermes-agent-pocv/data/lazy-packages' --exclude='hermes-agent-pocv/data/cache' \
+        --exclude='hermes-agent-pocv/data/image_cache' --exclude='hermes-agent-pocv/data/audio_cache' \
+        -czf "/docker/hermes-agent-pocv-archiv-$STAMP.tgz" -C /docker hermes-agent-pocv
     echo "   Archiv: /docker/hermes-agent-pocv-archiv-$STAMP.tgz"
   fi
 fi
