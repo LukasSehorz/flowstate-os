@@ -6,7 +6,7 @@ Stand 19.09.2026. Gehört zu Stufe 1 des Plans im Vault: `projekte/2026-09-herme
 
 | Datei | Wohin auf dem Server | Zweck |
 |---|---|---|
-| `docker-compose.yml` | `/docker/hermes/` | Container, Vault-Mount, Netz `hermes_default`, kein Port nach außen |
+| `docker-compose.yml` | `/docker/hermes/` | Container, Vault-Mount als `/opt/data/wissen`, Netz `hermes_default`, kein Port nach außen |
 | `.env.beispiel` | `/docker/hermes/.env` (mit frischen Schlüsseln) | API-Server, Dashboard-Login, OS-Token |
 | `config.yaml` | `/docker/hermes/data/config.yaml` | Modelle über das ChatGPT-Pro-Abo, Hilfsaufgaben auf dem kleinen Modell, Freigaben, Sperren |
 | `SOUL.md` | `/docker/hermes/data/SOUL.md` | Rolle, Zonen aus REGELN.md, Antwortformat (JSON) |

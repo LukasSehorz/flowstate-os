@@ -88,7 +88,7 @@ approvals:
 
 terminal:
   backend: local
-  cwd: /opt/flowstate-vault
+  cwd: /opt/data/wissen
   timeout: 180
   # Diese Werte duerfen Werkzeuge sehen (alles andere wird abgeschirmt).
   env_passthrough:

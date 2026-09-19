@@ -1818,7 +1818,7 @@ app.get("/api/briefing", (req, res) => {
 
 app.post("/briefing/neu", async (req, res) => {
   // Stufe 2 (19.09.2026): ueber lib/hermes.js — Auftragsbuch statt stummem .catch.
-  const auftrag = `Erstelle mein Tages-Briefing und schreibe es als Markdown nach /opt/flowstate-vault/projekte/briefing-heute.md (überschreibe die Datei). ` +
+  const auftrag = `Erstelle mein Tages-Briefing und schreibe es als Markdown nach /opt/data/wissen/projekte/briefing-heute.md (überschreibe die Datei). ` +
     `Inhalt: (1) Meine heutigen Termine aus dem Google-Kalender. (2) Die wichtigsten ungelesenen Mails, kurz zusammengefasst — nutze deinen mail-triage-Skill. ` +
     `(3) Was aus deiner Sicht heute Priorität hat, mit kurzer Begründung. (4) Falls dir etwas auffällt, das ich übersehen könnte: ein Hinweis. ` +
     `Halte es kompakt, deutsch, in Markdown mit Überschriften.`;
@@ -1829,7 +1829,7 @@ app.post("/briefing/neu", async (req, res) => {
 // Mail-Triage-Skill per Knopf ausführen — Ergebnis landet als JSON im Vault
 app.post("/skill/mail-triage", async (req, res) => {
   const auftrag = `Führe den mail-triage-Skill aus. Schreibe zusätzlich zur Chat-Übersicht das Ergebnis als JSON nach ` +
-    `/opt/flowstate-vault/projekte/mail-triage-heute.json (überschreiben) im Format: ` +
+    `/opt/data/wissen/projekte/mail-triage-heute.json (überschreiben) im Format: ` +
     `{"koerbe":{"dringend":[{"von":"","betreff":"","zusammenfassung":""}],"wichtig":[...],"warten":<anzahl>,"werbung":<anzahl>}} ` +
     `— das Dashboard liest diese Datei. Entwürfe für Korb 1 wie gewohnt nur vorschlagen, nichts senden.`;
   require("./lib/hermes.js").feuern(auftrag, { quelle: "web", nutzerId: req.session.crm?.id || null, sessionId: "mail-triage" });
@@ -2115,7 +2115,7 @@ app.post("/leads/run", async (req, res) => {
   const hermes = require("./lib/hermes.js");
   if (!hermes.verfuegbar()) return res.redirect("/leads");
   const auftrag = `Starte den lead-gen-Skill mit diesen Parametern: Branche „${branche}", Region „${region}", Anzahl ${Number(anzahl) || 20}. ` +
-    `Schreibe das Endergebnis zusätzlich zum Google Sheet als JSON nach /opt/flowstate-vault/projekte/leads/JJJJ-MM-TT-branche-region.json ` +
+    `Schreibe das Endergebnis zusätzlich zum Google Sheet als JSON nach /opt/data/wissen/projekte/leads/JJJJ-MM-TT-branche-region.json ` +
     `im Format {"lauf":{"datum","branche","region","anzahl","sheet_url"},"leads":[{"name","telefon","website","adresse","score","argumente":[]}]} — das Dashboard liest diese Datei.`;
   // Laeuft im Hintergrund; Ergebnis und Fehler stehen im Auftragsbuch (/agenten).
   hermes.feuern(auftrag, { quelle: "web", nutzerId: req.session.crm?.id || null, sessionId: "leads" });

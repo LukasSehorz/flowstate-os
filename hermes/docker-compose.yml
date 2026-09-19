@@ -6,10 +6,11 @@
 # SOUL.md, auth.json (Abo-Login), memories/, skills/, cron/, state.db.
 #
 # Das Wissen (der Vault) liegt NICHT in ./data, sondern als eigener Git-Klon
-# unter /opt/flowstate-vault und wird in den Container gemountet. Warum
-# derselbe Pfad innen wie aussen: Hermes hat unter /opt/data/vault einen
-# eigenen Geheimnis-Speicher, der schreibgeschuetzt ist. Unser Wissen darf
-# da nicht drueberliegen.
+# unter /opt/flowstate-vault und wird als /opt/data/wissen in den Container
+# gemountet. Warum INNERHALB von /opt/data: Hermes' Dateiwerkzeuge schreiben
+# nur unter seinem Heimatordner (Test 19.09.: "ich darf nur unter opt data
+# schreiben"). Warum nicht /opt/data/vault: dort liegt Hermes' eigener,
+# schreibgeschuetzter Geheimnis-Speicher.
 #
 # Keine Ports nach aussen. Das Dashboard erreicht den API-Server ueber das
 # Docker-Netz (hermes:8642). Das Hermes-Dashboard (9119) ist nur auf dem
@@ -28,7 +29,7 @@ services:
       - TZ=Europe/Berlin
     volumes:
       - ./data:/opt/data
-      - /opt/flowstate-vault:/opt/flowstate-vault
+      - /opt/flowstate-vault:/opt/data/wissen
     ports:
       - "127.0.0.1:9119:9119"
     shm_size: 1g
