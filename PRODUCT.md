@@ -1,7 +1,7 @@
 # Flowstate OS
 
 ## Was es ist
-Das interne Betriebssystem der **Sehorz Lukas, vom Hofe Jannik GbR — Flowstate AI Solutions** (84405 Dorfen). Eine einzige Weboberfläche, über die die Agentur läuft: Cold-Calling-Liste, CRM mit Vertriebs-Pipeline, Buchhaltung, Content- und Marketing-Planung, Wissensarchiv — und eine Sprachassistentin, die man anspricht statt anzuklicken.
+Das interne Betriebssystem von **svh Consulting** (Sehorz Lukas, vom Hofe Jannik GbR, 84405 Dorfen; bis September 2026 Flowstate AI Solutions). Eine einzige Weboberfläche, über die die Agentur läuft: Cold-Calling-Liste, CRM mit Vertriebs-Pipeline, Buchhaltung, Content- und Marketing-Planung, Wissensarchiv — und eine Sprachassistentin, die man anspricht statt anzuklicken.
 
 Angeboten werden Webdesign, Performance Marketing sowie KI-Beratung und -Implementierung.
 
