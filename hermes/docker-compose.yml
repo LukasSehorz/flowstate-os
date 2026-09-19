@@ -1,0 +1,47 @@
+# Hermes Agent, neu aufgesetzt (Stufe 1 des Plans vom 19.09.2026).
+#
+# Lebt auf dem Server unter /docker/hermes. Das Einrichtungsskript
+# (einrichten.sh) kopiert diese Datei dorthin. Alles, was Hermes weiss und
+# kann, liegt in ./data (= /opt/data im Container): .env, config.yaml,
+# SOUL.md, auth.json (Abo-Login), memories/, skills/, cron/, state.db.
+#
+# Das Wissen (der Vault) liegt NICHT in ./data, sondern als eigener Git-Klon
+# unter /opt/flowstate-vault und wird in den Container gemountet. Warum
+# derselbe Pfad innen wie aussen: Hermes hat unter /opt/data/vault einen
+# eigenen Geheimnis-Speicher, der schreibgeschuetzt ist. Unser Wissen darf
+# da nicht drueberliegen.
+#
+# Keine Ports nach aussen. Das Dashboard erreicht den API-Server ueber das
+# Docker-Netz (hermes:8642). Das Hermes-Dashboard (9119) ist nur auf dem
+# Server-Loopback gebunden: ssh -L 9119:127.0.0.1:9119 flowstate
+services:
+  hermes:
+    # Nach dem ersten erfolgreichen Start auf den Digest pinnen, damit ein
+    # Update bewusst passiert (einrichten.sh schreibt den Digest ins Protokoll).
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes
+    restart: unless-stopped
+    command: gateway run
+    env_file: .env
+    environment:
+      - HERMES_DASHBOARD=1
+      - TZ=Europe/Berlin
+    volumes:
+      - ./data:/opt/data
+      - /opt/flowstate-vault:/opt/flowstate-vault
+    ports:
+      - "127.0.0.1:9119:9119"
+    shm_size: 1g
+    mem_limit: 4g
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8642/health', timeout=5).status == 200 else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+networks:
+  default:
+    # Fester Name, damit das Dashboard (docker-compose.yml im Repo) sich
+    # unter diesem Namen einhaengen kann. Ersetzt hermes-agent-pocv_default.
+    name: hermes_default

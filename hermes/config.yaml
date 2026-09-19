@@ -1,0 +1,111 @@
+# Hermes-Konfiguration fuer das Flowstate OS (Stufe 1.5 des Plans).
+# Liegt auf dem Server unter /docker/hermes/data/config.yaml.
+#
+# Grundsaetze:
+#   - Modelle ueber das ChatGPT-Pro-Abo (Provider openai-codex), keine API-Kosten.
+#   - Arbeitsmodell GPT-6 Astra, Hilfsaufgaben und Unteragenten auf dem
+#     kleinen Modell (F13: beim Login pruefen, welches der Codex-Login anbietet).
+#   - Nichts nach aussen ohne Menschen: unattended/cron -> deny.
+#   - Der Container ist die Sandbox; das Arbeitsverzeichnis ist der Vault.
+
+model:
+  provider: openai-codex
+  default: gpt-6-astra
+
+agent:
+  reasoning_effort: medium
+
+# Springt ein, wenn Astra nicht antwortet oder das Kontingent voll ist.
+fallback_providers:
+  - provider: openai-codex
+    model: gpt-5.6-sol
+
+# Hilfsaufgaben laufen automatisch auf dem kleinen Modell.
+auxiliary:
+  compression:
+    provider: openai-codex
+    model: gpt-5.6-luna
+  approval:
+    provider: openai-codex
+    model: gpt-5.6-luna
+  title_generation:
+    provider: openai-codex
+    model: gpt-5.6-luna
+  curator:
+    provider: openai-codex
+    model: gpt-5.6-luna
+  session_search:
+    provider: openai-codex
+    model: gpt-5.6-luna
+
+# Unteragenten (Teilaufgaben eines Auftrags) ebenfalls auf dem kleinen Modell.
+delegation:
+  provider: openai-codex
+  model: gpt-5.6-luna
+
+# Astra kennt die installierte Version womoeglich noch nicht (F2).
+model_overrides:
+  gpt-6-astra:
+    context_length: 272000
+
+memory:
+  memory_enabled: true
+  user_profile_enabled: true
+  memory_char_limit: 6000
+  user_char_limit: 4000
+
+skills:
+  # Neue oder geaenderte Skills werden erst nach Freigabe wirksam
+  # (/skills approve). Nach vier Wochen ohne Aerger auf false stellen (5.1).
+  write_approval: true
+  guard_agent_created: true
+
+curator:
+  enabled: true
+  interval_hours: 168
+  min_idle_hours: 2
+  stale_after_days: 14
+  archive_after_days: 30
+  consolidate: false
+
+approvals:
+  mode: smart
+  timeout: 300
+  cron_mode: deny
+  single_query_mode: deny
+  unattended_mode: deny
+  mcp_reload_confirm: true
+  destructive_slash_confirm: true
+  # Sperren, die vor allem anderen gelten, auch vor /yolo.
+  deny:
+    - "rm -rf *"
+    - "git push --force*"
+    - "*curl*|*sh*"
+    - "*wget*|*sh*"
+    - "docker *"
+    - "ssh *"
+    - "sudo *"
+
+terminal:
+  backend: local
+  cwd: /opt/flowstate-vault
+  timeout: 180
+  # Diese Werte duerfen Werkzeuge sehen (alles andere wird abgeschirmt).
+  env_passthrough:
+    - FLOWSTATE_OS_URL
+    - FLOWSTATE_OS_TOKEN
+    - MELDE_SECRET
+
+security:
+  # Das Flowstate OS liegt im Docker-Netz (private Adresse). Ohne diesen
+  # Schalter blockt der SSRF-Schutz jeden Aufruf des Skills flowstate-os-api.
+  allow_private_urls: true
+  allow_lazy_installs: false
+
+gateway:
+  enable: true
+  # Keine Chat-Plattformen: der Chat mit Hermes laeuft ueber das OS
+  # (Web und OS-Telegram-Bot). Der API-Server kommt aus .env.
+  platforms: {}
+
+timezone: Europe/Berlin
