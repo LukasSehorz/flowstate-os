@@ -157,10 +157,6 @@ services:
       # changes" — git weigerte sich, eine lokal geaenderte Datei zu
       # ueberschreiben. Eine Konfiguration, die es nur auf einer Maschine
       # gibt, ist beim naechsten Neuaufsetzen weg.
-      - TELEFON_SECRET=${TELEFON_SECRET}
-      - ELEVENLABS_AGENT_ID=${ELEVENLABS_AGENT_ID}
-      - ELEVENLABS_TELEFON_ID=${ELEVENLABS_TELEFON_ID}
-      - TELEFON_ZIEL=${TELEFON_ZIEL}
       # Telegram-Bot (eigener Alexandra-Bot). Ohne Token schlummert er.
       # SELF_URL: das Dashboard ruft seine eigene Schnellspur intern auf.
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
@@ -177,12 +173,8 @@ services:
       # ElevenLabs — Stimme fuer /sprache. Der Schluessel steht in .env und
       # muss hier durchgereicht werden: Compose gibt nur weiter, was gelistet ist.
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
-      - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}
-      - ELEVENLABS_MODEL=${ELEVENLABS_MODEL:-eleven_flash_v2_5}
       # Was Alexandra sagt, wenn sie geweckt wird. Wird einmal erzeugt und dann
       # im Browser wiederverwendet — kurz halten, man hoert es bei jedem Wecken.
-      - BEGRUESSUNG=${BEGRUESSUNG:-}
-      - WAKE_WORD=${WAKE_WORD:-alexandra}
       # CRM-Datenbank (Supabase, Region Frankfurt) — RLS greift in der Datenbank
       - DATABASE_URL=${DATABASE_URL}
       # Buchhaltung (Lexware Office / lexoffice Public API) — offene Rechnungen.

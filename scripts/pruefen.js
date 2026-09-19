@@ -68,7 +68,8 @@ for (const d of geaendert.filter((x) => x.endsWith(".json") && !x.includes("node
 // Erzaehlspur selbst entfallen (Schritt A1) — sie prueften Verhalten, das es
 // nicht mehr gibt.
 const TESTS = [
-  "test-navigation", "test-prompt", "test-sprache", "test-kontakte", "test-gespraech",
+  "test-navigation", "test-prompt", "test-sprache", "test-kontakte",
+  // test-gespraech ist am 19.09.2026 mit dem Sprachbereich (public/sprache.js) entfallen.
   // test-kalender prueft das LESEN der gws-cli-Antwort, test-kalender-seite die
   // Rechnerei der Kalenderseite (Monatsraster, Googles ganztaegiges Ende).
   "test-kalender", "test-kalender-seite",

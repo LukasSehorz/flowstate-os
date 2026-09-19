@@ -125,7 +125,7 @@ const BEREICH_JE_PFAD = {
   crm: "crm", leads: "leads",
   buchhaltung: "buchhaltung", angebote: "angebote",
   marketing: "marketing", content: "content", projekte: "projekte",
-  chat: "chat", sprache: "sprache", whatsapp: "chat",
+  chat: "chat", whatsapp: "chat",
   wissen: "wissen", agenten: "agenten", einstellungen: "einstellungen",
 };
 // Immer offen: Anmeldung, Abmeldung und was der Browser fuer die Seite braucht.
@@ -420,25 +420,7 @@ app.post("/api/melde", (req, res) => {
     .then((r) => res.json(r)).catch((e) => res.json({ ok: false, grund: String(e.message).slice(0, 200) }));
 });
 
-// ALEXANDRA AM TELEFON — und zwar VOR dem Torwaechter (07.08.).
-//
-// Die Reihenfolge ist hier kein Geschmack, sondern Bedingung: ElevenLabs bringt
-// keine Sitzung mit, sondern einen eigenen Ausweis im Kopfzeilenfeld. Stuende
-// diese Zeile weiter unten, faengt der Torwaechter darunter den Aufruf ab und
-// antwortet mit einer Umleitung zur Anmeldeseite — ElevenLabs bekaeme statt
-// Alexandras Antwort eine HTML-Seite, und in der Leitung waere Stille.
-//
-// Genau so ist es beim ersten Versuch von aussen passiert. Die Testattrappe
-// konnte es nicht sehen: Sie kennt die Reihenfolge der Middleware nicht. Nur
-// ein Aufruf gegen den laufenden Server zeigt es (scripts/test-telefon-live.js).
-//
-// Der Endpunkt bleibt trotzdem geschuetzt — er prueft sein eigenes Geheimnis,
-// bevor er irgendetwas weiterreicht.
-try {
-  const telefon = require("./lib/telefon.js");
-  telefon.routen(app);
-  telefon.anmelden().catch((e) => console.error("Telefon-Anmeldung:", e.message));
-} catch (e) { console.error("Telefon-Modul:", e.message); }
+// Der Telefon-Agent (ElevenLabs) ist am 19.09.2026 mit dem Sprachbereich entfernt worden.
 
 app.use((req, res, next) => {
   if (!PASSWORD) return res.status(500).send("DASHBOARD_PASSWORD ist nicht gesetzt.");
@@ -633,40 +615,7 @@ try {
     console.log(`Zweites Gehirn: Telegram-Verdichtung alle ${Math.round(tgTakt / 3600000)} Std.`);
   }
 
-  // SPRACH-VERDICHTUNG (07.08.2026): dasselbe fuers GESPROCHENE Gespraech.
-  //
-  // Bis heute lief die Sprachspur an allem vorbei — das Sprachlog war reine
-  // Technik-Diagnose und wurde von der Chronik nie gelesen. Darum begann jedes
-  // Gespraech bei null: "Was habe ich dich gerade gefragt?" konnte sie nicht
-  // beantworten, sobald drei Wortwechsel dazwischen lagen.
-  //
-  // Zwei Ergebnisse je Lauf: Firmenwissen nach eingang/erkenntnisse/ (wie
-  // Telegram) UND eine fortgeschriebene Liste "so arbeitet Lukas", die bei
-  // jeder Frage im STAND mitgeht. Letzteres ist der Lernteil.
-  //
-  // Takt bewusst 6 Stunden statt naechtlich: Was am Vormittag geklaert wurde,
-  // soll am Nachmittag schon gelten, nicht erst morgen.
-  const zuflussSprache = require("./lib/zufluss-sprache.js");
-  const spTakt = Number(process.env.SPRACHE_VERDICHTUNG_MS || 6 * 60 * 60 * 1000);
-  const spLaufen = () =>
-    zuflussSprache.verdichte()
-      .then((r) => {
-        if (r.ok && (r.neu || r.gelernt)) {
-          console.log(`Sprach-Verdichtung: ${r.neu} Erkenntnis(se), ${r.gelernt} zur Zusammenarbeit gelernt.`);
-        } else if (!r.ok) console.error("Sprach-Verdichtung:", r.grund);
-      })
-      .catch((e) => console.error("Sprach-Verdichtung:", e.message));
-  if (vault.schreibbar("eingang")) {
-    setTimeout(spLaufen, 3 * 60 * 1000).unref();      // einmal kurz nach dem Start
-    setInterval(spLaufen, spTakt).unref();
-    console.log(`Zweites Gehirn: Sprach-Verdichtung alle ${Math.round(spTakt / 3600000)} Std.`);
-  }
-
-  // Von Hand ausloesen (Test/Vorschau).
-  app.post("/api/gehirn/sprache-verdichten", async (req, res) => {
-    try { res.json(await zuflussSprache.verdichte({ tage: Number(req.body?.tage) || 2 })); }
-    catch (e) { res.status(500).json({ ok: false, grund: e.message }); }
-  });
+  // Die Sprach-Verdichtung (zufluss-sprache.js) laeuft seit 19.09.2026 nicht mehr: kein Sprachbereich, kein Gespraechs-Zufluss.
 
   // Von Hand ausloesen (Test / spaeter Dashboard-Kachel).
   app.post("/api/gehirn/telegram", async (req, res) => {
@@ -1644,7 +1593,6 @@ app.get("/", async (req, res) => {
     knopfAdmin ? `<form method="post" action="/briefing/neu"><button class="hud-modul tat" type="submit">${ICON.sonne}Briefing erstellen</button></form>` : "",
     knopfAdmin ? `<form method="post" action="/skill/mail-triage"><button class="hud-modul tat" type="submit">${ZT.post}Mail-Triage starten</button></form>` : "",
     darf("chat") ? modul("/chat", ICON.funke, AGENT) : "",
-    darf("sprache") ? modul("/sprache", ICON.megafon, "Sprache") : "",
     darf("leads") ? modul("/leads", ICON.leads, "Lead-Maschine") : "",
     darf("crm") ? modul("/crm", ICON.kunden, "Kunden &amp; CRM") : "",
     darf("todos") ? modul("/todos", ICON.todo, "To-Dos") : "",
