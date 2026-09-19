@@ -9,13 +9,17 @@
 # gehoeren alle Dateien wieder dem Container-Nutzer 10000, sonst kann Hermes
 # nicht schreiben, was root beim Pull angelegt hat.
 #
-# Warum ein neues Skript: Der alte Sync stand seit dem 07.08.2026 still
-# (letzter auto-sync-Commit). Der alte Crontab-Eintrag muss weg (crontab -l).
+# Warum ein neues Skript (Befund 19.09.2026): Der alte Sync hing an einer
+# HTTPS-Adresse ohne Zugangsdaten. Er committete brav alle fuenf Minuten,
+# konnte aber seit dem 07.08. nie pushen (2.214 lokale Commits). Jetzt geht
+# es ueber SSH mit einem eigenen Deploy-Key (Schreibrecht) fuer das Repo
+# flowstate-vault: /root/.ssh/flowstate_vault.
 set -e
 VAULT=/opt/flowstate-vault
 LOG=/var/log/flowstate-vault-sync.log
+KEY=/root/.ssh/flowstate_vault
 cd "$VAULT"
-export GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=15"
+export GIT_SSH_COMMAND="ssh -i $KEY -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15"
 git config --global --add safe.directory "$VAULT" >/dev/null 2>&1 || true
 
 git add -A
@@ -25,7 +29,7 @@ if ! git diff --cached --quiet; then
 fi
 if ! git pull -q --rebase --autostash origin main; then
   git rebase --abort >/dev/null 2>&1 || true
-  echo "$(date '+%F %T') pull fehlgeschlagen, naechster Lauf versucht es erneut" >> "$LOG"
+  echo "$(date '+%F %T') pull fehlgeschlagen (Deploy-Key auf GitHub eingetragen?)" >> "$LOG"
   exit 1
 fi
 git push -q origin main
