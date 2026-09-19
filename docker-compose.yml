@@ -69,7 +69,11 @@ services:
       # Schnellspur (Ebene 1/2) — direktes Modell ohne Agent-Schleife.
       # E1-Entscheidung 21.07.2026: Anthropic Haiku 4.5. Ohne Schluessel
       # faellt alles auf Hermes zurueck (langsamer, aber nie kaputt).
+      # anthropic | hermes (Stufe 3.1: Kurz- und Denkspur ueber Hermes, kein Anthropic mehr)
       - SCHNELL_PROVIDER=${SCHNELL_PROVIDER:-}
+      - SCHNELL_MODEL_HERMES=${SCHNELL_MODEL_HERMES:-gpt-5.6-luna}
+      - DENKER_MODEL_HERMES=${DENKER_MODEL_HERMES:-gpt-5.6-terra}
+      - HERMES_PROVIDER=${HERMES_PROVIDER:-openai-codex}
       - SCHNELL_API_KEY=${SCHNELL_API_KEY:-}
       - SCHNELL_MODEL=${SCHNELL_MODEL:-claude-haiku-4-5}
       - SCHNELL_CHAT_URL=${SCHNELL_CHAT_URL:-}

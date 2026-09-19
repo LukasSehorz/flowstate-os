@@ -44,5 +44,16 @@ pruefe(antwortText({ zusammenfassung: "OK", ergebnis: "OK" }, "") === "OK", "gle
 pruefe(antwortText({ zusammenfassung: "Daten", ergebnis: { leads: 3 } }, "").includes('"leads": 3'), "Objekt-Ergebnis wird lesbar ausgegeben");
 pruefe(antwortText(null, "  roher Text  ") === "roher Text", "ohne Block bleibt der rohe Text");
 
+
+// 4. Klartext aus einem Kurzaufruf (Stufe 3.1): JSON-Block -> ergebnis, sonst roh
+{
+  const { klartext } = require("../lib/hermes.js");
+  const p = pruefe;
+  p(klartext("Heute stehen zwei Termine an.") === "Heute stehen zwei Termine an.", "Klartext bleibt Klartext");
+  p(klartext('{"zusammenfassung":"Satz formuliert.","ergebnis":"Drei neue Leads, zwei Termine.","freigabe_noetig":[]}') === "Drei neue Leads, zwei Termine.", "JSON-Block liefert das Ergebnis");
+  p(klartext('{"zusammenfassung":"OK","ergebnis":"","freigabe_noetig":[]}') === "OK", "leeres Ergebnis faellt auf die Zusammenfassung zurueck");
+  p(klartext("  ") === "", "leer bleibt leer");
+}
+
 if (fehler) { console.log(`\n${fehler} Prüfung(en) fehlgeschlagen.`); process.exit(1); }
 console.log("\nAlle Prüfungen bestanden.");
