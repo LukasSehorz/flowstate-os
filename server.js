@@ -333,8 +333,14 @@ const DIENST_KONTO = process.env.DIENST_KONTO || "";
 app.post("/intern/dienst-anmelden", async (req, res) => {
   const her = String(req.socket.remoteAddress || "");
   const drinnen = her === "127.0.0.1" || her === "::1" || her === "::ffff:127.0.0.1";
-  if (!drinnen) return res.status(403).json({ ok: false, hint: "nur intern" });
-  if (!PASSWORD || req.body?.passwort !== PASSWORD) return res.status(403).json({ ok: false, hint: "falsches Passwort" });
+  // DIENST-TOKEN (Stufe 2, 19.09.2026): Hermes laeuft in einem eigenen Container
+  // und kommt darum nicht von 127.0.0.1. Er weist sich mit der Kopfzeile
+  // x-dienst-token aus (DIENST_TOKEN = FLOWSTATE_OS_TOKEN in /docker/hermes/.env).
+  // Ohne gesetzten DIENST_TOKEN gibt es diesen Weg nicht.
+  const DIENST_TOKEN = process.env.DIENST_TOKEN || "";
+  const perToken = Boolean(DIENST_TOKEN) && String(req.get("x-dienst-token") || "") === DIENST_TOKEN;
+  if (!drinnen && !perToken) return res.status(403).json({ ok: false, hint: "nur intern" });
+  if (!perToken && (!PASSWORD || req.body?.passwort !== PASSWORD)) return res.status(403).json({ ok: false, hint: "falsches Passwort" });
   try {
     const { rows } = await require("./lib/crm.js").system(
       `select p.id, u.email, p.name, p.rolle, p.module
@@ -1811,31 +1817,22 @@ app.get("/api/briefing", (req, res) => {
 });
 
 app.post("/briefing/neu", async (req, res) => {
-  const url = process.env.HERMES_CHAT_URL;
-  if (url) {
-    const auftrag = `Erstelle mein Tages-Briefing und schreibe es als Markdown nach /opt/data/vault/projekte/briefing-heute.md (überschreibe die Datei). ` +
-      `Inhalt: (1) Meine heutigen Termine aus dem Google-Kalender. (2) Die wichtigsten ungelesenen Mails, kurz zusammengefasst — nutze deinen mail-triage-Skill. ` +
-      `(3) Was aus deiner Sicht heute Priorität hat, mit kurzer Begründung. (4) Falls dir etwas auffällt, das ich übersehen könnte: ein Hinweis. ` +
-      `Halte es kompakt, deutsch, in Markdown mit Überschriften. Bestätige mir kurz, wenn die Datei geschrieben ist.`;
-    const headers = { "Content-Type": "application/json" };
-    if (process.env.HERMES_API_KEY) headers["Authorization"] = "Bearer " + process.env.HERMES_API_KEY;
-    fetch(url, { method: "POST", headers, body: JSON.stringify({ model: process.env.HERMES_MODEL || "hermes-agent", messages: [{ role: "user", content: auftrag }], stream: false }), signal: AbortSignal.timeout(170000) }).catch(() => {});
-  }
+  // Stufe 2 (19.09.2026): ueber lib/hermes.js — Auftragsbuch statt stummem .catch.
+  const auftrag = `Erstelle mein Tages-Briefing und schreibe es als Markdown nach /opt/flowstate-vault/projekte/briefing-heute.md (überschreibe die Datei). ` +
+    `Inhalt: (1) Meine heutigen Termine aus dem Google-Kalender. (2) Die wichtigsten ungelesenen Mails, kurz zusammengefasst — nutze deinen mail-triage-Skill. ` +
+    `(3) Was aus deiner Sicht heute Priorität hat, mit kurzer Begründung. (4) Falls dir etwas auffällt, das ich übersehen könnte: ein Hinweis. ` +
+    `Halte es kompakt, deutsch, in Markdown mit Überschriften.`;
+  require("./lib/hermes.js").feuern(auftrag, { quelle: "web", nutzerId: req.session.crm?.id || null, sessionId: "briefing" });
   res.redirect("/?gestartet=Briefing");
 });
 
 // Mail-Triage-Skill per Knopf ausführen — Ergebnis landet als JSON im Vault
 app.post("/skill/mail-triage", async (req, res) => {
-  const url = process.env.HERMES_CHAT_URL;
-  if (url) {
-    const auftrag = `Führe den mail-triage-Skill aus. Schreibe zusätzlich zur Chat-Übersicht das Ergebnis als JSON nach ` +
-      `/opt/data/vault/projekte/mail-triage-heute.json (überschreiben) im Format: ` +
-      `{"koerbe":{"dringend":[{"von":"","betreff":"","zusammenfassung":""}],"wichtig":[...],"warten":<anzahl>,"werbung":<anzahl>}} ` +
-      `— das Dashboard liest diese Datei. Entwürfe für Korb 1 wie gewohnt nur im Chat vorschlagen, nichts senden.`;
-    const headers = { "Content-Type": "application/json" };
-    if (process.env.HERMES_API_KEY) headers["Authorization"] = "Bearer " + process.env.HERMES_API_KEY;
-    fetch(url, { method: "POST", headers, body: JSON.stringify({ model: process.env.HERMES_MODEL || "hermes-agent", messages: [{ role: "user", content: auftrag }], stream: false }), signal: AbortSignal.timeout(170000) }).catch(() => {});
-  }
+  const auftrag = `Führe den mail-triage-Skill aus. Schreibe zusätzlich zur Chat-Übersicht das Ergebnis als JSON nach ` +
+    `/opt/flowstate-vault/projekte/mail-triage-heute.json (überschreiben) im Format: ` +
+    `{"koerbe":{"dringend":[{"von":"","betreff":"","zusammenfassung":""}],"wichtig":[...],"warten":<anzahl>,"werbung":<anzahl>}} ` +
+    `— das Dashboard liest diese Datei. Entwürfe für Korb 1 wie gewohnt nur vorschlagen, nichts senden.`;
+  require("./lib/hermes.js").feuern(auftrag, { quelle: "web", nutzerId: req.session.crm?.id || null, sessionId: "mail-triage" });
   res.redirect("/?gestartet=Mail-Triage");
 });
 
@@ -2115,22 +2112,13 @@ app.get("/leads", (req, res) => {
 // Lauf starten -> Auftrag an Alexandra (Hermes-API); sie arbeitet im Hintergrund weiter
 app.post("/leads/run", async (req, res) => {
   const { branche, region, anzahl } = req.body;
-  const url = process.env.HERMES_CHAT_URL;
-  if (!url) return res.redirect("/leads");
-  const auftrag = `Starte den lead-gen-Skill als Hintergrund-Lauf mit diesen Parametern: Branche „${branche}", Region „${region}", Anzahl ${Number(anzahl) || 20}. ` +
-    `Wichtig: (1) Bestätige mir SOFORT kurz den Start und arbeite dann im Hintergrund weiter (delegierte Subagenten). ` +
-    `(2) Schreibe das Endergebnis zusätzlich zum Google Sheet als JSON nach /opt/data/vault/projekte/leads/JJJJ-MM-TT-branche-region.json ` +
+  const hermes = require("./lib/hermes.js");
+  if (!hermes.verfuegbar()) return res.redirect("/leads");
+  const auftrag = `Starte den lead-gen-Skill mit diesen Parametern: Branche „${branche}", Region „${region}", Anzahl ${Number(anzahl) || 20}. ` +
+    `Schreibe das Endergebnis zusätzlich zum Google Sheet als JSON nach /opt/flowstate-vault/projekte/leads/JJJJ-MM-TT-branche-region.json ` +
     `im Format {"lauf":{"datum","branche","region","anzahl","sheet_url"},"leads":[{"name","telefon","website","adresse","score","argumente":[]}]} — das Dashboard liest diese Datei.`;
-  try {
-    const headers = { "Content-Type": "application/json" };
-    if (process.env.HERMES_API_KEY) headers["Authorization"] = "Bearer " + process.env.HERMES_API_KEY;
-    // Nur kurz auf die Startbestätigung warten — der eigentliche Lauf dauert Minuten
-    await fetch(url, {
-      method: "POST", headers,
-      body: JSON.stringify({ model: process.env.HERMES_MODEL || "hermes-agent", messages: [{ role: "user", content: auftrag }], stream: false }),
-      signal: AbortSignal.timeout(90000),
-    }).catch(() => {});
-  } catch {}
+  // Laeuft im Hintergrund; Ergebnis und Fehler stehen im Auftragsbuch (/agenten).
+  hermes.feuern(auftrag, { quelle: "web", nutzerId: req.session.crm?.id || null, sessionId: "leads" });
   res.redirect("/leads?started=1");
 });
 
@@ -2164,6 +2152,7 @@ app.get("/agenten", (req, res) => {
       <div class="tile" data-tile2="cron"><span class="tile-num">–</span><span class="tile-label">Routinen</span></div>
     </div>
     <div class="grid">
+      <div class="card wide"><h2>📒 Auftragsbuch <span class="muted small">was ${AGENT} zuletzt bekommen hat und was daraus wurde</span></h2><div class="card-body" data-load="/api/agent/auftraege">Lade…</div></div>
       <div class="card"><h2>⚙️ ${AGENT}s Zustand</h2><div class="card-body" data-load="/api/agent/status">Lade…</div></div>
       <div class="card"><h2>⏰ Routinen (Cron)</h2><div class="card-body" data-load="/api/agent/cron">Lade…</div></div>
       <div class="card wide"><h2>🧩 Eigene Skills <span class="muted small">im Vault — von uns und ihr selbst gebaut</span></h2><div class="card-body" data-load="/api/agent/skills">Lade…</div></div>
@@ -2186,12 +2175,11 @@ app.get("/agenten", (req, res) => {
 app.get("/api/agent/status", async (req, res) => {
   const out = { ok: true, online: false, beschaeftigt: false };
   try {
-    const base = (process.env.HERMES_CHAT_URL || "").replace(/\/v1\/.*$/, "");
-    if (base) {
-      const r = await fetch(base + "/health", { signal: AbortSignal.timeout(4000) });
-      out.online = r.ok;
-      try { const h = await r.json(); out.details = h; } catch {}
-    }
+    const hermes = require("./lib/hermes.js");
+    const g = await hermes.gesund();
+    out.online = g.online; if (g.details) out.details = g.details;
+    out.laufend = (await hermes.laufende()).length;
+    out.beschaeftigt = out.laufend > 0;
   } catch {}
   // Modell + Skill-Zahl aus der Hermes-Konfiguration lesen (nur lesend)
   try {
@@ -2205,12 +2193,21 @@ app.get("/api/agent/status", async (req, res) => {
 
 app.get("/api/agent/cron", (req, res) => {
   try {
-    const p = "/hermes-data/cron.json";
-    if (!fs.existsSync(p)) return res.json({ ok: true, jobs: [], hint: "Noch keine Routinen eingerichtet." });
+    // Hermes v0.21 legt die Routinen unter cron/jobs.json ab (vorher cron.json).
+    const p = ["/hermes-data/cron/jobs.json", "/hermes-data/cron.json"].find((x) => fs.existsSync(x));
+    if (!p) return res.json({ ok: true, jobs: [], hint: "Noch keine Routinen eingerichtet." });
     const d = JSON.parse(fs.readFileSync(p, "utf-8"));
     const jobs = Array.isArray(d) ? d : d.jobs || [];
     res.json({ ok: true, jobs });
   } catch (e) { res.json({ ok: true, jobs: [], hint: "Routinen nicht lesbar." }); }
+});
+
+// Das Auftragsbuch (Stufe 2, 19.09.2026): die letzten Auftraege an Hermes mit Status.
+app.get("/api/agent/auftraege", async (req, res) => {
+  try {
+    const auftraege = await require("./lib/hermes.js").liste(Number(req.query.n) || 30);
+    res.json({ ok: true, auftraege });
+  } catch (e) { res.json({ ok: false, hint: "Auftragsbuch nicht lesbar." }); }
 });
 
 app.get("/api/agent/skills", (req, res) => {
@@ -2565,6 +2562,13 @@ function layout(title, active, content, req) {
         }).join("") + "</div>" +
         (d.heute_erledigt ? "<p class='caption zt-fuss'>" + d.heute_erledigt + " heute schon erledigt</p>" : "");
       }
+      if (src.includes("agent/auftraege")) {
+        if (!d.auftraege || !d.auftraege.length) return "<p class='muted'>Noch keine Aufträge.</p>";
+        var lampe = function (st) { return st === "fertig" ? "🟢" : (st === "laeuft" || st === "neu") ? "🟠" : st === "freigabe" ? "🟡" : "🔴"; };
+        var wann = function (t) { try { return new Date(t).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; } };
+        return "<table class='tbl'><thead><tr><th>#</th><th>Wann</th><th>Quelle</th><th>Auftrag</th><th>Status</th><th>Ergebnis</th></tr></thead><tbody>" +
+          d.auftraege.map(function (a) { return "<tr><td class='muted small'>" + a.id + "</td><td class='muted small'>" + wann(a.gestartet) + "</td><td class='small'>" + hesc(a.quelle) + "</td><td class='small'>" + hesc(a.text) + "</td><td>" + lampe(a.status) + " " + hesc(a.status) + (a.dauer_ms ? " <span class='muted small'>" + Math.round(a.dauer_ms / 1000) + " s</span>" : "") + "</td><td class='small'>" + hesc(a.antwort || "") + "</td></tr>"; }).join("") + "</tbody></table>";
+      }
       if (src.includes("agent/status")) {
         return "<div class='row'><span>Erreichbar</span><span>" + (d.online ? "🟢 online" : "⚪ offline") + "</span></div>" +
                (d.modell ? "<div class='row'><span>Modell</span><span>" + d.modell + "</span></div>" : "") +
@@ -2574,7 +2578,7 @@ function layout(title, active, content, req) {
       }
       if (src.includes("agent/cron")) {
         if (!d.jobs || !d.jobs.length) return "<p class='muted'>" + (d.hint || "Noch keine Routinen.") + "</p><p class='muted small'>Später hier: Morgen-Briefing 7:30, Wochenreport Mo 9:00 …</p>";
-        return d.jobs.map(j => "<div class='row'><span>" + String(j.name || j.prompt || "Routine").slice(0,60) + "</span><span class='muted small'>" + (j.schedule || j.cron || "") + "</span></div>").join("");
+        return d.jobs.map(j => "<div class='row'><span>" + String(j.name || j.prompt || "Routine").slice(0,60) + "</span><span class='muted small'>" + ((j.schedule && j.schedule.display) || (typeof j.schedule === "string" ? j.schedule : "") || j.cron || "") + (j.enabled === false ? " · aus" : "") + "</span></div>").join("");
       }
       if (src.includes("agent/skills")) {
         if (!d.skills || !d.skills.length) return "<p class='muted'>Keine eigenen Skills gefunden.</p>";

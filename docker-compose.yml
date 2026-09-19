@@ -13,6 +13,8 @@ services:
       # in der .env, kam aber nie im Container an, und jeder Lauf endete in
       # "Dienstanmelden: 403".
       - DIENST_KONTO=${DIENST_KONTO}
+      # Hermes meldet sich damit als Dienstkonto an (Stufe 2) — = FLOWSTATE_OS_TOKEN in /docker/hermes/.env
+      - DIENST_TOKEN=${DIENST_TOKEN:-}
       # ZEITZONE DES CONTAINERS (14.09.2026).
       #
       # node:22-bookworm-slim laeuft ohne diese Zeile auf UTC. Die Datenbank
@@ -61,13 +63,12 @@ services:
       # Hermes API-Server (OpenAI-kompatibel) — Chat mit Alexandra im Dashboard
       - HERMES_CHAT_URL=${HERMES_CHAT_URL}
       - HERMES_API_KEY=${HERMES_API_KEY}
+      # Basis der Runs-API (lib/hermes.js); ohne Angabe aus HERMES_CHAT_URL abgeleitet
+      - HERMES_URL=${HERMES_URL:-}
       - HERMES_MODEL=hermes-agent
       # Streaming von Hermes: AUS (Messung 24.07.). Hermes denkt stumm und
       # liefert die fertige Antwort am Stueck — es gibt keinen Fortschritt zu
       # erzaehlen, und laenger denkende Aufgaben wurden von der Probezeit
-      # abgebrochen und doppelt ausgefuehrt. Auf "an" setzen, sobald Hermes
-      # echte Zwischenstaende liefert.
-      - HERMES_STREAM=${HERMES_STREAM:-aus}
       # Schnellspur (Ebene 1/2) — direktes Modell ohne Agent-Schleife.
       # E1-Entscheidung 21.07.2026: Anthropic Haiku 4.5. Ohne Schluessel
       # faellt alles auf Hermes zurueck (langsamer, aber nie kaputt).
@@ -196,7 +197,7 @@ services:
       - META_API_VERSION=${META_API_VERSION:-v21.0}
     networks:
       # Ins Hermes-Netz haengen -> direkte Container-zu-Container-Verbindung,
-      # Hermes ist dann als "hermes-agent-pocv-hermes-agent-1" erreichbar
+      # Hermes ist dann als "hermes" erreichbar (Stack /docker/hermes, seit 19.09.2026)
       - default
       - hermes
     volumes:
@@ -204,13 +205,13 @@ services:
       # Stimmen und Dokumente fuer die Regie-Seite. Nur lesend — die Seite
       # liefert aus, sie schreibt nicht.
       - /opt/flowstate-dreh:/dreh:ro
-      - /docker/hermes-agent-pocv/data/vault:/vault:ro
+      - /opt/flowstate-vault:/vault:ro
       # Zweites Gehirn: NUR diese Unterordner sind beschreibbar. Der Vault-Sync
       # (Host-Cron) committet + pusht sie nach Obsidian. Rest bleibt :ro, damit
       # der Dashboard-Code REGELN.md/Skills nicht anfassen kann.
       #   chronik/ = Aggregatzahlen (keine PII) · eingang/ = Kanal-Inhalte (Mail)
-      - /docker/hermes-agent-pocv/data/vault/chronik:/vault/chronik:rw
-      - /docker/hermes-agent-pocv/data/vault/eingang:/vault/eingang:rw
+      - /opt/flowstate-vault/chronik:/vault/chronik:rw
+      - /opt/flowstate-vault/eingang:/vault/eingang:rw
       - dashboard-data:/data
       # Gemeinsam mit der WhatsApp-Bruecke: QR-Bild + eingehende Nachrichten.
       - wa-state:/wa
@@ -219,12 +220,13 @@ services:
       # geschrieben) werden. Read-only liess jeden Mailversand scheitern,
       # sobald der Token abgelaufen war ("Read-only file system: token.json").
       # Dieselbe Datei nutzt Hermes ebenfalls rw — der Token ist geteilt.
-      - /docker/hermes-agent-pocv/data/.config:/gws-home/.config:rw
+      - /docker/hermes/data/.config:/gws-home/.config:rw
       # Hermes-Konfiguration NUR LESEND fuer das Modul "Agenten & Skills"
       # (Modell, Denkstaerke, Skill-Anzahl, Routinen). Secrets liegen in .env und
       # werden vom Dashboard nie gelesen.
-      - /docker/hermes-agent-pocv/data/config.yaml:/hermes-data/config.yaml:ro
-      - /docker/hermes-agent-pocv/data/skills:/hermes-data/skills:ro
+      - /docker/hermes/data/config.yaml:/hermes-data/config.yaml:ro
+      - /docker/hermes/data/skills:/hermes-data/skills:ro
+      - /docker/hermes/data/cron:/hermes-data/cron:ro
     ports:
       # Nur lokal nuetzlich (Firewall blockt von aussen) — zum Debuggen: curl localhost:8090
       - "8090:3000"
@@ -258,4 +260,4 @@ volumes:
 networks:
   hermes:
     external: true
-    name: hermes-agent-pocv_default
+    name: hermes_default
