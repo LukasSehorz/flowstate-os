@@ -66,9 +66,6 @@ services:
       # Basis der Runs-API (lib/hermes.js); ohne Angabe aus HERMES_CHAT_URL abgeleitet
       - HERMES_URL=${HERMES_URL:-}
       - HERMES_MODEL=hermes-agent
-      # Streaming von Hermes: AUS (Messung 24.07.). Hermes denkt stumm und
-      # liefert die fertige Antwort am Stueck — es gibt keinen Fortschritt zu
-      # erzaehlen, und laenger denkende Aufgaben wurden von der Probezeit
       # Schnellspur (Ebene 1/2) — direktes Modell ohne Agent-Schleife.
       # E1-Entscheidung 21.07.2026: Anthropic Haiku 4.5. Ohne Schluessel
       # faellt alles auf Hermes zurueck (langsamer, aber nie kaputt).
