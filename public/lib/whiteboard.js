@@ -252,8 +252,26 @@
   });
   const reihen = Math.ceil(team.length / jeReihe);
   const spalten = Math.min(team.length, jeReihe);
-  const WAND_B = spalten * BOARD_B + (spalten - 1) * LUECKE;
-  const WAND_H = reihen * BOARD_H + (reihen - 1) * LUECKE_Y;
+
+  // Die Listen-Tafeln "Kunden" und "Leads" (14.09.2026) haengen mit etwas
+  // Abstand in einer eigenen Reihe UNTER den Personen. Sie sind keine
+  // Zeichenflaechen — kein Stift, keine Elemente, nur Zeilen, die
+  // whiteboard-listen.js hineinbaut. Hier bekommen sie ihren Platz, damit
+  // Pfeile, Ansichten und die Uebersicht sie wie jede Tafel behandeln.
+  const LISTEN_TAFELN = [
+    { id: "liste-kunden", liste: "kunden", name: "Kunden" },
+    { id: "liste-leads", liste: "leads", name: "Leads" },
+  ];
+  const LISTEN_ABSTAND = 240;               // Luft zusaetzlich zum Reihenabstand
+  const listenY = reihen * (BOARD_H + LUECKE_Y) + LISTEN_ABSTAND;
+  LISTEN_TAFELN.forEach((t, i) => {
+    versatz.set(t.id, i * (BOARD_B + LUECKE));
+    versatzY.set(t.id, listenY);
+  });
+  const istListenTafel = (id) => LISTEN_TAFELN.some((t) => t.id === id);
+  const wandSpalten = Math.max(spalten, LISTEN_TAFELN.length);
+  const WAND_B = wandSpalten * BOARD_B + (wandSpalten - 1) * LUECKE;
+  const WAND_H = listenY + BOARD_H;
 
   const elemente = new Map();              // id -> Element (inhalt als Objekt)
   const stricheJeBoard = new Map();        // TAFEL-id -> [Element] in Zeichenreihenfolge
@@ -759,6 +777,33 @@
     });
   }
   team.forEach(boardBauen);
+
+  // Die Listen-Tafeln: Rahmen, Tafelflaeche und Schild wie jede Tafel, dazu
+  // ein leeres Fach, in das whiteboard-listen.js die Zeilen baut. Keine
+  // Ablage, keine Knoepfe, kein boardKnoten-Eintrag — hier wird nicht
+  // gezeichnet, und Schilder mit Fortschritt gibt es fuer eine Liste nicht.
+  function listenTafelBauen(t) {
+    const wrap = document.createElement("div");
+    wrap.className = "wb-board wb-listentafel";
+    wrap.dataset.liste = t.liste;
+    wrap.style.left = versatz.get(t.id) + "px";
+    wrap.style.top = versatzY.get(t.id) + "px";
+    wrap.style.width = BOARD_B + "px";
+    wrap.style.height = BOARD_H + "px";
+    wrap.innerHTML = `
+      <div class="wb-rahmen"></div>
+      <div class="wb-tafelflaeche"></div>
+      <div class="wb-schild">
+        <span class="wb-schild-punkt"></span>
+        <span><span class="wb-schild-name"></span><span class="wb-schild-unter"></span></span>
+      </div>
+      <div class="wb-liste-mount"></div>`;
+    $(".wb-schild-name", wrap).textContent = t.name;
+    $(".wb-schild-unter", wrap).textContent = "Fürs ganze Team · Einträge landen in der Akte";
+    $(".wb-liste-mount", wrap).dataset.liste = t.liste;
+    buehne.appendChild(wrap);
+  }
+  LISTEN_TAFELN.forEach(listenTafelBauen);
 
   // Namensschilder: Rolle, Fortschritt (nur ☐-Zeilen), zuletzt aktiv,
   // Anwesenheits-Punkt. Wird nach jedem Poll und jeder Aenderung genaehrt.
@@ -4326,6 +4371,7 @@
       if (p.id === ich.id) continue;
       knopf(p.id, p.name.split(" ")[0]);
     }
+    for (const t of LISTEN_TAFELN) knopf(t.id, t.name);
     knopf("alle", "Alle");
     segmenteEl.addEventListener("click", (ev) => {
       const b = ev.target.closest(".wb-seg");
@@ -4394,6 +4440,10 @@
 
   function ansichtWechseln(ziel) {
     ansichtWahl = ziel;
+    // Auf einer Listen-Tafel wird getippt, nicht gezeichnet. Mit Stift oder
+    // Schwamm in der Hand laege die Tintenebene ueber den Feldern, und kein
+    // Klick kaeme an.
+    if (istListenTafel(ziel) && werkzeug !== "auswahl") werkzeugSetzen("auswahl");
     segmenteMarkieren();
     pfeileAuffrischen();
     flaeche.dataset.ansicht = ziel;
@@ -4419,10 +4469,22 @@
     return team.findIndex((p) => p.id === id);
   }
 
+  // Die Nachbar-Tafel in einer Richtung — eine Person oder eine Liste. Die
+  // Listen haengen als eigene Reihe unter der letzten Personenreihe: Von dort
+  // fuehrt "unten" zu ihnen, von ihnen fuehrt "oben" zurueck.
   function nachbar(richtung) {
+    const l = LISTEN_TAFELN.findIndex((t) => t.id === ansichtWahl);
+    if (l >= 0) {
+      if (richtung === "links") return LISTEN_TAFELN[l - 1] || null;
+      if (richtung === "rechts") return LISTEN_TAFELN[l + 1] || null;
+      if (richtung === "oben") return team[Math.min((reihen - 1) * jeReihe + l, team.length - 1)] || null;
+      return null;
+    }
     const i = angeseheneTafel();
     if (i < 0) return null;
     const spalte = i % jeReihe, reihe = Math.floor(i / jeReihe);
+    if (richtung === "unten" && reihe === reihen - 1)
+      return LISTEN_TAFELN[Math.min(spalte, LISTEN_TAFELN.length - 1)];
     let j = -1;
     if (richtung === "links" && spalte > 0) j = i - 1;
     else if (richtung === "rechts" && spalte < jeReihe - 1) j = i + 1;
@@ -4442,10 +4504,11 @@
       // title statt des Haus-Tooltips: der Knopf traegt den Namen schon
       // sichtbar, und ein Chip ueber dem Oben-Pfeil laege genau auf der
       // Kopfzeile.
-      const wort = "Zu " + besitzform(p.name.split(" ")[0]) + " Tafel";
+      const kurz = p.liste ? p.name : p.name.split(" ")[0];
+      const wort = p.liste ? "Zur Liste " + p.name : "Zu " + besitzform(kurz) + " Tafel";
       knopf.title = wort;
       knopf.setAttribute("aria-label", wort);
-      $("span", knopf).textContent = p.name.split(" ")[0];
+      $("span", knopf).textContent = kurz;
       knopf.dataset.ziel = p.id === ich.id ? "mein" : p.id;
     }
   }
@@ -5091,7 +5154,9 @@
       // stehen fuenf Boards nebeneinander — sie anzuklicken ist die
       // naheliegendste Art hinzukommen, naeher als der Umschalter oben.
       if (ansichtWahl === "alle" && !aufElement) {
-        const boardId = boardAnPunkt(a);
+        const liste = LISTEN_TAFELN.find((t) => a.x >= versatz.get(t.id) && a.x <= versatz.get(t.id) + BOARD_B
+          && a.y >= versatzY.get(t.id) && a.y <= versatzY.get(t.id) + BOARD_H);
+        const boardId = boardAnPunkt(a) || (liste && liste.id);
         if (boardId) ansichtWechseln(boardId === ich.id ? "mein" : boardId);
       }
       return;
