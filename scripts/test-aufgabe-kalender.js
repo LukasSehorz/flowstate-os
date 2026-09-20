@@ -34,9 +34,14 @@ const melde = (ok, text) => { console.log((ok ? "✅" : "❌") + " " + text); if
 const gleich = (a, b, text) => melde(JSON.stringify(a) === JSON.stringify(b),
   text + (JSON.stringify(a) === JSON.stringify(b) ? "" : `  (war ${JSON.stringify(a)}, erwartet ${JSON.stringify(b)})`));
 
+// Die Beispielaufgabe traegt 'anruf:follow-up' und nicht mehr
+// 'anruf:keine-zeit' (16.09.2026): "Spaeter nochmal" bekommt seit heute
+// grundsaetzlich keinen Kalendereintrag, taugt hier also nicht als Trager fuer
+// die allgemeinen Faelle (Tag, Titel, Vorname). Der Titel bleibt "Nochmal
+// anrufen" — er ist nur Anzeigetext und in den Erwartungen unten verankert.
 const aufgabe = (extra = {}) => ({
   id: 7, titel: "Nochmal anrufen", firma_id: 42, firma_name: "Muster GmbH",
-  geplant_am: "2026-09-12", faellig: "2026-09-12", anlass: "anruf:keine-zeit",
+  geplant_am: "2026-09-12", faellig: "2026-09-12", anlass: "anruf:follow-up",
   erledigt: false, notiz: "", ...extra,
 });
 
@@ -89,6 +94,27 @@ melde(crm.aufgabeKalenderPlan(aufgabe({ anlass: "anruf:follow-up" }),
   { erstgespraechImKalender: true }).eintrag === true,
   "Follow-up bei Firma mit altem Erstgespräch: eigener Eintrag");
 
+// "Spaeter nochmal" bekommt GAR KEINEN Eintrag — unabhaengig von Tag, Uhrzeit
+// und davon, ob fuer die Firma schon etwas im Kalender steht (16.09.2026).
+// Gemessen am 14.09.: 42 von 49 CRM-Kalendereintraegen kamen aus diesem einen
+// Ergebnis, und 34 davon hatte jemand per Hand wieder geloescht.
+gleich(crm.aufgabeKalenderPlan(aufgabe({ anlass: "anruf:keine-zeit" })).grund,
+  "kein-kalender-vorhaben", "Später nochmal: kein Kalendereintrag");
+melde(crm.aufgabeKalenderPlan(aufgabe({ anlass: "anruf:keine-zeit" })).eintrag === false,
+  "Später nochmal: eintrag false");
+melde(crm.aufgabeKalenderPlan(aufgabe({ anlass: "anruf:keine-zeit", geplant_um: "10:00" }))
+  .eintrag === false, "Später nochmal mit Uhrzeit: trotzdem kein Eintrag");
+// Die beiden anderen Anlaesse bleiben unberuehrt — sonst waere aus dem
+// Aufraeumen ein Abschalten geworden.
+melde(crm.aufgabeKalenderPlan(aufgabe({ anlass: "anruf:follow-up" })).eintrag === true,
+  "Follow-up: bekommt weiterhin einen Eintrag");
+melde(crm.aufgabeKalenderPlan(aufgabe({ anlass: "anruf:gebucht" }),
+  { erstgespraechImKalender: false }).eintrag === true,
+  "gebucht ohne Termin im Kalender: bekommt weiterhin einen Eintrag");
+// Von Hand angelegte Kundenaufgaben (kein anruf:*-Anlass) auch nicht.
+melde(crm.aufgabeKalenderPlan(aufgabe({ anlass: null })).eintrag === true,
+  "von Hand angelegt: bekommt weiterhin einen Eintrag");
+
 // ------------------------------------------------ 3. Wessen Kalender
 // Es gibt genau EINEN Google-Zugang (Lukas'). Aufgaben anderer landen darum
 // ebenfalls dort — und tragen deren Vornamen vorn, damit er sie unterscheidet.
@@ -130,6 +156,104 @@ gleich(spaeterNotiz.titel, "Nochmal anrufen · Ruft ab 14 Uhr an", "Später noch
 const ohneDatum = crm.anrufAufgabePlanen("keine-zeit", {});
 const wochentag = new Date(ohneDatum.tag + "T12:00:00").getDay();
 melde(wochentag !== 0 && wochentag !== 6, "ohne Wiedervorlage: drei Werktage, kein Wochenende");
+
+// FOLLOW-UP MIT VERABREDETEM TERMIN (14.09.2026).
+//
+// Der Gespraechs-Dialog der Leads-Maske bietet das Terminfeld bei "gebucht"
+// UND "follow-up" an und schickt es immer als "termin" — nie als "datum".
+// anrufAufgabePlanen las bis heute nur extra.datum: Ein Follow-up, fuer das
+// eine Uhrzeit ausgehandelt war, stand trotzdem "in drei Werktagen" auf der
+// Tafel, und der Titel behauptete "kein Termin". Nachgemessen an echten
+// Daten: 15 Follow-up-Leads, 15 mit Deal, 0 mit Wiedervorlage.
+const fuTermin = crm.anrufAufgabePlanen("follow-up", { termin: "2026-09-21T10:00", notiz: "" });
+gleich(fuTermin.tag, "2026-09-21", "Follow-up: Tag kommt aus dem Termin, nicht aus drei Werktagen");
+gleich(fuTermin.titel, "Nachfassen am 21.09. um 10:00", "Follow-up: Uhrzeit steht im Titel");
+// Ohne Uhrzeit (Mitternacht gilt als keine, wie im Kalender): nur der Tag.
+const fuTag = crm.anrufAufgabePlanen("follow-up", { termin: "2026-09-21T00:00", notiz: "" });
+gleich(fuTag.titel, "Nachfassen am 21.09.", "Follow-up ohne Uhrzeit: Tag ohne Zeitangabe");
+// Ganz ohne Termin bleibt es bei der alten Aussage — sie ist dann richtig.
+const fuOhne = crm.anrufAufgabePlanen("follow-up", { notiz: "" });
+gleich(fuOhne.titel, "Nachfassen — kein Termin", "Follow-up ohne Termin: unveraendert");
+// extra.datum bleibt Rueckfall fuer Wege, die nur einen Tag kennen (Sprache, Akte).
+const fuDatum = crm.anrufAufgabePlanen("follow-up", { datum: "2026-09-18", notiz: "" });
+gleich(fuDatum.tag, "2026-09-18", "Follow-up: extra.datum wirkt weiterhin");
+// Und die Notiz haengt auch mit Termin hinten an.
+const fuNotiz = crm.anrufAufgabePlanen("follow-up", { termin: "2026-09-21T10:00", notiz: "Meldet sich Freitag" });
+gleich(fuNotiz.titel, "Nachfassen am 21.09. um 10:00 · Meldet sich Freitag",
+  "Follow-up: Termin und Notiz zusammen");
+// "Später nochmal" liest denselben Vorrang — der Dialog schickt dort zwar
+// keinen Termin, aber wenn doch, darf er nicht ignoriert werden.
+const szTermin = crm.anrufAufgabePlanen("keine-zeit", { termin: "2026-09-21T10:00", notiz: "" });
+gleich(szTermin.tag, "2026-09-21", "Später nochmal: Termin gewinnt vor drei Werktagen");
+
+// DIE VERABREDETE UHRZEIT (0069, 14.09.2026).
+//
+// Ohne geplant_um entscheidet ersterFreierPlatz() wie bisher (erstes freies
+// Fenster ab 9:00) — der Plan gibt dann gar kein "von" mit. Mit Uhrzeit wird
+// ab ihr gesucht: Bei KFZ Holzer war 10:00 verabredet, der Block landete
+// trotzdem auf 9:00, weil die Aufgabe die Uhrzeit nirgends tragen konnte.
+melde(crm.aufgabeKalenderPlan(aufgabe()).von === undefined,
+  "ohne geplant_um: kein Wunschfenster, ersterFreierPlatz entscheidet");
+gleich(crm.aufgabeKalenderPlan(aufgabe({ geplant_um: "10:00:00" })).von, 600,
+  "geplant_um aus der Datenbank (10:00:00) -> 600 Minuten");
+gleich(crm.aufgabeKalenderPlan(aufgabe({ geplant_um: "10:00" })).von, 600,
+  "geplant_um aus der Maske (10:00) -> 600 Minuten");
+gleich(crm.aufgabeKalenderPlan(aufgabe({ geplant_um: "14:27:00" })).von, 867,
+  "geplant_um 14:27 -> 867 Minuten");
+// Unsinn faellt auf null zurueck, statt den Block auf 0:00 zu legen.
+for (const murks of ["", null, "abc", "25:00", "99:99"])
+  melde(crm.aufgabeKalenderPlan(aufgabe({ geplant_um: murks })).von === undefined,
+    `geplant_um ${JSON.stringify(murks)}: kein Wunschfenster`);
+// Und die Platzwahl selbst: ab der Wunschzeit, nicht ab 9:00.
+// Eigener Tag hier — die Konstante TAG des Platz-Abschnitts steht weiter
+// unten und existiert an dieser Stelle noch nicht.
+const UHRTAG = "2026-09-21";
+gleich(crm.ersterFreierPlatz([], UHRTAG, 10, { von: 600 }).uhrzeit, "10:00",
+  "freie Wunschzeit: der Termin steht genau dort");
+// Belegt: die naechste Luecke DANACH — nicht in den bestehenden Termin hinein.
+gleich(crm.ersterFreierPlatz(
+  [{ id: "x", start: `${UHRTAG}T10:00`, ende: `${UHRTAG}T10:30` }], UHRTAG, 10, { von: 600 }).uhrzeit,
+  "10:30", "belegte Wunschzeit: rutscht dahinter, nicht hinein");
+// Ein Termin VOR der Wunschzeit blockiert sie nicht.
+gleich(crm.ersterFreierPlatz(
+  [{ id: "x", start: `${UHRTAG}T09:00`, ende: `${UHRTAG}T09:30` }], UHRTAG, 10, { von: 600 }).uhrzeit,
+  "10:00", "Termin vor der Wunschzeit stoert nicht");
+
+// Und der Weg von der Notiz bis zur Spalte: anrufAufgabePlanen gibt die
+// Uhrzeit mit hinaus, damit anrufAufgabe sie nach geplant_um schreiben kann.
+gleich(crm.anrufAufgabePlanen("follow-up", { termin: "2026-09-21T10:00" }).uhrzeit, "10:00",
+  "Follow-up: Plan traegt die Uhrzeit fuer geplant_um");
+melde(crm.anrufAufgabePlanen("follow-up", { termin: "2026-09-21T00:00" }).uhrzeit === undefined,
+  "Follow-up um Mitternacht: keine Uhrzeit (Tag ohne Zeit)");
+melde(crm.anrufAufgabePlanen("follow-up", {}).uhrzeit === undefined,
+  "Follow-up ohne Termin: keine Uhrzeit");
+gleich(crm.anrufAufgabePlanen("keine-zeit", { termin: "2026-09-21T10:00" }).uhrzeit, "10:00",
+  "Später nochmal: Uhrzeit geht ebenfalls mit");
+
+// DER REINE GESPRAECHSTEXT (14.09.2026).
+//
+// Die Leads-Maske schickt seit heute drei Felder getrennt: termin, person,
+// text. Vorher war alles ein String ("Termin <ISO> · <Person> · <Text>"), der
+// als Notiz in die Terminbeschreibung ging — im Google-Termin von KFZ Holzer
+// stand der Zeitstempel dreimal, und auf 40 Zeichen gekuerzt blieb auf der
+// Tafel genau er uebrig und vom Gespraech nichts.
+const verklebt = "Termin 2026-09-21T10:00 · Herr Alexander Holzer · Meldet sich am Freitag";
+gleich(crm.anrufAufgabePlanen("follow-up",
+  { termin: "2026-09-21T10:00", text: "Meldet sich am Freitag", notiz: verklebt }).titel,
+  "Nachfassen am 21.09. um 10:00 · Meldet sich am Freitag",
+  "Stichpunkt kommt aus dem reinen Text, nicht aus der Sammelfassung");
+// Ohne die getrennten Felder (alter Browser-Tab) bleibt die Sammelfassung —
+// besser als nichts, und genau das alte Verhalten.
+gleich(crm.anrufAufgabePlanen("follow-up",
+  { termin: "2026-09-21T10:00", notiz: verklebt }).titel,
+  "Nachfassen am 21.09. um 10:00 · Termin 2026-09-21T10:00 · Herr…",
+  "ohne text: Rueckfall auf die Sammelfassung");
+// Ein leerer Text ist eine Angabe ("nichts notiert"), kein fehlendes Feld:
+// dann steht der Titel ohne Stichpunkt da, statt die Sammelfassung zu holen.
+gleich(crm.anrufAufgabePlanen("follow-up",
+  { termin: "2026-09-21T10:00", text: "", notiz: verklebt }).titel,
+  "Nachfassen am 21.09. um 10:00",
+  "leerer Text: kein Stichpunkt, nicht der Rueckfall");
 
 // Die fuenf festen Plaetze — der Server (lib/aufgaben-tafel.js) muss dieselben
 // Zahlen kennen wie der Client (public/lib/whiteboard.js, platzVon/ORD_X/ORD_Y),

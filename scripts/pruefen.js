@@ -68,7 +68,8 @@ for (const d of geaendert.filter((x) => x.endsWith(".json") && !x.includes("node
 // Erzaehlspur selbst entfallen (Schritt A1) — sie prueften Verhalten, das es
 // nicht mehr gibt.
 const TESTS = [
-  "test-navigation", "test-prompt", "test-sprache", "test-kontakte", "test-gespraech",
+  "test-navigation", "test-prompt", "test-sprache", "test-kontakte",
+  // test-gespraech ist am 19.09.2026 mit dem Sprachbereich (public/sprache.js) entfallen.
   // test-kalender prueft das LESEN der gws-cli-Antwort, test-kalender-seite die
   // Rechnerei der Kalenderseite (Monatsraster, Googles ganztaegiges Ende).
   "test-kalender", "test-kalender-seite",
@@ -85,6 +86,9 @@ const TESTS = [
   // scripts/ads-proben.js bei kaputten Antworten ueberhaupt anschlaegt —
   // test-guthaben, ob ein leeres Guthaben laut scheitert statt still.
   "test-harnisch", "test-guthaben",
+  // 19.09.2026: das Lesen von Hermes' Ereignisstrom und Ergebnis-Block
+  // (lib/hermes.js) — ohne Netz, ohne Datenbank.
+  "test-auftraege",
   // 20.08.2026: der Weg des Monatsordners zur Steuerberaterin. Seit heute legt
   // er einen ENTWURF an, statt auf ein gesprochenes Ja hin zu senden — und
   // genau das muss belegbar bleiben, sonst faellt es beim naechsten Umbau

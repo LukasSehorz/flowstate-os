@@ -115,7 +115,7 @@ pruefe("Empfaenger aus Firma: Name, Ansprechperson, Strasse, PLZ Ort, Mail", emp
 pruefe("Empfaenger ohne Firma: leere Felder, kein Fehler", rg.empfaengerAusFirma(null).name === "");
 // ZWEI Briefkoepfe, gemessen an Lukas' echten Belegen (D1-vorlagen-
 // spezifikation.md): Rechnungen gehen unter SVH Consulting GbR, Angebote unter
-// Flowstate AI Solutions — beide Am Anger 3, 84539 Zangberg. Die alte
+// svh Consulting (bis 09/2026 Flowstate AI Solutions) — beide Am Anger 3, 84539 Zangberg. Die alte
 // PRODUCT.md-Vorgabe "84405 Dorfen" gilt fuer Belege nicht mehr; sie stand in
 // keiner der 30 Rechnungen und keinem der 18 Angebote.
 const abs = rg.absender("rechnung");
@@ -124,14 +124,14 @@ pruefe("Absender Rechnung: SVH Consulting GbR, Am Anger 3, 84539 Zangberg",
   abs.name === "SVH Consulting GbR" && abs.strasse === "Am Anger 3" && abs.plz_ort === "84539 Zangberg" && abs.unterschrift === "Jannik vom Hofe");
 pruefe("Absender Rechnung: Bank, Steuernummer und USt-IdNr. der Hausvorlage",
   abs.iban === "DE21 7115 1020 0032 0980 71" && abs.bic === "BYLADEM1MDF" && abs.kontoinhaber === "Jannik vom Hofe" && abs.steuernr === "141/174/10707" && abs.ustid === "DE464385333");
-pruefe("Absender Angebot: Flowstate AI Solutions, ohne Bank und ohne Steuernummer",
-  absA.name === "Flowstate AI Solutions" && absA.plz_ort === "84539 Zangberg" && absA.iban === "" && absA.steuernr === "" && absA.unterschrift === "Lukas Sehorz");
+pruefe("Absender Angebot: svh Consulting, ohne Bank und ohne Steuernummer",
+  absA.name === "svh Consulting" && absA.plz_ort === "84539 Zangberg" && absA.iban === "" && absA.steuernr === "" && absA.unterschrift === "Lukas Sehorz");
 pruefe("Absender: unbekannte Art -> Rechnungsbriefkopf", rg.absender("quatsch").name === abs.name);
 pruefe("Absender: RECHNUNG_ABSENDER_* uebersteuert und trifft das Angebot nicht", (() => {
   process.env.RECHNUNG_ABSENDER_NAME = "Andere GbR";
   const x = rg.absender("rechnung"), y = rg.absender("angebot");
   delete process.env.RECHNUNG_ABSENDER_NAME;
-  return x.name === "Andere GbR" && y.name === "Flowstate AI Solutions";
+  return x.name === "Andere GbR" && y.name === "svh Consulting";
 })());
 const r = { art: "rechnung", nummer: "R-2026-131", summe: 1500, faellig: "2026-09-19", titel: "Webseite",
   empfaenger: { name: "Müller GmbH", ansprechperson: "Max Müller" } };
@@ -179,8 +179,8 @@ const angebotV = rg.texte("website", "angebot");
 const pa = rg.pdfBauen({ ...basis, art: "angebot", nummer: "2026-024", faellig: "2026-10-05",
   einleitung: angebotV.einleitung, schluss: angebotV.schluss, nutzen: angebotV.nutzen }, rg.absender("angebot"));
 const ia = inhalt(pa);
-pruefe("Angebot: Briefkopf FLOWSTATE AI SOLUTIONS, Nummer, ausgeschriebenes Datum, 'Gültig bis'",
-  /\(FLOWSTATE\)/.test(ia) && /\(AI SOLUTIONS\)/.test(ia) && /\(Angebot-Nr\.\)/.test(ia) && /\(2026-024\)/.test(ia) && /05\. Oktober 2026/.test(ia) && /G\\374ltig bis/.test(ia));
+pruefe("Angebot: Briefkopf SVH CONSULTING, Nummer, ausgeschriebenes Datum, 'Gültig bis'",
+  /\(SVH\)/.test(ia) && /\(CONSULTING\)/.test(ia) && /\(Angebot-Nr\.\)/.test(ia) && /\(2026-024\)/.test(ia) && /05\. Oktober 2026/.test(ia) && /G\\374ltig bis/.test(ia));
 pruefe("Angebot: Nutzenliste, Balken 'Gesamtpaket', kein §19 und keine Bankverbindung",
   /mobiloptimierter Auftritt/.test(ia) && /\(Gesamtpaket\)/.test(ia) && !/19 Abs\. 1 UStG/.test(ia) && !/IBAN/.test(ia));
 

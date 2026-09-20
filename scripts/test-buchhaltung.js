@@ -16,7 +16,7 @@
 //   node scripts/test-buchhaltung.js
 
 const buch = require("../lib/buchhaltung.js");
-const { quelleAus, naechsteFaelligkeit, fixkostenJeMonat, offeneSummen, monatsStatus, tagText } = buch.rechnen;
+const { quelleAus, naechsteFaelligkeit, fixkostenJeMonat, offeneSummen, monatsStatus, tagText, nochOffen } = buch.rechnen;
 
 let fehler = 0;
 const pruefe = (name, wahr, zusatz) => {
@@ -32,6 +32,14 @@ for (const [kopf, soll] of [
   const ist = quelleAus(kopf);
   pruefe(`X-Quelle ${JSON.stringify(kopf)} -> ${ist}`, ist === soll, `erwartet ${soll}`);
 }
+
+console.log("\n— Sammelbuchung: bezahlt oder offen —");
+// Eine Rechnung mit Zahlungsziel in der Zukunft ist mit einiger Sicherheit
+// noch nicht ueberwiesen — sie wird offen gebucht, nicht mit erfundenem Zahltag.
+for (const [faellig, heute, soll] of [
+  ["2026-09-30", "2026-09-18", true], ["2026-09-18", "2026-09-18", true],
+  ["2026-09-17", "2026-09-18", false], [null, "2026-09-18", false], ["", "2026-09-18", false],
+]) pruefe(`faellig ${JSON.stringify(faellig)} am ${heute} -> ${soll ? "offen" : "bezahlt"}`, nochOffen(faellig, heute) === soll);
 
 console.log("\n— Naechste Faelligkeit —");
 for (const [datum, intervall, soll, anker = null] of [

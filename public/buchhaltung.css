@@ -179,3 +179,13 @@
 .buch-quellen svg,.buch-kanzlei-zeile svg,.buch-scan-nebenweg label svg,.buch-scan-kopf svg{
   width:16px;height:16px;flex:0 0 auto;vertical-align:-3px}
 .buch-quellen>span,.buch-kanzlei-zeile{display:inline-flex;align-items:center;gap:6px}
+
+/* Postfach-Zeile auf der Belege-Seite (18.09.2026): angeschlossene Konten
+   und die Rueckschau ab einem Tag. Dieselbe leise Tonlage wie .buch-quellen. */
+.buch-postfach{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--text-secondary);margin:6px 0 2px}
+.buch-postfach>span{display:inline-flex;align-items:center;gap:6px}
+.buch-postfach svg{width:14px;height:14px}
+.buch-postfach-form{display:inline-flex;align-items:center;gap:8px;margin-left:auto}
+.buch-postfach-form label{display:inline-flex;align-items:center;gap:6px}
+.buch-postfach-form input[type=date]{font:inherit;padding:3px 6px;border:1px solid var(--rand,#d6dae0);border-radius:6px;background:var(--flaeche,#fff);color:inherit}
+@media (max-width:640px){.buch-postfach-form{margin-left:0}}

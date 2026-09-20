@@ -230,6 +230,66 @@ console.log("\nVertrag: wirft nie");
   const sv = await akte.spanneVoll("2026-09-01", "2026-09-30");
   pruefe("spanneVoll ohne gws-cli/Token -> { ok:false } statt Absturz", sv && sv.ok === false, JSON.stringify(sv).slice(0, 120));
   gleich("terminNachId ohne Direktweg -> null", await akte.terminNachId("e1"), null);
+
+  // --- Jeder in seinen eigenen Kalender (18.09.2026) ----------------------
+  // Lukas: "kann man das fixen, dass die Termine von Jannik auch in seinen
+  // Kalender gebucht werden?" Zugeordnet wird ueber die Anmelde-Mail; die
+  // Konten heissen genauso wie die Kalender.
+  //
+  // Geprueft wird hier der RUECKFALL, denn er entscheidet, ob im Zweifel ein
+  // Termin ausfaellt: Ohne gws-cli (wie in dieser Pruefung) bleibt die
+  // Kalenderliste unbekannt, und dann MUSS der Hauptkalender genommen werden.
+  // Wuerde hier ok:false herauskommen, entstuenden bei einem Google-Aussetzer
+  // stillschweigend gar keine Termine mehr — schlimmer als der Zustand, den
+  // die Aenderung behebt.
+  const kid = require("../lib/kalender-id.js");
+  const ohneGoogle = await kid.kalenderFuer("jannikvomhofe@svhconsult.de");
+  pruefe("Kalenderliste unbekannt -> Hauptkalender, Termin faellt nicht aus",
+    ohneGoogle.ok === true && ohneGoogle.args.length === 0, JSON.stringify(ohneGoogle));
+  const ohneMail = await kid.kalenderFuer("");
+  pruefe("ohne Mail -> Hauptkalender", ohneMail.ok === true && ohneMail.args.length === 0,
+    JSON.stringify(ohneMail));
+  pruefe("Unsinn statt Mail -> Hauptkalender",
+    (await kid.kalenderFuer("keine-mail")).grund === "keine-mail", "");
+  // Waehrend der Werbeaufnahmen zeigt KALENDER_ID auf den Drehkalender. Dann
+  // muss ALLES dorthin, auch fremde Aufgaben — sonst stehen echte Termine im Bild.
+  const altKal = process.env.KALENDER_ID;
+  process.env.KALENDER_ID = "dreh@example.com";
+  const dreh = await kid.kalenderFuer("jannikvomhofe@svhconsult.de");
+  pruefe("KALENDER_ID gewinnt (Drehkulisse)",
+    dreh.ok === true && dreh.args[1] === "dreh@example.com", JSON.stringify(dreh));
+  gleich("kalenderArgs mit KALENDER_ID", kid.kalenderArgs(), ["-c", "dreh@example.com"]);
+  if (altKal === undefined) delete process.env.KALENDER_ID; else process.env.KALENDER_ID = altKal;
+  gleich("kalenderArgs ohne KALENDER_ID: leer", kid.kalenderArgs(), []);
+
+  // --- Beschreibung des Erstgespraechs (16.09.2026) -----------------------
+  // Zwei Wuensche von Lukas an derselben Stelle: KEIN Akte-Link mehr im
+  // Termin, und die Gespraechsnotiz soll vollstaendig drinstehen. Vorher war
+  // sie fest auf 200 Zeichen geschnitten — bei den echten Notizen (bis 487
+  // Zeichen) fiel damit der zweite Teil weg, in dem steht, was vereinbart
+  // wurde. Jetzt wird der Platz gerechnet, und ein Rechenfehler hier wuerde
+  // still Text abschneiden: darum geprueft.
+  const firma = { name: "Muster GmbH", ansprechperson: "Anna Muster",
+    telefon: "+4989123", ort: "München" };
+  const kurzeNotiz = akte.beschreibungErstgespraech(firma, "Braucht neue Seite");
+  pruefe("Erstgespräch: kein Akte-Link in der Beschreibung",
+    !/Kundenakte:/.test(kurzeNotiz), kurzeNotiz);
+  pruefe("Erstgespräch: Notiz steht drin", /Notiz: Braucht neue Seite/.test(kurzeNotiz), kurzeNotiz);
+  pruefe("Erstgespräch: Ansprechperson steht drin",
+    /Ansprechperson: Anna Muster/.test(kurzeNotiz), kurzeNotiz);
+  // Eine Notiz in der Laenge der laengsten echten (487 Zeichen) muss ungekuerzt
+  // durchgehen — genau dieser Fall war vorher abgeschnitten.
+  const lang = "A".repeat(400);
+  const langeNotiz = akte.beschreibungErstgespraech(firma, lang);
+  pruefe("Erstgespräch: 400-Zeichen-Notiz bleibt ganz",
+    langeNotiz.includes(lang) && !/…/.test(langeNotiz), String(langeNotiz.length));
+  // Der Deckel bleibt aber: Google nimmt nur 500 Zeichen, mehr wird mit … gekuerzt.
+  const zuLang = akte.beschreibungErstgespraech(firma, "B".repeat(900));
+  pruefe("Erstgespräch: zu lange Notiz wird gekuerzt, nicht abgehackt",
+    zuLang.length <= 500 && /…$/.test(zuLang), String(zuLang.length));
+  gleich("Erstgespräch ohne Notiz: keine Notizzeile",
+    /Notiz:/.test(akte.beschreibungErstgespraech(firma, "")), false);
+
   if (alt) process.env.DATABASE_URL = alt;
 
   console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Faelle bestanden.");
