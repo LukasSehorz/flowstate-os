@@ -52,32 +52,63 @@ const zeitstempel = () => {
     : path.join(__dirname, "..", "sicherungen");
   fs.mkdirSync(ordner, { recursive: true });
 
-  const daten = {};
-  let gesamt = 0, fehlend = [];
-  for (const t of TABELLEN) {
+  const datei = path.join(ordner, `sicherung-${zeitstempel()}.json`);
+
+  // Zeile für Zeile in den Datenstrom, NICHT ein JSON.stringify über alles:
+  // Seit dem 20.09.2026 sprengt die ganze Datenbank als EIN String die
+  // Längengrenze von JavaScript ("Invalid string length"). Die Sicherung brach
+  // damit genau in dem Moment ab, in dem sie zum ersten Mal gebraucht wurde —
+  // vor dem Einpflegen der echten Kundenzahlen.
+  const strom = fs.createWriteStream(datei);
+  let stromFehler = null;
+  strom.on("error", (e) => { stromFehler = e; });
+  const schreib = (text) => new Promise((fertig) => {
+    if (stromFehler) throw stromFehler;
+    if (strom.write(text)) fertig();
+    else strom.once("drain", fertig);
+  });
+
+  // Erst die Tabellen in Abhängigkeits-Reihenfolge (TABELLEN oben), dann alles,
+  // was seitdem dazugekommen ist. Eine Sicherung darf keine Tabelle vergessen,
+  // nur weil niemand die Liste nachgezogen hat — am 20.09. fehlten so das
+  // ganze Whiteboard, die Rechnungen und die Termin-Verknüpfungen.
+  const { rows: vorhanden } = await crm.system(
+    `select table_name from information_schema.tables
+      where table_schema = 'public' and table_type = 'BASE TABLE' order by table_name`);
+  const liste = [...TABELLEN, ...vorhanden.map((r) => r.table_name).filter((t) => !TABELLEN.includes(t))];
+
+  await schreib(`{\n"erstellt": ${JSON.stringify(new Date().toISOString())},\n`);
+  await schreib('"hinweis": "Vollsicherung der Flowstate-Datenbank. Enthält personenbezogene Daten — nicht ins Git, nicht in den Vault.",\n"daten": {\n');
+
+  const zahlen = {};
+  const fehlend = [];
+  let gesamt = 0, erste = true;
+  for (const t of liste) {
+    let rows;
     try {
       // system() umgeht die Zeilenrechte bewusst: eine Sicherung, die nur die
       // Zeilen EINES Nutzers enthält, ist keine Sicherung.
-      const { rows } = await crm.system(`select * from public.${t}`);
-      daten[t] = rows;
-      gesamt += rows.length;
-      console.log(`  ${t.padEnd(24)} ${String(rows.length).padStart(6)} Zeilen`);
+      ({ rows } = await crm.system(`select * from public.${t}`));
     } catch (e) {
       fehlend.push(t);
-      console.log(`  ${t.padEnd(24)}      — ${String(e.message).slice(0, 50)}`);
+      console.log(`  ${t.padEnd(26)}      — ${String(e.message).slice(0, 50)}`);
+      continue;
     }
+    await schreib(`${erste ? "" : ",\n"}${JSON.stringify(t)}: [`);
+    erste = false;
+    for (let n = 0; n < rows.length; n++) await schreib((n ? ",\n" : "") + JSON.stringify(rows[n]));
+    await schreib("]");
+    zahlen[t] = rows.length;
+    gesamt += rows.length;
+    console.log(`  ${t.padEnd(26)} ${String(rows.length).padStart(7)} Zeilen`);
   }
 
-  const datei = path.join(ordner, `sicherung-${zeitstempel()}.json`);
-  fs.writeFileSync(datei, JSON.stringify({
-    erstellt: new Date().toISOString(),
-    hinweis: "Vollsicherung der Flowstate-Datenbank. Enthält personenbezogene Daten — nicht ins Git, nicht in den Vault.",
-    tabellen: Object.fromEntries(Object.entries(daten).map(([t, r]) => [t, r.length])),
-    daten,
-  }, null, 1));
+  await schreib(`\n},\n"tabellen": ${JSON.stringify(zahlen, null, 1)}\n}\n`);
+  await new Promise((fertig) => strom.end(fertig));
+  if (stromFehler) throw stromFehler;
 
   const mb = (fs.statSync(datei).size / 1048576).toFixed(2);
-  console.log(`\n✅ ${gesamt} Zeilen aus ${Object.keys(daten).length} Tabellen`);
+  console.log(`\n✅ ${gesamt} Zeilen aus ${Object.keys(zahlen).length} Tabellen`);
   if (fehlend.length) console.log(`⚠️  nicht gelesen: ${fehlend.join(", ")}`);
   console.log(`   ${datei}  (${mb} MB)`);
   process.exit(0);

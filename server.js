@@ -47,8 +47,10 @@ const eurK = (n) => {
 // kubische Bezier, damit die Kurve weich laeuft, und die Stuetzpunkte auf den
 // Wertebereich des Abschnitts geklemmt — ohne das schwingt sie zwischen zwei
 // Monaten unter die Nulllinie und behauptet einen Verlust, den es nie gab.
-function umsatzKurve(werte) {
-  const max = Math.max(1, ...werte);
+// maxVorgabe: Zwei Kurven im selben Bild muessen denselben Massstab haben —
+// sonst laege "eingegangen" optisch gleichauf mit "voraussichtlich".
+function umsatzKurve(werte, maxVorgabe) {
+  const max = Math.max(1, Number(maxVorgabe) || 0, ...werte);
   const pkt = werte.map((w, i) => [
     (i / (werte.length - 1 || 1)) * 780 + 10,
     190 - (w / max) * 178,
@@ -122,7 +124,7 @@ app.use(
 const BEREICH_JE_PFAD = {
   "": "zentrale", umsatz: "zentrale",
   kalender: "kalender", todos: "todos", whiteboard: "whiteboard",
-  crm: "crm", leads: "leads",
+  crm: "crm",
   buchhaltung: "buchhaltung", angebote: "angebote",
   marketing: "marketing", content: "content", projekte: "projekte",
   chat: "chat", whatsapp: "chat",
@@ -1276,7 +1278,229 @@ function hudKugel(w) {
 }
 
 // ---------------------------------------------------------------- Die Seite
+// ---------- Zentrale ----------
+//
+// Seit dem 14.09.2026 wieder die helle Karten-Zentrale im Design des uebrigen
+// OS — der Stand vor dem Jarvis-Umbau (Commit 3a01b02, 19.08.). Wunsch von
+// Lukas: "so, wie es war, bevor es dunkel und blau wurde".
+//
+// Das Pult ist nicht weg: Die Aufnahme-Buehne (/buehne, lib/sprache-routes.js)
+// holt es mit ?buehne=1 in ihren Rahmen, fuer die Werbeaufnahmen. Dorthin
+// fuehrt hudZentraleSenden() weiter unten, unveraendert.
+//
+// Gegenueber dem alten Stand faellt nur der Knopf "Lead-Lauf" weg: Die
+// Lead-Maschine gibt es seit dem 09.09. nicht mehr.
 app.get("/", async (req, res) => {
+  if (String(req.query.buehne || "") === "1") return hudZentraleSenden(req, res);
+  const heute = new Date().toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  // Buchhaltung sieht nur die Geschaeftsfuehrung (dieselbe Regel wie unter
+  // /buchhaltung). Wer nur mit dem gemeinsamen Passwort da ist, bekommt die
+  // Karte trotzdem — sie fragt dann nach der persoenlichen Anmeldung.
+  const nutzer = (req.session && req.session.crm) || null;
+  const admin = !nutzer || nutzer.rolle === "admin";
+  // Eine Karte auf der Zentrale ist eine Tuer, und eine Tuer, die nicht
+  // aufgeht, gehoert nicht in die Wand.
+  const darf = (id) => require("./lib/schale.js").darfModul(nutzer, id);
+  // Buchhaltung, Content und Marketing haengen an der Datenbank — ohne
+  // DATABASE_URL gibt es ihre Routen nicht, also auch keine Karten dafuer.
+  const datenbank = Boolean(process.env.DATABASE_URL);
+  // Eine Karte = ein Bereich. Der Inhalt wird nachgeladen (data-load) und von
+  // renderCard() im Seitenskript gebaut.
+  const karte = (titel, unter, quelle, ziel, zielWort) => `
+    <div class="karte"><div class="karte-kopf"><div>
+      <h2>${titel}</h2><div class="sub">${unter}</div></div>
+      ${ziel ? `<a href="${ziel}" class="caption">${zielWort} →</a>` : ""}</div>
+      <div data-load="${quelle}"><p class="caption">Lädt …</p></div></div>`;
+
+  // Umsatz, Kurve und Ausblick werden SERVERSEITIG gebaut: dieselben Zahlen
+  // wie im CRM-Dashboard (crm.zentraleZahlen, lib/pipeline-quoten.js). Ohne
+  // persoenliche Anmeldung gibt es sie nicht — daran haengen die Zeilenrechte.
+  let geldBlock = "";
+  if (datenbank && nutzer) {
+    try {
+      const z = await require("./lib/crm.js").zentraleZahlen(nutzer);
+      const MON = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+      // Zwei Reihen im selben Massstab: was zugesagt wurde (voraussichtlich)
+      // und was wirklich ankam (eingegangen).
+      const maxKurve = Math.max(...z.verlauf.map((v) => v.wert), ...z.eingang_verlauf.map((v) => v.wert), 1);
+      const kurve = umsatzKurve(z.verlauf.map((v) => v.wert), maxKurve);
+      const eingangKurve = umsatzKurve(z.eingang_verlauf.map((v) => v.wert), maxKurve);
+      const monatName = new Date().toLocaleDateString("de-DE", { month: "long" });
+      const vormonatName = (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
+        return d.toLocaleDateString("de-DE", { month: "long" }); })();
+      // Ohne Vormonatsumsatz gibt es keinen Prozentwert — "+100 %" auf eine
+      // Null ist keine Aussage.
+      //
+      // Gerechnet wird auf dem UMSATZ des Monats, nicht auf dem Zahlungseingang
+      // (20.09.2026, Vorgabe Lukas): Was in einem Monat verkauft wurde, ist die
+      // Leistung dieses Monats. Wann das Geld kommt, haengt am Zahlungsziel und
+      // sagt ueber den Monat wenig — dafuer stehen "auf dem Konto" und "offene
+      // Forderungen" in den Kacheln darueber.
+      const wachstum = z.umsatz.vormonat > 0
+        ? Math.round(((z.umsatz.monat - z.umsatz.vormonat) / z.umsatz.vormonat) * 100)
+        : null;
+      const monateMitUmsatz = z.eingang_verlauf.filter((v) => v.wert > 0).length;
+      const schnitt = monateMitUmsatz ? z.eingegangen.gesamt / monateMitUmsatz : 0;
+
+      geldBlock = `
+      ${/* Die vier Zahlen, die Lukas am 20.09.2026 getrennt sehen wollte —
+            sie beantworten vier verschiedene Fragen und duerfen darum nie in
+            einer Zahl zusammenfallen. */""}
+      ${/* Jede der vier Zahlen fuehrt auf ihre Aufschluesselung (20.09.2026).
+            Eine Zahl, die man nicht aufmachen kann, muss man glauben. */""}
+      ${/* Fuenf Zahlen seit dem 20.09.2026: Die laufende Betreuung hat einen
+            eigenen Kasten bekommen und ist dafuer aus den beiden Nachbarn
+            herausgerechnet. 4.800 EUR Betreuung ueber zwoelf Monate sind
+            etwas anderes als 41.300 EUR Projektgeschaeft — zusammengezaehlt
+            sieht ein Monat mit einem grossen Projekt aus wie ein ruhiges
+            Jahr. Jede fuehrt auf ihre Aufschluesselung. */""}
+      <div class="kennzeilen kennzeilen-fuenf">
+        <a class="kennzeile" href="/umsatz?sicht=eingegangen"><span>Umsatz — auf dem Konto</span><b>${eur(z.eingegangen.gesamt)}</b>
+          <i>${eur(z.eingegangen.monat)} im ${esc(monatName)}</i></a>
+        <a class="kennzeile" href="/umsatz"><span>Voraussichtlicher Umsatz</span><b>${eur(z.umsatz_ohne_retainer)}</b>
+          <i>${z.kunden} Kunden zusammen · ohne Retainer</i></a>
+        <a class="kennzeile" href="/umsatz?sicht=offen"><span>Offene Forderungen</span><b>${eur(z.offen_ohne_retainer)}</b>
+          <i>zugesagt, noch nicht bezahlt · ohne Retainer</i></a>
+        <a class="kennzeile" href="/umsatz?sicht=retainer"><span>Monatliche Retainer</span><b>${eur(z.retainer.pro_monat)}</b>
+          <i>${eur(z.retainer.jahr)} auf zwölf Monate · ${z.retainer.kunden} ${z.retainer.kunden === 1 ? "Kunde" : "Kunden"}</i></a>
+        <a class="kennzeile" href="/crm/pipeline"><span>Pipeline — nur Leads</span><b>${eur(z.pipeline_wert)}</b>
+          <i>${z.offene_deals} offene Deals · Forecast ${eur(z.forecast)}</i></a>
+      </div>
+      <div class="zt-geld">
+        <a class="karte zt-umsatz" href="/umsatz" title="Alle Abschlüsse nach Monat ansehen">
+          <div class="zt-umsatz-haupt">
+            <span class="kachel-label">Umsatz ${esc(monatName)}</span>
+            ${/* Der ganze Umsatz des Monats: das Projekt im Monat des
+                  Abschlusses, die Betreuung in jedem Monat, in dem sie
+                  anfaellt. Bis zum 20.09.2026 stand hier der Zahlungseingang —
+                  dieselbe Ueberschrift, eine andere Zahl. Was davon schon da
+                  ist, steht als zweite Zeile darunter; was noch aussteht,
+                  oben in "Offene Forderungen". */""}
+            <div class="zt-umsatz-zahl">${eur(z.umsatz.monat)}</div>
+            <div class="zt-umsatz-fuss">
+              ${/* Was davon schon auf dem Konto ist, steht in der Kachel
+                    "Umsatz — auf dem Konto" darueber. Hier nicht noch einmal:
+                    Zwei Geldbetraege unter einer Ueberschrift lesen sich wie
+                    ein Widerspruch. */""}
+              <span class="caption">Wert der Abschlüsse in diesem Monat</span>
+              ${wachstum === null
+                ? `<span class="caption zt-punkt">${esc(vormonatName)} ohne Umsatz</span>`
+                : `<span class="trend ${wachstum >= 0 ? "auf" : "ab"} klein">${wachstum >= 0 ? "↗" : "↘"} ${Math.abs(wachstum)} % zu ${esc(vormonatName)}</span>`}
+            </div>
+          </div>
+          <div class="zt-umsatz-seite">
+            <div class="zt-umsatz-neben">
+              <span class="kachel-mini-titel">${esc(vormonatName)}</span>
+              <div class="zt-umsatz-neben-zahl">${eur(z.umsatz.vormonat)}</div>
+            </div>
+            <div class="zt-umsatz-neben stark">
+              <span class="kachel-mini-titel">Eingegangen insgesamt</span>
+              <div class="zt-umsatz-neben-zahl">${eur(z.eingegangen.gesamt)}</div>
+              <span class="kachel-mini-ziel">${z.umsatz.anzahl_gesamt} Abschlüsse · Ø ${eur(schnitt)}/Monat</span>
+            </div>
+          </div>
+        </a>
+
+        <div class="karte zt-kurve">
+          <div class="karte-kopf"><div><h2>Umsatzentwicklung</h2>
+            <div class="sub">Zwölf Monate — <b>eingegangen</b> (Fläche) gegen <b>voraussichtlich</b> (gestrichelt)</div></div>
+            <a href="/crm" class="caption">CRM →</a></div>
+          <div class="chart-flaeche" style="height:200px">
+            <div class="chart-y">${[kurve.max, kurve.max * .75, kurve.max * .5, kurve.max * .25, 0]
+              .map((v, i) => `<span style="top:${kurve.gitter[i]}px">${eurK(v)}</span>`).join("")}</div>
+            <svg viewBox="0 0 800 200" preserveAspectRatio="none" style="width:100%;height:180px">
+              <defs>
+                <linearGradient id="ztfl" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="var(--blau-600)" stop-opacity=".38"/>
+                  <stop offset="45%" stop-color="var(--blau-500)" stop-opacity=".16"/>
+                  <stop offset="100%" stop-color="var(--blau-400)" stop-opacity="0"/></linearGradient>
+                <linearGradient id="ztln" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="var(--blau-400)"/>
+                  <stop offset="100%" stop-color="var(--blau-900)"/></linearGradient>
+              </defs>
+              ${kurve.gitter.map((y) => `<line x1="0" y1="${y}" x2="800" y2="${y}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 6"/>`).join("")}
+              <path d="${eingangKurve.flaeche}" fill="url(#ztfl)"/>
+              <path d="${kurve.linie}" fill="none" stroke="var(--blau-400)" stroke-width="2"
+                    stroke-dasharray="6 5" stroke-linecap="round"/>
+              <path d="${eingangKurve.linie}" fill="none" stroke="url(#ztln)" stroke-width="2.5" stroke-linecap="round"/>
+              ${eingangKurve.pkt.map((p) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" fill="var(--surface-fest, #fff)" stroke="var(--blau-600)" stroke-width="2.5"/>`).join("")}
+            </svg>
+            <div class="chart-achse">${z.verlauf.map((v) =>
+              `<span class="caption">${MON[Number(v.monat.slice(5, 7)) - 1]}</span>`).join("")}</div>
+          </div>
+        </div>
+
+        <div class="karte zt-vorn">
+          <div class="karte-kopf"><div><h2>Blick nach vorn</h2>
+            <div class="sub">Was in der offenen Pipeline steckt</div></div></div>
+          <div class="forecast">
+            <div class="forecast-label">${ZT.waage} Forecast</div>
+            <div class="forecast-zahl">${eur(z.forecast)}</div>
+            <div class="forecast-sub">gewichtet nach Phasen-Wahrscheinlichkeit</div>
+          </div>
+          <div class="kennliste">
+            <div class="kennzeile">${ZT.trend}<span>Pipeline — nur Leads</span><b>${eur(z.pipeline_wert)}</b></div>
+            <div class="kennzeile">${ZT.schichten}<span>Offene Lead-Deals</span><b>${z.offene_deals}</b></div>
+            <div class="kennzeile">${ZT.euro}<span>Ø Deal-Größe</span><b>${z.offene_deals ? eur(z.pipeline_wert / z.offene_deals) : "—"}</b></div>
+            <div class="kennzeile">${ZT.kalenderKlein}<span>Nächste 30 Tage</span><b>${z.erwartet30 ? eur(z.erwartet30) : "—"}</b></div>
+            <div class="kennzeile">${ZT.ziel}<span>Kunden · Leads</span><b>${z.kunden} · ${z.leads}</b></div>
+          </div>
+        </div>
+      </div>`;
+    } catch (e) {
+      console.error("Zentrale-Zahlen:", e.message);
+      geldBlock = `<div class="hinweis warn" style="margin-bottom:16px">${ZT.warnung}<div>
+        Umsatz und Forecast sind gerade nicht abrufbar — die CRM-Datenbank antwortet nicht.</div></div>`;
+    }
+  } else if (datenbank) {
+    geldBlock = `<div class="hinweis info" style="margin-bottom:16px">${ZT.info}<div>
+      <strong>Melde dich persönlich an</strong>, dann stehen hier Umsatz, Entwicklung und Forecast —
+      an deinem Konto hängen die Zeilenrechte in der Datenbank.
+      <a href="/crm/anmelden">Jetzt anmelden →</a></div></div>`;
+  }
+
+  res.send(layout("Zentrale", "zentrale-start", `
+    <div class="seiten-kopf">
+      <div><p class="sub">${heute}${nutzer ? " · " + esc(nutzer.name.split(" ")[0]) : ""}</p></div>
+      <div class="zt-tasten">
+        ${admin ? `
+        <form method="post" action="/briefing/neu"><button class="dunkel">${ICON.sonne} Briefing erstellen</button></form>
+        <form method="post" action="/skill/mail-triage"><button class="sekundaer">${ZT.post} Mail-Triage starten</button></form>` : ""}
+        ${darf("chat") ? `<a class="knopf sekundaer" href="/chat">${ICON.funke} ${esc(AGENT)} fragen</a>` : ""}
+      </div>
+    </div>
+    ${req.query.gestartet ? `<div class="hinweis info" style="margin-bottom:16px">${ZT.info}<div>
+      <strong>${esc(req.query.gestartet)}</strong> läuft — ${esc(AGENT)} arbeitet im Hintergrund.
+      Das Ergebnis erscheint hier, lad die Seite in ein paar Minuten neu.</div></div>` : ""}
+
+    ${geldBlock}
+
+    <div class="karte" style="margin-bottom:16px"><div class="karte-kopf"><div>
+      <h2>Tages-Briefing</h2><div class="sub">Was ${esc(AGENT)} für heute zusammengestellt hat</div></div>
+      <a href="/chat" class="caption">${esc(AGENT)} fragen →</a></div>
+      <div data-load="/api/briefing"><p class="caption">Lädt …</p></div></div>
+
+    <div class="zt-raster">
+      <div class="karte"><div class="karte-kopf"><div>
+        <h2>Kalender</h2><div class="sub" id="cal-label">Heute</div></div>
+        <span class="zt-kopf-rechts">
+          <span class="zt-nav">
+            <button type="button" onclick="calShift(-1)" title="Ein Tag zurück">${ZT.links}</button>
+            <button type="button" onclick="calShift(1)" title="Ein Tag vor">${ZT.rechts}</button></span>
+          <a href="/kalender" class="caption">öffnen →</a></span></div>
+        <div id="cal-body"><p class="caption">Lädt …</p></div></div>
+      ${datenbank && darf("todos") ? karte("To-Dos", "Was heute ansteht", "/api/todos/stats", "/todos", "öffnen") : ""}
+      ${admin ? karte("Mail-Triage", `Vier Körbe, sortiert von ${esc(AGENT)}`, "/api/mail", null) : ""}
+      ${admin ? karte("Was braucht mich?", "Freigaben und Entscheidungen", "/api/inbox", null) : ""}
+      ${darf("crm") ? karte("Kunden &amp; CRM", "Wie der Monat ausgeht", "/api/crm/stats", "/crm", "öffnen") : ""}
+      ${datenbank && admin ? karte("Buchhaltung", "Der laufende Monat", "/api/buchhaltung/stats", "/buchhaltung", "öffnen") : ""}
+      ${datenbank && darf("content") ? karte("Content", "Was wir selbst posten", "/api/content/stats", "/content", "öffnen") : ""}
+      ${datenbank && darf("marketing") ? karte("Marketing", "Eingekaufte Reichweite", "/api/marketing/stats", "/marketing", "öffnen") : ""}
+    </div>`, req));
+});
+
+// Das Jarvis-Pult — nur noch fuer die Aufnahme-Buehne (/?buehne=1), siehe oben.
+async function hudZentraleSenden(req, res) {
   const jetzt = new Date();
   const heute = jetzt.toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   const nutzer = (req.session && req.session.crm) || null;
@@ -1593,7 +1817,6 @@ app.get("/", async (req, res) => {
     knopfAdmin ? `<form method="post" action="/briefing/neu"><button class="hud-modul tat" type="submit">${ICON.sonne}Briefing erstellen</button></form>` : "",
     knopfAdmin ? `<form method="post" action="/skill/mail-triage"><button class="hud-modul tat" type="submit">${ZT.post}Mail-Triage starten</button></form>` : "",
     darf("chat") ? modul("/chat", ICON.funke, AGENT) : "",
-    darf("leads") ? modul("/leads", ICON.leads, "Lead-Maschine") : "",
     darf("crm") ? modul("/crm", ICON.kunden, "Kunden &amp; CRM") : "",
     darf("todos") ? modul("/todos", ICON.todo, "To-Dos") : "",
     darf("kalender") ? modul("/kalender", ICON.kalender, "Kalender") : "",
@@ -1663,7 +1886,7 @@ app.get("/", async (req, res) => {
     .replace(/<body[^>]*>/, () =>
       `<body class="jarvis hud-zentrale${imRahmen ? " hud-im-rahmen" : ""}">\n${HUD_VERTRAG}`);
   res.send(seite);
-});
+}
 
 // --- Umsatz aufgeschluesselt: was hinter der Zahl auf der Zentrale steckt ---
 //
@@ -1687,59 +1910,243 @@ app.get("/umsatz", async (req, res) => {
     const crm = require("./lib/crm.js");
     const d = await crm.umsatzNachMonat(nutzer);
     const SPARTE_NAME = { webdesign: "Webdesign", performance: "Performance Marketing", ki: "KI" };
+    // Drei Sichten auf dieselben Zahlen (20.09.2026). Sie kommen aus EINER
+    // Rechnung (crm.umsatzNachMonat) — sonst koennte "auf dem Konto" hier
+    // etwas anderes sagen als die Kachel, von der man gerade gekommen ist.
+    const SICHTEN = [
+      ["umsatz", "Umsatz", "Monat für Monat — das Projekt im Monat des Abschlusses, die Betreuung in jedem Monat, in dem sie anfällt"],
+      ["eingegangen", "Auf dem Konto", "Was wirklich bezahlt wurde — in dem Monat, zu dem es gehört"],
+      ["offen", "Offene Forderungen", "Zugesagt, aber noch nicht bezahlt — nach Kunde, der größte Betrag oben"],
+      ["retainer", "Monatliche Retainer", "Die laufende Betreuung — je Kunde Monat für Monat"],
+    ];
+    const sicht = SICHTEN.some(([k]) => k === req.query.sicht) ? req.query.sicht : "umsatz";
+    const sichtTitel = (SICHTEN.find(([k]) => k === sicht) || SICHTEN[0])[1];
+    const sichtUnter = (SICHTEN.find(([k]) => k === sicht) || SICHTEN[0])[2];
+    const umschalter = `<nav class="um-sichten">${SICHTEN.map(([k, t]) =>
+      `<a href="/umsatz${k === "umsatz" ? "" : "?sicht=" + k}"${k === sicht ? ' class="aktiv"' : ""}>${esc(t)}</a>`).join("")}</nav>`;
     const heuteSchluessel = (() => { const n = new Date();
       return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`; })();
 
-    const monatsBlock = d.monate.map((m) => {
-      const offen = m.summe - m.eingegangen;
-      return `<div class="karte um-monat${m.schluessel === heuteSchluessel ? " jetzt" : ""}">
+    // Ein Monatskasten. Zeigt je Posten, was er WERT ist und was davon
+    // eingegangen ist — bis zum 20.09.2026 stand hier die ganze Vertragssumme
+    // im Abschlussmonat: Anderka mit 4.900 EUR im September, obwohl davon
+    // 2.400 EUR erst in den zwoelf Monaten danach anfallen.
+    const monatsKasten = (m) => `<div class="karte um-monat${m.schluessel === heuteSchluessel ? " jetzt" : ""}">
+      <div class="um-kopf">
+        <div class="um-kopf-titel">
+          <h2>Umsatz ${esc(m.titel)}</h2>
+          <span class="caption">${m.posten.length} ${m.posten.length === 1 ? "Posten" : "Posten"}
+            · ${eur(m.eingegangen)} eingegangen${m.offen > 0.01 ? ` · ${eur(m.offen)} offen` : ""}</span>
+        </div>
+        <div class="um-kopf-zahl">${eur(m.summe)}</div>
+      </div>
+      <div class="um-liste">
+        ${m.posten.map((x) => {
+          const stand = x.wert <= 0.01 ? { text: "Eingang ohne Posten", klasse: "" }
+            : x.offen <= 0.01 ? { text: "bezahlt", klasse: "b-gruen" }
+            : x.eingegangen > 0.01 ? { text: eur(x.offen) + " offen", klasse: "b-bernstein" }
+            : { text: "nichts eingegangen", klasse: "b-rot" };
+          return `<a class="um-zeile" href="/crm/firma/${x.firma_id}">
+            <span class="um-tag">${x.tag
+              ? new Date(x.tag).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })
+              : "—"}</span>
+            <span class="um-name">${esc(x.firma)}
+              <i>${esc(x.was)} · ${esc(SPARTE_NAME[x.sparte] || x.sparte || "—")}${x.ort ? " · " + esc(x.ort) : ""}</i></span>
+            <span class="badge ${stand.klasse} um-stand">${esc(stand.text)}</span>
+            <span class="um-wert">${eur(x.wert)}
+              <i>${eur(x.eingegangen)} ein · ${eur(x.offen)} offen</i></span>
+          </a>`;
+        }).join("")}
+      </div>
+    </div>`;
+
+    // Vergangenheit und Gegenwart oben, das Kommende getrennt darunter. Die
+    // Betreuung laeuft bis zu zwoelf Monate in die Zukunft — stuende sie
+    // vorne, oeffnete sich die Seite mit Monaten, die es noch nicht gab.
+    const bisHeute = d.monate.filter((m) => m.schluessel <= heuteSchluessel);
+    const kommend = d.monate.filter((m) => m.schluessel > heuteSchluessel)
+      .sort((a, b) => a.schluessel.localeCompare(b.schluessel));
+    const kommendSumme = kommend.reduce((s2, m) => s2 + m.summe, 0);
+    const monatsBlock = bisHeute.map(monatsKasten).join("")
+      + (kommend.length ? `
+      <div class="um-kommend-kopf">
+        <h2>Noch kommend</h2>
+        <span class="caption">${eur(kommendSumme)} aus der laufenden Betreuung,
+          verteilt auf ${kommend.length} ${kommend.length === 1 ? "Monat" : "Monate"} —
+          vereinbart, aber noch nicht angefallen</span>
+      </div>` + kommend.map(monatsKasten).join("") : "");
+
+    // --- Sicht "Auf dem Konto": nur Posten, bei denen Geld angekommen ist ---
+    const eingangsBlock = d.monate
+      .map((m) => ({ ...m, posten: m.posten.filter((x) => x.eingegangen > 0.01) }))
+      .filter((m) => m.posten.length)
+      .map((m) => `<div class="karte um-monat${m.schluessel === heuteSchluessel ? " jetzt" : ""}">
         <div class="um-kopf">
           <div class="um-kopf-titel">
-            <h2>Umsatz ${esc(m.titel)}</h2>
-            <span class="caption">${m.deals.length} ${m.deals.length === 1 ? "Abschluss" : "Abschlüsse"}
-              · ${eur(m.eingegangen)} eingegangen${offen > 0.01 ? ` · ${eur(offen)} offen` : ""}</span>
+            <h2>${esc(m.titel)}</h2>
+            <span class="caption">${m.posten.length} ${m.posten.length === 1 ? "Zahlung" : "Zahlungen"}
+              · von ${eur(m.summe)} Umsatz in diesem Monat</span>
           </div>
-          <div class="um-kopf-zahl">${eur(m.summe)}</div>
+          <div class="um-kopf-zahl">${eur(m.eingegangen)}</div>
         </div>
         <div class="um-liste">
-          ${m.deals.map((x) => {
-            const rest = x.wert - x.eingegangen;
-            const stand = rest <= 0.01
-              ? { text: "bezahlt", klasse: "b-gruen" }
-              : x.eingegangen > 0.01
-                ? { text: eur(rest) + " offen", klasse: "b-bernstein" }
-                : { text: "nichts eingegangen", klasse: "b-rot" };
-            return `<a class="um-zeile" href="/crm/firma/${x.firma_id}">
-              <span class="um-tag">${x.geschlossen_am
-                ? new Date(x.geschlossen_am).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })
-                : "—"}</span>
-              <span class="um-name">${esc(x.firma)}
-                <i>${esc(SPARTE_NAME[x.sparte] || x.sparte || "—")}${x.ort ? " · " + esc(x.ort) : ""}${
-                  x.status === "verloren" ? " · verloren" : ""}</i></span>
-              <span class="badge ${stand.klasse} um-stand">${esc(stand.text)}</span>
-              <span class="um-wert">${eur(x.wert)}</span>
-            </a>`;
-          }).join("")}
+          ${m.posten.map((x) => `<a class="um-zeile" href="/crm/firma/${x.firma_id}">
+            <span class="um-tag">${x.tag
+              ? new Date(x.tag).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })
+              : "—"}</span>
+            <span class="um-name">${esc(x.firma)}
+              <i>${esc(x.was)} · ${esc(SPARTE_NAME[x.sparte] || x.sparte || "—")}</i></span>
+            <span class="badge ${x.offen <= 0.01 ? "b-gruen" : "b-bernstein"} um-stand">${
+              x.offen <= 0.01 ? "vollständig" : "Teilzahlung"}</span>
+            <span class="um-wert">${eur(x.eingegangen)}
+              <i>von ${eur(x.wert)}</i></span>
+          </a>`).join("")}
         </div>
-      </div>`;
-    }).join("");
+      </div>`).join("");
+
+    // --- Sicht "Offene Forderungen": nach Kunde, nicht nach Monat ---
+    //
+    // Bewusst anders gebuendelt als die beiden anderen Sichten: Bei einer
+    // offenen Forderung ist die Frage "wer schuldet uns wie viel", nicht "in
+    // welchem Monat ist das entstanden". Die Monate stehen trotzdem dabei —
+    // an den einzelnen Posten.
+    //
+    // FAELLIG und KOMMEND werden getrennt gezaehlt. Die Summe oben (und die
+    // Kachel auf der Zentrale) enthaelt den ganzen Vertrag, also auch die
+    // Betreuungsmonate, die erst 2027 anfallen — so ist "offene Forderungen"
+    // definiert. Wer aber wissen will, wem er hinterhertelefonieren muss,
+    // meint nur das, was schon faellig ist. Beides steht da, sortiert wird
+    // nach dem Faelligen.
+    const nachKunde = new Map();
+    for (const m of d.monate) {
+      for (const x of m.posten) {
+        if (x.offen <= 0.01) continue;
+        if (!nachKunde.has(x.firma_id)) {
+          nachKunde.set(x.firma_id, { firma_id: x.firma_id, firma: x.firma, ort: x.ort,
+            sparte: x.sparte, offen: 0, faellig: 0, kommend: 0, wert: 0, eingegangen: 0, posten: [] });
+        }
+        const k = nachKunde.get(x.firma_id);
+        const kommend = m.schluessel > heuteSchluessel;
+        k.offen += x.offen; k.wert += x.wert; k.eingegangen += x.eingegangen;
+        if (kommend) k.kommend += x.offen; else k.faellig += x.offen;
+        k.posten.push({ ...x, monat: m.titel, schluessel: m.schluessel, kommend });
+      }
+    }
+    const schuldner = [...nachKunde.values()].sort((a, b) => b.faellig - a.faellig || b.offen - a.offen);
+    // Faellige Posten zuerst (neueste oben), danach das, was noch kommt
+    // (chronologisch) — in der Reihenfolge, in der man sie abarbeitet.
+    for (const k of schuldner) {
+      k.posten.sort((a, b) => (a.kommend ? 1 : 0) - (b.kommend ? 1 : 0)
+        || (a.kommend ? a.schluessel.localeCompare(b.schluessel) : b.schluessel.localeCompare(a.schluessel)));
+    }
+    const offenBlock = schuldner.map((k) => `<div class="karte um-monat">
+      <div class="um-kunde-kopf">
+        <h2><a href="/crm/firma/${k.firma_id}">${esc(k.firma)}</a></h2>
+        <span class="caption">${k.eingegangen > 0.01
+          ? eur(k.eingegangen) + " von " + eur(k.wert) + " bezahlt"
+          : "noch gar nichts bezahlt"}${k.kommend > 0.01
+          ? ` · davon ${eur(k.faellig)} schon fällig, ${eur(k.kommend)} kommt erst noch`
+          : ""}</span>
+        <span class="um-kunde-offen">${eur(k.offen)}</span>
+      </div>
+      <div class="um-liste">
+        ${k.posten.map((x) => `<a class="um-zeile" href="/crm/firma/${x.firma_id}">
+          <span class="um-tag">${x.tag
+            ? new Date(x.tag).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })
+            : "—"}</span>
+          <span class="um-name">${esc(x.was)}
+            <i>${esc(x.monat)}${x.kommend ? " · fällt erst noch an" : ""}</i></span>
+          <span class="badge ${x.kommend ? "" : x.eingegangen > 0.01 ? "b-bernstein" : "b-rot"} um-stand">${
+            x.kommend ? "noch nicht fällig"
+              : x.eingegangen > 0.01 ? eur(x.eingegangen) + " bezahlt" : "nichts eingegangen"}</span>
+          <span class="um-wert">${eur(x.offen)}
+            <i>von ${eur(x.wert)}</i></span>
+        </a>`).join("")}
+      </div>
+    </div>`).join("");
+
+    // --- Sicht "Monatliche Retainer": die laufende Betreuung je Kunde ---
+    //
+    // Sie steht getrennt, weil sie in den beiden Zahlen darueber nicht mehr
+    // mitzaehlt (Vorgabe Lukas, 20.09.2026). Hier ist sie vollstaendig: jeder
+    // Monat, bezahlt oder nicht, bis zum Ende der Laufzeit.
+    const retainerKunden = new Map();
+    for (const m of d.monate) {
+      for (const x of m.posten) {
+        if (x.art !== "retainer") continue;
+        if (!retainerKunden.has(x.firma_id)) {
+          retainerKunden.set(x.firma_id, { firma_id: x.firma_id, firma: x.firma, sparte: x.sparte,
+            proMonat: x.wert, monate: 0, wert: 0, eingegangen: 0, offen: 0, posten: [] });
+        }
+        const k = retainerKunden.get(x.firma_id);
+        k.monate += 1; k.wert += x.wert; k.eingegangen += x.eingegangen; k.offen += x.offen;
+        k.posten.push({ ...x, monat: m.titel, schluessel: m.schluessel,
+          kommend: m.schluessel > heuteSchluessel });
+      }
+    }
+    const retainerListe = [...retainerKunden.values()].sort((a, b) => b.proMonat - a.proMonat);
+    for (const k of retainerListe) k.posten.sort((a, b) => a.schluessel.localeCompare(b.schluessel));
+    const retainerProMonat = retainerListe.reduce((a, k) => a + k.proMonat, 0);
+    const retainerBlock = retainerListe.length ? `
+      <div class="um-summe" style="margin-bottom:18px">
+        <div><span class="caption">Pro Monat</span><b>${eur(retainerProMonat)}</b>
+          <span class="caption">${retainerListe.length} ${retainerListe.length === 1 ? "Kunde" : "Kunden"} in Betreuung</span></div>
+        <div><span class="caption">Auf zwölf Monate</span><b>${eur(retainerProMonat * 12)}</b>
+          <span class="caption">wenn niemand kündigt</span></div>
+        <div><span class="caption">Davon schon bezahlt</span><b>${eur(retainerListe.reduce((a, k) => a + k.eingegangen, 0))}</b>
+          <span class="caption">von ${eur(retainerListe.reduce((a, k) => a + k.wert, 0))} über die Laufzeiten</span></div>
+      </div>` + retainerListe.map((k) => `<div class="karte um-monat">
+      <div class="um-kunde-kopf">
+        <h2><a href="/crm/firma/${k.firma_id}">${esc(k.firma)}</a></h2>
+        <span class="caption">${eur(k.proMonat)} im Monat · ${k.monate} ${k.monate === 1 ? "Monat" : "Monate"}
+          · ${k.posten.filter((x) => x.eingegangen > 0.01).length} bezahlt</span>
+        <span class="um-kunde-offen">${eur(k.proMonat)}<span class="caption">/Monat</span></span>
+      </div>
+      <div class="um-liste">
+        ${k.posten.map((x) => `<a class="um-zeile" href="/crm/firma/${x.firma_id}">
+          <span class="um-tag">${new Date(x.tag).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}</span>
+          <span class="um-name">${esc(x.monat)}
+            <i>${x.kommend ? "fällt erst noch an" : x.eingegangen > 0.01 ? "bezahlt" : "fällig, noch nicht bezahlt"}</i></span>
+          <span class="badge ${x.kommend ? "" : x.eingegangen > 0.01 ? "b-gruen" : "b-rot"} um-stand">${
+            x.kommend ? "noch nicht fällig" : x.eingegangen > 0.01 ? "bezahlt" : "offen"}</span>
+          <span class="um-wert">${eur(x.wert)}</span>
+        </a>`).join("")}
+      </div>
+    </div>`).join("") : "";
+
+    const retainerGesamt = retainerListe.reduce((a, k) => a + k.wert, 0);
+    const leer = (text) => `<div class="karte leer"><h3>Nichts zu zeigen</h3><p>${text}</p></div>`;
+    const inhalt = sicht === "eingegangen"
+      ? (eingangsBlock || leer("Es ist noch keine Zahlung eingegangen."))
+      : sicht === "offen"
+        ? (offenBlock || leer("Alle Kunden haben bezahlt. Nichts offen."))
+        : sicht === "retainer"
+          ? (retainerBlock || leer("Noch kein Kunde mit monatlicher Betreuung."))
+          : (d.monate.length ? monatsBlock
+            : leer("Sobald ein Kunde mit Preis in der Kundenakte steht, erscheint er hier."));
 
     res.send(layout("Umsatz", "zentrale", `
       <div class="seiten-kopf">
-        <div><h1>Umsatz</h1>
-          <p>Alle gewonnenen Abschlüsse — neuester Monat zuerst</p></div>
+        <div><h1>${esc(sichtTitel)}</h1>
+          <p>${esc(sichtUnter)}</p></div>
         <a class="knopf sekundaer" href="/">← Zentrale</a>
       </div>
+      ${umschalter}
+      ${/* Die Aufteilung Projekte / Betreuung steht ueber jeder Sicht. Auf der
+            Zentrale sind die Retainer aus "voraussichtlicher Umsatz" und
+            "offene Forderungen" herausgerechnet — wer von dort kommt, soll
+            hier sofort sehen, wo sie geblieben sind, statt eine dritte Zahl
+            vorzufinden. */""}
       <div class="um-summe">
         <div><span class="caption">Umsatz insgesamt</span><b>${eur(d.gesamt)}</b>
-          <span class="caption">${d.anzahl} Abschlüsse</span></div>
+          <span class="caption">${eur(d.gesamt - retainerGesamt)} Projekte + ${eur(retainerGesamt)} Betreuung</span></div>
         <div><span class="caption">Davon eingegangen</span><b>${eur(d.eingegangen)}</b>
-          <span class="caption">in der Buchhaltung gebucht</span></div>
+          <span class="caption">${d.kunden} Kunden · ${d.anzahl} Posten</span></div>
         <div><span class="caption">Noch offen</span><b>${eur(d.gesamt - d.eingegangen)}</b>
-          <span class="caption">abgeschlossen, aber nicht bezahlt</span></div>
+          <span class="caption">${schuldner.length} ${schuldner.length === 1 ? "Kunde" : "Kunden"} · ${
+            eur(schuldner.reduce((a, k) => a + k.faellig, 0))} davon schon fällig</span></div>
       </div>
-      ${d.monate.length ? monatsBlock : `<div class="karte leer"><h3>Noch kein Umsatz</h3>
-        <p>Sobald ein Kunde mit Preis in der Kundenakte steht, erscheint er hier.</p></div>`}`, req));
+      ${inhalt}`, req));
   } catch (err) {
     console.error("Umsatzseite:", err.message);
     res.send(layout("Umsatz", "zentrale", `
@@ -1809,13 +2216,6 @@ app.get("/api/inbox", (req, res) => {
   } catch {}
   const alle = [...(Array.isArray(ausVault) ? ausVault : []), ...readInbox()].filter((x) => !x.erledigt);
   res.json({ ok: true, punkte: alle.slice(0, 8), gesamt: alle.length });
-});
-
-app.get("/api/leads/stats", (req, res) => {
-  const runs = readLeadRuns();
-  const gesamt = runs.reduce((n, r) => n + (r.leads || []).length, 0);
-  const top = runs.flatMap((r) => r.leads || []).filter((l) => Number(l.score) >= 9).length;
-  res.json({ ok: true, laeufe: runs.length, gesamt, top, letzter: runs[0]?.lauf?.datum || null, manuell: readLeads().length });
 });
 
 // CRM-Kennzahlen fuer die Zentrale. Braucht eine persoenliche Anmeldung, weil die
@@ -1974,115 +2374,6 @@ app.get("/wissen", (req, res) => {
   }
   res.send(layout("Wissen — der Vault, live", "wissen", `
     <div class="split"><nav class="tree">${tree}</nav><article class="reader">${content}</article></div>`, req));
-});
-
-// ---------- Leads (Grundgerüst mit lokalem Speicher) ----------
-const LEADS_FILE = path.join(DATA_PATH, "leads.json");
-function readLeads() {
-  try { return JSON.parse(fs.readFileSync(LEADS_FILE, "utf-8")); } catch { return []; }
-}
-function writeLeads(leads) { fs.writeFileSync(LEADS_FILE, JSON.stringify(leads, null, 2)); }
-
-// Läufe der Lead-Maschine: Alexandra schreibt Ergebnisse als JSON in den Vault
-function readLeadRuns() {
-  const dir = path.join(VAULT_PATH, "projekte", "leads");
-  try {
-    return fs.readdirSync(dir)
-      .filter((f) => f.endsWith(".json"))
-      .map((f) => {
-        try { return { file: f, ...JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8")) }; }
-        catch { return null; }
-      })
-      .filter(Boolean)
-      .sort((a, b) => String(b.lauf?.datum || b.file).localeCompare(String(a.lauf?.datum || a.file)));
-  } catch { return []; }
-}
-
-function scoreBadge(s) {
-  const n = Number(s) || 0;
-  const cls = n >= 9 ? "b-gewonnen" : n >= 7 ? "b-kontaktiert" : "b-verloren";
-  return `<span class="badge ${cls}">${n}/10</span>`;
-}
-
-app.get("/leads", (req, res) => {
-  const runs = readLeadRuns();
-  const runBlocks = runs.map((r) => {
-    const rows = (r.leads || []).map((l) => `
-      <tr>
-        <td>${esc(l.name)}</td><td>${esc(l.telefon || "–")}</td>
-        <td>${l.website ? `<a href="${esc(l.website)}" target="_blank">Website ↗</a>` : "<span class='muted'>keine ✨</span>"}</td>
-        <td>${scoreBadge(l.score)}</td>
-        <td class="small">${(l.argumente || []).map(esc).join(" · ")}</td>
-      </tr>`).join("");
-    return `<div class="card">
-      <h2>📦 ${esc(r.lauf?.branche || "?")} · ${esc(r.lauf?.region || "?")} <span class="muted small">— ${esc(r.lauf?.datum || "")}, ${(r.leads || []).length} Leads</span></h2>
-      ${r.lauf?.sheet_url ? `<p><a href="${esc(r.lauf.sheet_url)}" target="_blank">📊 Google Sheet öffnen ↗</a></p>` : ""}
-      <table class="tbl"><thead><tr><th>Name</th><th>Telefon</th><th>Website</th><th>Score</th><th>Verkaufsargumente</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="5" class="muted">Keine Leads im Lauf.</td></tr>'}</tbody></table>
-    </div>`;
-  }).join("");
-
-  const leads = readLeads();
-  const manualRows = leads.map((l, i) => `
-    <tr>
-      <td>${esc(l.name)}</td><td>${esc(l.telefon || "–")}</td>
-      <td>${l.website ? `<a href="${esc(l.website)}" target="_blank">${esc(l.website)}</a>` : "–"}</td>
-      <td><span class="badge b-${esc(l.status || "neu")}">${esc(l.status || "neu")}</span></td>
-      <td>${esc(l.notiz || "")}</td>
-      <td><form method="post" action="/leads/delete" class="inline"><input type="hidden" name="i" value="${i}"><button class="tiny danger">✕</button></form></td>
-    </tr>`).join("");
-
-  const started = req.query.started === "1";
-  res.send(layout("Lead-Maschine", "leads", `
-    ${started ? `<div class="card" style="border-color:var(--accent)"><h2>🚀 Auftrag an Alexandra gesendet</h2><p>Der Lauf startet im Hintergrund (ca. 8–15 Min). Das Ergebnis erscheint hier und als Google Sheet, sobald es fertig ist — Seite später einfach neu laden.</p></div>` : ""}
-    <div class="card"><h2>🎯 Neuen Lauf starten</h2>
-      <form method="post" action="/leads/run" class="lead-form">
-        <input name="branche" placeholder="Branche (z. B. Physiotherapie)" required>
-        <input name="region" placeholder="Region (z. B. München)" required>
-        <input name="anzahl" type="number" value="20" min="5" max="100">
-        <button type="submit">Lauf starten</button>
-      </form>
-      <p class="muted small">Ablauf: Apify-Rohdaten → technischer Vorfilter → Screenshot-Bewertung durch parallele Subagenten (Score 1–10, ab 7 = Lead) → Google Sheet + Tabelle hier.</p>
-    </div>
-    ${runBlocks || '<div class="card"><p class="muted">Noch keine Läufe. Starte oben den ersten — oder warte, bis ${AGENT} den lead-gen-Skill fertig hat.</p></div>'}
-    <div class="card"><h2>✍️ Manuelle Leads</h2><form method="post" action="/leads/add" class="lead-form">
-      <input name="name" placeholder="Name / Praxis" required>
-      <input name="telefon" placeholder="Telefon">
-      <input name="website" placeholder="Website (https://…)">
-      <select name="status"><option>neu</option><option>kontaktiert</option><option>termin</option><option>gewonnen</option><option>verloren</option></select>
-      <input name="notiz" placeholder="Notiz">
-      <button type="submit">Hinzufügen</button>
-    </form>
-    <table class="tbl"><thead><tr><th>Name</th><th>Telefon</th><th>Website</th><th>Status</th><th>Notiz</th><th></th></tr></thead>
-    <tbody>${manualRows || '<tr><td colspan="6" class="muted">Noch keine manuellen Leads.</td></tr>'}</tbody></table></div>`, req));
-});
-
-// Lauf starten -> Auftrag an Alexandra (Hermes-API); sie arbeitet im Hintergrund weiter
-app.post("/leads/run", async (req, res) => {
-  const { branche, region, anzahl } = req.body;
-  const hermes = require("./lib/hermes.js");
-  if (!hermes.verfuegbar()) return res.redirect("/leads");
-  const auftrag = `Starte den lead-gen-Skill mit diesen Parametern: Branche „${branche}", Region „${region}", Anzahl ${Number(anzahl) || 20}. ` +
-    `Schreibe das Endergebnis zusätzlich zum Google Sheet als JSON nach /opt/data/wissen/projekte/leads/JJJJ-MM-TT-branche-region.json ` +
-    `im Format {"lauf":{"datum","branche","region","anzahl","sheet_url"},"leads":[{"name","telefon","website","adresse","score","argumente":[]}]} — das Dashboard liest diese Datei.`;
-  // Laeuft im Hintergrund; Ergebnis und Fehler stehen im Auftragsbuch (/agenten).
-  hermes.feuern(auftrag, { quelle: "web", nutzerId: req.session.crm?.id || null, sessionId: "leads" });
-  res.redirect("/leads?started=1");
-});
-
-app.post("/leads/add", (req, res) => {
-  const leads = readLeads();
-  const { name, telefon, website, status, notiz } = req.body;
-  if (name) leads.push({ name, telefon, website, status, notiz, erstellt: new Date().toISOString() });
-  writeLeads(leads);
-  res.redirect("/leads");
-});
-
-app.post("/leads/delete", (req, res) => {
-  const leads = readLeads();
-  leads.splice(Number(req.body.i), 1);
-  writeLeads(leads);
-  res.redirect("/leads");
 });
 
 // ---------- Platzhalter-Module ----------
@@ -2488,9 +2779,9 @@ function layout(title, active, content, req) {
           (d.gesamt > d.punkte.length ? "<p class='caption zt-fuss'>" + (d.gesamt - d.punkte.length) + " weitere</p>" : "");
       }
       // Die Leads-Karte stand hier bis zum 27.07. Sie ist von der Zentrale
-      // runter — die Lead-Maschine ist die Fundgrube VOR dem CRM, und auf der
-      // Startseite hat sie zwischen Umsatz und Tagesgeschaeft nichts zu suchen.
-      // Die Seite /leads und /api/leads/stats gibt es unveraendert weiter.
+      // runter — die Lead-Maschine war die Fundgrube VOR dem CRM, und auf der
+      // Startseite hatte sie zwischen Umsatz und Tagesgeschaeft nichts zu suchen.
+      // Die Lead-Maschine selbst (/leads) ist seit dem 09.09. komplett raus.
       if (src.includes("todos")) {
         var kopf = liste(
           zeile("Heute", d.heute, "gross"),

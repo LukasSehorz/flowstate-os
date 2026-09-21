@@ -2137,3 +2137,148 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   .wb-pfeile .wb-pfeil-unten:hover{transform:translateX(-50%)}
   .wb-zeile-link:hover{transform:none}
 }
+
+/* =====================================================================
+   Listen-Tafeln "Kunden" und "Leads" (14.09.2026)
+   Zwei Tafeln IN der Wand, unter den Personen (whiteboard.js baut Rahmen
+   und Schild, whiteboard-listen.js die Zeilen). Alles ist in WELTEINHEITEN
+   bemessen wie der Rest der Tafel (2400 x 1400) — die Buehne skaliert es
+   mit. In der ueblichen Tafel-Ansicht (Zoom um 0,45) werden aus 32
+   Einheiten gut 14 Bildschirm-Pixel.
+   ===================================================================== */
+.wb-liste-mount{position:absolute;inset:0;padding:56px 64px 44px}
+.wb-liste-inhalt{height:100%;display:flex;flex-direction:column;font-size:32px;color:var(--wb-chrom-text)}
+/* In der Uebersicht ist die Tafel ein Knopf zum Hinfahren, kein Formular:
+   Klicks gehen an die Wand durch, whiteboard.js faehrt dann hin. */
+.wb-flaeche[data-ansicht="alle"] .wb-liste-inhalt{pointer-events:none}
+
+.wb-liste-kopfzeile,
+.wb-liste-zeile{
+  display:grid;align-items:center;column-gap:24px;
+  grid-template-columns:44px minmax(0,1.15fr) minmax(0,1.6fr) minmax(0,1.6fr) 230px 56px;
+}
+.wb-liste-kopfzeile{
+  padding:0 20px 18px;border-bottom:3px solid var(--wb-chrom-rand);
+  font-size:22px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--wb-chrom-neben);
+}
+.wb-liste-zeilen{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:10px 0}
+.wb-liste-zeile{
+  padding:14px 20px;border-bottom:2px solid color-mix(in srgb,var(--wb-chrom-rand) 60%,transparent);
+  transition:background .15s ease,opacity .15s ease;
+}
+.wb-liste-zeile:hover{background:color-mix(in srgb,var(--wb-chrom-rand) 22%,transparent)}
+.wb-liste-zeile:focus-within{background:var(--wb-primaer-weich)}
+.wb-liste-zeile.zieht{opacity:.4}
+
+.wb-liste-griff{display:flex;align-items:center;justify-content:center;height:56px;color:var(--wb-chrom-still);cursor:grab}
+.wb-liste-griff svg{width:30px;height:30px}
+.wb-liste-griff:active{cursor:grabbing}
+
+.wb-liste-feld,
+.wb-liste-suche{
+  width:100%;min-width:0;height:60px;padding:0 14px;
+  font:inherit;font-size:32px;color:var(--wb-chrom-text);
+  background:transparent;border:0;border-bottom:3px solid transparent;border-radius:8px 8px 0 0;
+  transition:border-color .15s ease,background .15s ease;
+}
+.wb-liste-feld::placeholder,
+.wb-liste-suche::placeholder{color:var(--wb-chrom-still)}
+.wb-liste-feld:hover,
+.wb-liste-suche:hover{background:color-mix(in srgb,var(--wb-chrom-rand) 30%,transparent)}
+.wb-liste-feld:focus,
+.wb-liste-suche:focus{outline:none;border-bottom-color:var(--wb-primaer);background:var(--wb-tafel)}
+/* Bezahlt ist eine Auswahl. Das Eigenbau-Dreieck des Browsers waere bei
+   Zoom 40 % ein Fleck — darum ohne, mittig, wie die anderen Felder. */
+.wb-liste-bezahlt{text-align:center;text-align-last:center;font-weight:600;
+  appearance:none;-webkit-appearance:none;cursor:pointer}
+.wb-liste-bezahlt option{font-size:22px;font-weight:500}
+.wb-liste-feld.klemmt{border-bottom-color:var(--wb-rot);background:color-mix(in srgb,var(--wb-rot) 8%,transparent)}
+
+/* Kurzer gruener Schimmer: "steht jetzt auch in der Akte". */
+@keyframes wb-in-akte{
+  0%{box-shadow:inset 0 -3px 0 var(--wb-gruen),0 0 0 6px color-mix(in srgb,var(--wb-gruen) 30%,transparent)}
+  100%{box-shadow:inset 0 -3px 0 transparent,0 0 0 0 transparent}
+}
+.in-akte{animation:wb-in-akte 1.6s ease-out}
+
+.wb-liste-firma{min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.wb-liste-firma .wb-liste-suche{flex:1 1 auto}
+.wb-liste-firmalink{
+  flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  padding:6px 0;font-weight:650;color:var(--wb-chrom-text);text-decoration:none;
+}
+.wb-liste-firmalink:hover{color:var(--wb-primaer);text-decoration:underline;text-underline-offset:6px}
+.wb-liste-firmawechsel{
+  flex:none;padding:6px 12px;border:0;border-radius:8px;background:none;cursor:pointer;
+  font:inherit;font-size:22px;color:var(--wb-chrom-still);
+  opacity:0;transition:opacity .15s ease,background .15s ease,color .15s ease;
+}
+.wb-liste-zeile:hover .wb-liste-firmawechsel,
+.wb-liste-firmawechsel:focus-visible{opacity:1}
+.wb-liste-firmawechsel:hover{background:color-mix(in srgb,var(--wb-chrom-rand) 40%,transparent);color:var(--wb-chrom-text)}
+
+/* Zeilen, die der Abgleich erzeugt hat (Migration 0077). Die Marke ist leise:
+   Sie erklaert, warum hier weder "ändern" noch ein Loeschknopf steht — mehr
+   braucht es nicht, die Zeile selbst sieht aus wie jede andere. */
+.wb-liste-auto{
+  flex:none;padding:5px 14px;border-radius:999px;
+  border:2px dashed var(--wb-chrom-rand);
+  font-size:20px;font-weight:600;color:var(--wb-chrom-still);cursor:help;
+}
+/* Der Preis kommt aus der Akte: sichtbar, aber kein Eingabefeld. Gleiche
+   Hoehe und Ausrichtung wie ein Feld, damit die Spalte nicht springt. */
+.wb-liste-fest{
+  display:flex;align-items:center;
+  background:transparent;border-color:transparent;cursor:default;
+  color:var(--wb-chrom-still);
+}
+.wb-liste-loeschen:disabled{cursor:default}
+.wb-liste-zeile:hover .wb-liste-loeschen:disabled{opacity:.35}
+.wb-liste-loeschen:disabled:hover{background:transparent;color:var(--wb-chrom-still)}
+.wb-liste-bezahlt:disabled{opacity:.45;cursor:not-allowed}
+
+/* Die Vorschlaege stehen IN der Zeile (die Zeile waechst kurz), nicht
+   darueber: Die Liste scrollt, und ein schwebendes Menue wuerde an ihrer
+   Unterkante abgeschnitten. */
+.wb-liste-vorschlaege{
+  flex:1 1 100%;display:flex;flex-direction:column;padding:8px;
+  background:var(--wb-chrom-flaeche);border:2px solid var(--wb-chrom-rand);border-radius:14px;
+  box-shadow:var(--wb-schatten2);
+}
+/* display:flex schlaegt das hidden-Attribut — ohne diese Zeile stuende die
+   leere Box dauerhaft da (derselbe Fehler wie am 09.09. beim Warnzeichen). */
+.wb-liste-vorschlaege[hidden]{display:none}
+.wb-liste-vorschlag{
+  display:flex;align-items:baseline;justify-content:space-between;gap:16px;width:100%;
+  padding:12px 16px;border:0;border-radius:10px;background:transparent;text-align:left;cursor:pointer;
+  font:inherit;font-size:28px;color:var(--wb-chrom-text);
+}
+.wb-liste-vorschlag small{font-size:22px;color:var(--wb-chrom-still);white-space:nowrap}
+.wb-liste-vorschlag:hover,
+.wb-liste-vorschlag.markiert{background:var(--wb-primaer-weich)}
+.wb-liste-keintreffer{padding:12px 16px;font-size:24px;color:var(--wb-chrom-still)}
+
+.wb-liste-loeschen{
+  width:52px;height:52px;border:0;border-radius:50%;background:transparent;cursor:pointer;
+  font-size:26px;line-height:1;color:var(--wb-chrom-still);
+  opacity:0;transition:opacity .15s ease,background .15s ease,color .15s ease;
+}
+.wb-liste-zeile:hover .wb-liste-loeschen,
+.wb-liste-zeile:focus-within .wb-liste-loeschen,
+.wb-liste-loeschen:focus-visible{opacity:1}
+.wb-liste-loeschen:hover{background:var(--wb-rot);color:#fff}
+
+.wb-liste-leer{padding:60px 20px;text-align:center;font-size:30px;color:var(--wb-chrom-still)}
+.wb-liste-fuss{flex:none;display:flex;align-items:center;gap:28px;padding-top:24px}
+.wb-liste-add{
+  padding:16px 34px;border:0;border-radius:999px;cursor:pointer;
+  font:inherit;font-size:28px;font-weight:650;color:var(--wb-primaer);background:var(--wb-primaer-weich);
+  transition:filter .15s ease;
+}
+.wb-liste-add:hover{filter:brightness(.95)}
+.wb-liste-add:disabled{opacity:.5;cursor:default}
+.wb-liste-meldung{margin:0;font-size:26px;font-weight:550;color:var(--wb-rot)}
+
+@media (prefers-reduced-motion:reduce){
+  .in-akte{animation:none}
+}
