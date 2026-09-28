@@ -286,8 +286,22 @@
 
     // Gezogen wird nur am Griff: In einem Textfeld markiert man Text, man
     // schiebt keine Zeile herum.
-    griff.addEventListener("pointerdown", () => { zeile.draggable = true; });
-    griff.addEventListener("pointerup", () => { if (!zieht) zeile.draggable = false; });
+    // Den Zeiger AM GRIFF festhalten: ohne setPointerCapture feuert das
+    // pointerup nur, wenn der Zeiger den Griff nie verlassen hat — und das
+    // tut er schon bei drei Pixeln Wackeln. "draggable" blieb dann fuer immer
+    // stehen, die Zeile war ab da dauerhaft ziehbar und man konnte in ihren
+    // Feldern keinen Text mehr markieren (28.09.2026 gefunden). Dasselbe
+    // Muster wie ueberall sonst im Whiteboard.
+    griff.addEventListener("pointerdown", (ev) => {
+      zeile.draggable = true;
+      try { griff.setPointerCapture(ev.pointerId); } catch { /* alter Browser: dann eben ohne */ }
+    });
+    const griffLos = (ev) => {
+      try { if (ev.pointerId !== undefined) griff.releasePointerCapture(ev.pointerId); } catch { /* egal */ }
+      if (!zieht) zeile.draggable = false;
+    };
+    griff.addEventListener("pointerup", griffLos);
+    griff.addEventListener("pointercancel", griffLos);
     zeile.addEventListener("dragstart", (ev) => {
       if (!zeile.draggable) { ev.preventDefault(); return; }
       zieht = true;
@@ -306,9 +320,28 @@
       const behaelter = mounts[liste].querySelector(".wb-liste-zeilen");
       const ids = [...behaelter.children].map((k) => k.dataset.id);
       if (ids.join() === stand[liste].map((x) => String(x.id)).join()) return;
-      stand[liste].sort((a, b) => ids.indexOf(String(a.id)) - ids.indexOf(String(b.id)));
+      // Die alte Reihenfolge merken: Was der Server nicht bestaetigt, darf
+      // nicht so aussehen, als waere es gespeichert (Grundsatz im Kopf dieser
+      // Datei — beim Loeschen wird er schon eingehalten, hier fehlte er).
+      const vorher = stand[liste].slice();
+      // Eine id, die der DOM nicht kennt (per Poll dazugekommen), liefert -1
+      // und rutschte stillschweigend nach vorn. Unbekannte bleiben darum hinten.
+      const platz = (x) => { const i = ids.indexOf(String(x.id)); return i < 0 ? ids.length : i; };
+      stand[liste].sort((a, b) => platz(a) - platz(b));
       const r = await post("/api/whiteboard-liste/sortieren", { liste, ids });
-      if (!r.ok) melden(liste, "Reihenfolge nicht gespeichert.");
+      if (!r.ok) {
+        stand[liste] = vorher;
+        // Wie beim Loeschknopf direkt im DOM zurueckrollen: die Zeilen in der
+        // alten Reihenfolge wieder anhaengen. Ein Neuaufbau waere hier falsch —
+        // er wuerde einen gerade getippten, noch nicht gespeicherten Text
+        // ueberschreiben.
+        const nachId = new Map([...behaelter.children].map((k) => [k.dataset.id, k]));
+        for (const x of vorher) {
+          const k = nachId.get(String(x.id));
+          if (k) behaelter.appendChild(k);
+        }
+        melden(liste, "Reihenfolge nicht gespeichert.");
+      }
     });
     return zeile;
   }

@@ -165,6 +165,58 @@ const warte = (ms) => new Promise((r) => setTimeout(r, ms));
       m ? "Zoom " + m.zoom.toFixed(2) + ": " + m.luecke.toFixed(1) + " px, " + (m.verdeckt.join(",") || "frei") : "kein Chip");
   }
 
+  console.log("\n— F. Escape bricht ab, was gerade laeuft (28.09.2026)");
+  {
+    // Gefunden bei der Durchsicht: Escape leerte nur die Auswahl. Ein halb
+    // aufgezogener Rahmen blieb stehen und legte beim Loslassen TROTZDEM einen
+    // Block an — man drueckt Abbruch und bekommt trotzdem, was man abbrach.
+    const vorher = (await s.evaluate(() => window.__wb.stand())).length;
+    // Erst den Fokus aus dem Text nehmen: dort gehoeren die Tasten dem
+    // Schreiben, ein "t" waere ein Buchstabe und kein Werkzeugwechsel.
+    await s.evaluate(() => { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); });
+    await warte(150);
+    await s.keyboard.press("t");                       // Text-Werkzeug
+    p("Das Text-Werkzeug ist aktiv", (await s.evaluate(() => window.__wb.werkzeug)) === "text", await s.evaluate(() => window.__wb.werkzeug));
+    // Freie Stelle suchen — in der vollen Runde liegen hier schon Bloecke,
+    // und auf einem Block wird nicht aufgezogen, sondern der Block angefasst.
+    const frei = await s.evaluate(() => {
+      for (let y = 900; y > 200; y -= 40) for (let x = 1500; x > 900; x -= 40) {
+        const e = document.elementFromPoint(x, y);
+        if (e && !e.closest(".wb-el") && !e.closest(".wb-leiste") && !e.closest(".wb-liste-tafel")) return { x, y };
+      }
+      return null;
+    });
+    p("Eine freie Stelle zum Aufziehen gefunden", !!frei, JSON.stringify(frei));
+    await s.mouse.move(frei.x - 180, frei.y - 80); await s.mouse.down();
+    await s.mouse.move(frei.x, frei.y, { steps: 6 }); await warte(150);
+    const rahmenDa = await s.evaluate(() => { const r = document.querySelector(".wb-neurahmen"); return !!r && !r.hidden; });
+    p("Der Vorschau-Rahmen steht beim Aufziehen", rahmenDa);
+    await s.keyboard.press("Escape"); await warte(200);
+    p("Escape nimmt den Rahmen weg", !(await s.evaluate(() => { const r = document.querySelector(".wb-neurahmen"); return !!r && !r.hidden; })));
+    await s.mouse.up(); await warte(500);
+    const nachher = (await s.evaluate(() => window.__wb.stand())).length;
+    p("Nach dem Loslassen entsteht KEIN Block", nachher === vorher, vorher + " -> " + nachher);
+    await s.keyboard.press("v"); await warte(150);
+  }
+
+  console.log("\n— G. Tastenkuerzel feuern nicht durch offene Dialoge (28.09.2026)");
+  {
+    // Ebenfalls aus der Durchsicht: Der Wischen-Dialog hat nur Knoepfe, und ein
+    // Knopf ist kein Textfeld — "e" schaltete hinter dem Dialog den Schwamm ein.
+    const werkzeugVorher = await s.evaluate(() => window.__wb.werkzeug);
+    await s.evaluate(() => { const d = document.querySelector(".wb-wischen-dialog"); if (d && !d.open) d.showModal(); });
+    await warte(250);
+    p("Der Dialog ist offen", await s.evaluate(() => !!document.querySelector("dialog[open]")));
+    await s.keyboard.press("e"); await warte(200);
+    await s.keyboard.press("n"); await warte(200);
+    const werkzeugNachher = await s.evaluate(() => window.__wb.werkzeug);
+    p("Die Tasten wirken NICHT auf das Werkzeug dahinter", werkzeugNachher === werkzeugVorher, werkzeugVorher + " -> " + werkzeugNachher);
+    await s.evaluate(() => { const d = document.querySelector("dialog[open]"); if (d) d.close(); });
+    await warte(250);
+    p("Nach dem Schliessen wirken die Kuerzel wieder", await (async () => { await s.keyboard.press("e"); await warte(200); return (await s.evaluate(() => window.__wb.werkzeug)) === "schwamm"; })());
+    await s.keyboard.press("v"); await warte(150);
+  }
+
   p("Keine Seitenfehler", seitenfehler.length === 0, seitenfehler.slice(0, 2).join(" | "));
   await b.close();
   console.log("\n" + (fehler ? fehler + " von " + nr + " offen." : "Alle " + nr + " Prüfungen grün."));

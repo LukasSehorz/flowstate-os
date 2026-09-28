@@ -1124,6 +1124,63 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
   outline:calc(1.7px * var(--wb-anti2,1)) solid color-mix(in srgb,var(--wb-primaer) 78%,transparent);
   outline-offset:.14em;
 }
+/* ---------------------------------------- Mehrere Zeilen markiert (28.09.2026)
+   Wunsch von Lukas: "wie bei Excel mit den Zeilen" — Umschalt+Klick oder mit
+   gedrueckter Maustaste darueberziehen, dann in einem Rutsch loeschen.
+
+   Der Bereich soll als EIN Block gelesen werden, nicht als Stapel einzeln
+   gerahmter Zeilen: die Flaeche liegt auf allen, die KANTE nur oben und unten
+   (…-erste / …-letzte). Deshalb hier box-shadow statt outline — outline laeuft
+   immer rundherum und haette jede Zeile einzeln eingerahmt.
+
+   Bewusst etwas kraeftiger als die aktive Zeile (14 % statt 8 %): Hier ist
+   etwas ausgewaehlt, das im naechsten Tastendruck verschwinden kann — das
+   darf man nicht uebersehen. Die Randlinien laufen gegen den Zoom
+   (--wb-anti2), damit sie in der Tafel-Ansicht nicht zu Haaren werden. */
+.wb-el.wb-darf .wb-zeile.wb-zeile-gewaehlt{
+  background:color-mix(in srgb,var(--wb-primaer) 14%,transparent);
+  border-radius:0;
+}
+.wb-el.wb-darf .wb-zeile.wb-zeile-gewaehlt-erste{
+  border-top-left-radius:.3em;border-top-right-radius:.3em;
+  box-shadow:inset 0 calc(1.7px * var(--wb-anti2,1)) 0 0 color-mix(in srgb,var(--wb-primaer) 70%,transparent);
+}
+.wb-el.wb-darf .wb-zeile.wb-zeile-gewaehlt-letzte{
+  border-bottom-left-radius:.3em;border-bottom-right-radius:.3em;
+  box-shadow:inset 0 calc(-1.7px * var(--wb-anti2,1)) 0 0 color-mix(in srgb,var(--wb-primaer) 70%,transparent);
+}
+/* Eine einzelne markierte Zeile ist beides zugleich — sonst schluege die
+   zweite Regel die erste und die obere Kante fehlte. */
+.wb-el.wb-darf .wb-zeile.wb-zeile-gewaehlt-erste.wb-zeile-gewaehlt-letzte{
+  box-shadow:inset 0 calc(1.7px * var(--wb-anti2,1)) 0 0 color-mix(in srgb,var(--wb-primaer) 70%,transparent),
+             inset 0 calc(-1.7px * var(--wb-anti2,1)) 0 0 color-mix(in srgb,var(--wb-primaer) 70%,transparent);
+}
+/* Solange ein Bereich markiert ist, tritt der Rahmen der aktiven Zeile
+   zurueck: zwei Rahmen uebereinander sind einer zu viel, und gemeint ist
+   gerade der Bereich. */
+.wb-el.wb-hat-zeilenwahl .wb-zeile.wb-zeile-aktiv{
+  outline:none;box-shadow:none;background:none;
+}
+.wb-el.wb-hat-zeilenwahl .wb-zeile.wb-zeile-aktiv.wb-zeile-gewaehlt{
+  background:color-mix(in srgb,var(--wb-primaer) 14%,transparent);
+}
+/* Die Werkzeuge einer einzelnen Zeile waeren hier irrefuehrend: sie wirken
+   auf EINE Zeile, gemeint sind aber alle markierten. */
+.wb-el.wb-hat-zeilenwahl .wb-zeile-tools{display:none}
+/* Keine fremde Textmarkierung ueber der Zeilenauswahl — sonst sieht man zwei
+   Markierungen zugleich und weiss nicht, welche gilt. */
+.wb-el.wb-hat-zeilenwahl .wb-zeile-text::selection{background:transparent}
+/* Auch der blinkende Cursor gehoert weg: er stand noch in der zuletzt
+   angeklickten Zeile und behauptete "hier wird geschrieben", waehrend in
+   Wahrheit drei Zeilen zum Loeschen markiert sind. Zwei Aussagen zugleich,
+   von denen eine falsch ist. caret-color:transparent laesst den Fokus (und
+   damit die Tastatur) unangetastet — es versteckt nur den Strich. */
+.wb-el.wb-hat-zeilenwahl .wb-zeile-text{caret-color:transparent}
+/* Und der Antwort-Chip: er zeigt auf EINE Zeile und schwebte ueber dem
+   markierten Bereich, als gehoerte er dazu. Solange ein Bereich markiert ist,
+   ist er nicht gemeint. */
+.wb-el.wb-hat-zeilenwahl .wb-zeile-chip{display:none}
+
 /* Der Papierkorb der Zeile ist ROT, sobald man ihn meint — damit er sich vom
    "Block loeschen" im Kasten unterscheidet, mit dem er verwechselt wurde. */
 .wb-zeile-tools button.wb-zeile-weg:hover{
@@ -1244,6 +1301,12 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
 /* Unsichtbare Trefferflaeche auf 40 px — der Chip selbst misst bei der
    Vorwahl M nur rund 19 px hoch. ::after ist hier frei (kein data-tip). */
 .wb-zeile-chip::after{content:"";position:absolute;inset:min(0px,calc((1.5em - 40px) / 2))}
+/* Liegt der Chip MITTEN im Satz (umbrochene Zeile, siehe chipNachziehen),
+   darf er den Klick nicht abfangen: er ist dann nur noch Anzeige, und wer in
+   den Text klickt, trifft den Text. Angetippt wird das Antworten in dem Fall
+   ueber die Werkzeugleiste der Zeile. 28.09.2026, gemeldet von Lukas. */
+.wb-zeile-chip.wb-chip-im-satz{pointer-events:none;opacity:.6}
+.wb-zeile-chip.wb-chip-im-satz::after{content:none}
 .wb-zeile-chip:hover{
   opacity:1;
   background:color-mix(in srgb,var(--wb-warte-chrom) 12%,var(--wb-flaeche-fest));

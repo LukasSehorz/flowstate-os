@@ -14,6 +14,7 @@
 //   Runde 1  Tafel am Schreibtisch   (Werkzeuge, Papierkorb, Unterpunkte, Ziehen)
 //   Runde 2  Alltag und Rueckfall    (mehrfach loeschen, Zettel, Abgabe an andere)
 //   Runde 3  Handy-Blatt             (Touch, 390 x 844)
+//   Runde 4  Zeilen markieren        (Umschalt+Klick, Ziehen, Loeschen)
 //
 // Laeuft gegen scripts/whiteboard-probe.js (Arbeitsspeicher, keine Datenbank,
 // nichts verlaesst das Haus) — der Laeufer startet die Probe selbst auf einem
@@ -27,7 +28,7 @@ const { CHROME } = require("./whiteboard-haertetest/gemeinsam.js");
 
 const PORT = Number(process.env.WB_TEST_PORT) || 3971;
 const BASIS = "http://localhost:" + PORT;
-const RUNDEN = ["runde1-tafel.js", "runde2-alltag.js", "runde3-handy.js"];
+const RUNDEN = ["runde1-tafel.js", "runde2-alltag.js", "runde3-handy.js", "runde4-zeilenwahl.js"];
 const nur = Number(process.argv[2]) || 0;
 
 const antwortet = () => new Promise((fertig) => {

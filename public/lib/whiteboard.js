@@ -1842,6 +1842,10 @@
     elemente.delete(id);
     auswahl.delete(id);
     inArbeit.delete(id);
+    // Zeigte die Zeilenmarkierung hierher, faellt sie mit. Ein Zustand, der
+    // auf ein geloeschtes Element zeigt, laesst die naechste Entf-Taste auf
+    // undefined laufen.
+    if (zeilenwahl && zeilenwahl.id === id) zeilenwahl = null;
     elementAusBoardNehmen(el);
     auswahlAnzeigen();
     schilderAuffrischen();
@@ -1863,6 +1867,11 @@
     rendernLaeuft = true;
     try { blockRendernInnen(el, alt); }
     finally { rendernLaeuft = false; }
+    // blockRendernInnen schreibt className neu und baut Zeilen um: die
+    // Klassen der Zeilenmarkierung muessen danach aus dem Zustand neu
+    // gesetzt werden, sonst waere der Bereich nach jedem Rendern unsichtbar
+    // (aber noch wirksam) — die unangenehmste Sorte Fehler.
+    if (zeilenwahl && zeilenwahl.id === el.id) { zeilenwahlPruefen(); zeilenwahlAnzeigen(); }
   }
 
   function blockRendernInnen(el, alt) {
@@ -2612,28 +2621,54 @@
     return vor.toString().length;
   };
 
+  // Zeichenposition -> Stelle im DOM. Der Zeilentext ist KEIN einzelner
+  // Textknoten: gestrichene Stuecke sind eigene Knoten darin (siehe
+  // zeilenTextSetzen). Wer "das 12. Zeichen" sucht, muss sie also durchlaufen.
+  // Gibt null zurueck, wenn der Span leer ist.
+  function stelleImText(span, offset) {
+    let rest = klemm(offset, 0, span.textContent.length);
+    const lauf = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
+    let knoten;
+    while ((knoten = lauf.nextNode())) {
+      if (rest <= knoten.textContent.length) return { knoten, pos: rest };
+      rest -= knoten.textContent.length;
+    }
+    return null;
+  }
+
+  // Umgekehrt: Stelle im DOM -> Zeichenposition in der Zeile.
+  function offsetImText(span, knoten, pos) {
+    if (!span.contains(knoten)) return null;
+    let n = 0;
+    const lauf = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
+    let k;
+    while ((k = lauf.nextNode())) {
+      if (k === knoten) return n + pos;
+      n += k.textContent.length;
+    }
+    return null;
+  }
+
   function caretSetzen(span, offset) {
     span.focus();
     const sel = window.getSelection();
     if (!sel) return;
     const r = document.createRange();
-    let rest = klemm(offset, 0, span.textContent.length);
-    let gesetzt = false;
-    const lauf = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
-    let knoten;
-    while ((knoten = lauf.nextNode())) {
-      if (rest <= knoten.textContent.length) { r.setStart(knoten, rest); gesetzt = true; break; }
-      rest -= knoten.textContent.length;
-    }
-    if (!gesetzt) { r.selectNodeContents(span); r.collapse(false); }
-    else r.collapse(true);
+    const stelle = stelleImText(span, offset);
+    if (stelle) { r.setStart(stelle.knoten, stelle.pos); r.collapse(true); }
+    else { r.selectNodeContents(span); r.collapse(false); }
     sel.removeAllRanges();
     sel.addRange(r);
   }
 
   // Zeilenmetadaten leben im Datenmodell, nicht im DOM: der DOM-Index der
   // Zeile IST der Index im Modell — beide werden immer zusammen geaendert.
-  const zeilenIndex = (z) => Array.prototype.indexOf.call(z.parentElement.children, z);
+  // Haengt der Knoten nicht (mehr) in einer Liste, gibt es keinen Index: -1.
+  // Ohne diese Wache warf der Zeilen-Zug "Cannot read properties of null
+  // (reading 'children')", sobald zwischen zwei Mausbewegungen neu gerendert
+  // wurde (gemessen 28.09.2026).
+  const zeilenIndex = (z) => (z && z.parentElement)
+    ? Array.prototype.indexOf.call(z.parentElement.children, z) : -1;
   const elVonKnoten = (knoten) => elemente.get(knoten.closest(".wb-el").dataset.id);
 
   // Serialisiert die Texte aus dem DOM zurueck ins Modell. Metadaten
@@ -2714,6 +2749,73 @@
   //          Nachbarzeile, und die Knoepfe sollen ihm dabei nicht wegspringen.
   let aktiveZeile = null, warmeZeile = null, warmTimer = 0;
   const WARM_NACHLAUF_MS = 700, WARM_WECHSEL_MS = 140;
+
+  // ---------------------------------------------------- Zeilen markieren
+  //
+  // Wunsch von Lukas (28.09.2026): "wie bei Excel mit den Zeilen" — mit
+  // Umschalt+Klick von der aktuellen Zeile bis zur angeklickten alles
+  // auswaehlen, oder mit gedrueckter Maustaste darueberziehen, und das
+  // Markierte dann in einem Rutsch loeschen.
+  //
+  // Der Zustand lebt NICHT im DOM: blockRendernInnen schreibt className neu,
+  // eine Klasse allein waere nach dem naechsten Rendern weg. Gemerkt wird
+  // darum der Block plus ein Indexbereich; die Klassen werden daraus gesetzt
+  // (zeilenwahlAnzeigen) und ueberleben so jedes Rendern.
+  //
+  // "anker" ist die Zeile, an der die Auswahl begann — von ihr aus misst
+  // Umschalt+Klick, genau wie in einer Tabelle. Sie bleibt stehen, solange
+  // man den Bereich aufzieht, damit man in beide Richtungen korrigieren kann.
+  let zeilenwahl = null;           // { id, von, bis, anker }  (von <= bis)
+
+  function zeilenwahlLeeren(stillIds) {
+    if (!zeilenwahl) return;
+    const id = zeilenwahl.id;
+    zeilenwahl = null;
+    if (stillIds !== true) zeilenwahlAnzeigen(id);
+  }
+
+  // Die Klassen aus dem Zustand herstellen. Ohne id: der gemerkte Block.
+  function zeilenwahlAnzeigen(auchId) {
+    const ids = new Set();
+    if (zeilenwahl) ids.add(zeilenwahl.id);
+    if (auchId) ids.add(auchId);
+    for (const id of ids) {
+      const knoten = elementKnoten.get(id);
+      if (!knoten) continue;
+      const zeilen = $$(".wb-zeilen > .wb-zeile", knoten);
+      const gewaehlt = zeilenwahl && zeilenwahl.id === id;
+      zeilen.forEach((z, i) => {
+        const an = gewaehlt && i >= zeilenwahl.von && i <= zeilenwahl.bis;
+        z.classList.toggle("wb-zeile-gewaehlt", an);
+        // Nur oben und unten eine Kante: der Bereich soll als EIN Block
+        // gelesen werden, nicht als Stapel einzeln gerahmter Zeilen.
+        z.classList.toggle("wb-zeile-gewaehlt-erste", an && i === zeilenwahl.von);
+        z.classList.toggle("wb-zeile-gewaehlt-letzte", an && i === zeilenwahl.bis);
+      });
+      knoten.classList.toggle("wb-hat-zeilenwahl", !!gewaehlt);
+    }
+  }
+
+  // Bereich setzen (immer ueber den Anker gerechnet) und anzeigen.
+  function zeilenwahlSetzen(el, anker, bis) {
+    const n = el.inhalt.zeilen.length;
+    const a = klemm(anker, 0, n - 1), b = klemm(bis, 0, n - 1);
+    const vorher = zeilenwahl && zeilenwahl.id;
+    zeilenwahl = { id: el.id, anker: a, von: Math.min(a, b), bis: Math.max(a, b) };
+    zeilenwahlAnzeigen(vorher && vorher !== el.id ? vorher : null);
+  }
+
+  // Wie viele Zeilen sind gerade markiert? (0 = keine)
+  const zeilenwahlAnzahl = () => zeilenwahl ? (zeilenwahl.bis - zeilenwahl.von + 1) : 0;
+
+  // Die Textmarkierung des Browsers wegnehmen. Gebraucht, sobald ZEILEN
+  // markiert werden: sonst blinkt der Caret mitten im markierten Bereich und
+  // die naechste Taste schriebe in den Text, statt auf die Markierung zu wirken.
+  function markierungAufheben() {
+    const sel = window.getSelection && window.getSelection();
+    if (sel && sel.rangeCount) sel.removeAllRanges();
+    blaseVerstecken();
+  }
   function zeileWarmSetzen(z) {
     clearTimeout(warmTimer); warmTimer = 0;
     const neu = z && z.isConnected ? z : null;
@@ -2787,6 +2889,9 @@
       knoten.classList.remove("wb-fokus");
       chipWeg();
       zeileAktivSetzen(null);
+      // Die Zeilenmarkierung gehoert zum offenen Block: wer ihn verlaesst,
+      // laesst keinen Rahmen zurueck, der auf nichts mehr wirkt.
+      if (zeilenwahl && zeilenwahl.id === knoten.dataset.id) zeilenwahlLeeren();
       if (!el) return;
       blockSerialisieren(el);
       const leer = el.inhalt.zeilen.every((z) => !z.t.trim());
@@ -2845,12 +2950,121 @@
       if (!el || !darfBearbeiten(el)) return;
 
       // Shift ergaenzt die Auswahl (Muster der Flaeche), ohne zu ziehen.
-      if (ev.shiftKey) {
-        ev.preventDefault(); ev.stopPropagation();
+      // ABER nicht im offenen Block: wer darin steht, meint seine ZEILEN
+      // (Umschalt+Klick "von hier bis dort"), nicht den Block als Ganzes.
+      // Diese Unterscheidung fehlte bis zum 28.09.2026 — der Zweig hier fing
+      // jeden Umschalt-Klick ab, und die Zeilenauswahl kam nie zum Zug.
+      if (ev.shiftKey && !(knoten.classList.contains("wb-fokus") && ev.target.closest(".wb-zeile"))) {
+        ev.preventDefault(); ev.stopImmediatePropagation();
         if (auswahl.has(el.id)) auswahl.delete(el.id); else auswahl.add(el.id);
         auswahlAnzeigen();
         return;
       }
+
+      // ---- Zeilen markieren (Wunsch 28.09.2026, "wie bei Excel").
+      //
+      // Das greift NUR, wenn der Block schon offen ist (wb-fokus) — sonst
+      // waere der erste Klick auf einen fremden Block schon eine Markierung,
+      // und das Verschieben von Bloecken ginge verloren. Wer im Block ist,
+      // arbeitet an seinen Zeilen; wer es nicht ist, arbeitet am Block.
+      const zeileHier = ev.target.closest(".wb-zeile");
+      const offen = knoten.classList.contains("wb-fokus");
+      if (offen && zeileHier && ev.pointerType !== "touch") {
+        const idx = zeilenIndex(zeileHier);
+
+        // Umschalt+Klick: von der aktuellen Zeile (oder dem bestehenden
+        // Anker) bis hierher. Der Anker bleibt stehen, damit man den Bereich
+        // in beide Richtungen korrigieren kann, ohne neu anzufangen.
+        if (ev.shiftKey) {
+          const anker = zeilenwahl && zeilenwahl.id === el.id ? zeilenwahl.anker
+                      : (aktiveZeile && knoten.contains(aktiveZeile) ? zeilenIndex(aktiveZeile) : idx);
+
+          // BLEIBT ES IN DERSELBEN ZEILE, ist Umschalt+Klick das normale
+          // Markieren von TEXT — "von hier bis dorthin", wie in jedem
+          // Textfeld. Gemeldet von Lukas am 28.09.2026: in einer langen,
+          // umbrochenen Zeile ging genau das nicht. Der Grund lag nicht hier,
+          // sondern eine Zeile tiefer: pointerdown ruft weiter unten
+          // ev.preventDefault() auf, sobald der Block gezogen werden koennte —
+          // und ein unterdruecktes mousedown nimmt dem Browser die
+          // Moeglichkeit, die Auswahl zu erweitern. Wir erledigen es deshalb
+          // selbst: Anfang der bestehenden Auswahl merken, Ende auf den
+          // Klickpunkt setzen.
+          if (anker === idx && !zeilenwahl) {
+            const span = $(".wb-zeile-text", zeileHier);
+            const sel = window.getSelection();
+            // Wo faengt die Auswahl an? Beim bestehenden Anker, sonst beim
+            // Caret. Beides in ZEICHEN gerechnet, nicht in DOM-Knoten: der
+            // Zeilentext zerfaellt bei gestrichenen Stuecken in mehrere Knoten.
+            let von = null;
+            if (sel && sel.rangeCount && span.contains(sel.anchorNode)) {
+              von = offsetImText(span, sel.anchorNode, sel.anchorOffset);
+            }
+            if (von === null && aktiveZeile === zeileHier) von = 0;
+            if (von !== null) {
+              const bis = caretAusPunkt(span, ev.clientX, ev.clientY);
+              const a = stelleImText(span, Math.min(von, bis));
+              const b = stelleImText(span, Math.max(von, bis));
+              if (a && b) {
+                ev.preventDefault(); ev.stopImmediatePropagation();
+                const r = document.createRange();
+                r.setStart(a.knoten, a.pos);
+                r.setEnd(b.knoten, b.pos);
+                sel.removeAllRanges(); sel.addRange(r);
+                span.focus({ preventScroll: true });
+                markierungPruefen();
+                return;
+              }
+            }
+          }
+
+          // Ueber Zeilengrenzen hinweg: ganze ZEILEN markieren (wie in einer
+          // Tabelle). Der Anker bleibt stehen, damit man den Bereich in beide
+          // Richtungen korrigieren kann, ohne neu anzufangen.
+          ev.preventDefault(); ev.stopImmediatePropagation();
+          zeilenwahlSetzen(el, anker, idx);
+          markierungAufheben();
+          return;
+        }
+
+        // Ziehen mit gedrueckter Maustaste: erst ab der zweiten Zeile eine
+        // Markierung. Innerhalb EINER Zeile gehoert das Ziehen weiter der
+        // Textmarkierung — sonst koennte man kein einzelnes Wort mehr
+        // markieren, und genau das braucht Lukas zum Kopieren.
+        if (!ev.shiftKey && ev.button === 0) {
+          const startIdx = idx, zeiger = ev.pointerId;
+          let zieht = false;
+          const bewegen = (m) => {
+            if (m.pointerId !== zeiger) return;
+            const ueber = document.elementFromPoint(m.clientX, m.clientY);
+            const z2 = ueber && ueber.closest && ueber.closest(".wb-zeile");
+            if (!z2 || !knoten.contains(z2)) return;
+            const i2 = zeilenIndex(z2);
+            if (i2 === startIdx && !zieht) return;     // noch in derselben Zeile
+            if (!zieht) {
+              zieht = true;
+              markierungAufheben();
+            }
+            zeilenwahlSetzen(el, startIdx, i2);
+          };
+          const fertig = (m) => {
+            if (m.pointerId !== zeiger) return;
+            window.removeEventListener("pointermove", bewegen, true);
+            window.removeEventListener("pointerup", fertig, true);
+            window.removeEventListener("pointercancel", fertig, true);
+            // Nur ein Klick, kein Zug: die Markierung faellt weg, der Caret
+            // darf hinein. Sonst bliebe nach jedem Klick ein Rahmen stehen.
+            if (!zieht && zeilenwahl && zeilenwahl.id === el.id) zeilenwahlLeeren();
+          };
+          window.addEventListener("pointermove", bewegen, true);
+          window.addEventListener("pointerup", fertig, true);
+          window.addEventListener("pointercancel", fertig, true);
+        }
+      }
+
+      // Ein Klick ohne Umschalt beendet eine bestehende Zeilenmarkierung —
+      // ab jetzt gilt wieder der Caret. (Der Zug-Zweig oben hat sie fuer
+      // diesen Fall noch nicht gesetzt.)
+      if (!ev.shiftKey && zeilenwahl && zeilenwahl.id === el.id) zeilenwahlLeeren();
 
       // Steht der Cursor schon IM Block, darf nur Griff/Rand ziehen —
       // sonst koennte man Text nicht mehr markieren.
@@ -2999,7 +3213,89 @@
       blockGeaendert(el, true);
     }
 
+    // ---- Den markierten Bereich loeschen (28.09.2026).
+    //
+    // Unterpunkte am Rand kommen MIT: Wer die Aufgabe loescht, meint auch
+    // ihre Stichpunkte — blieben sie stehen, haengen sie unter einer
+    // fremden Aufgabe und behaupten dort etwas Falsches. Umgekehrt zieht
+    // ein markierter Unterpunkt seine Aufgabe NICHT mit.
+    function zeilenwahlLoeschen(el, knoten) {
+      if (!zeilenwahl || zeilenwahl.id !== el.id) return;
+      const zeilen = el.inhalt.zeilen;
+      let von = zeilenwahl.von, bis = zeilenwahl.bis;
+      // Haengen unter der LETZTEN markierten Zeile noch Unterpunkte, die
+      // nicht mitmarkiert sind? Dann gehoeren sie dazu.
+      if (zeilen[bis] && zeilen[bis].ebene !== 1) {
+        while (zeilen[bis + 1] && zeilen[bis + 1].ebene === 1) bis++;
+      }
+      const anzahl = bis - von + 1;
+      const wortlaut = anzahl === 1 ? "Zeile gelöscht." : anzahl + " Zeilen gelöscht.";
+      zeilenwahlLeeren();
+      zeilenWeg(el, von, anzahl, { idx: von, pos: 0 });
+      toast(wortlaut, { aktion: () => undoAusfuehren(), aktionText: "Rückgängig" });
+    }
+
     // ---- Tastenlogik je Zeile.
+    // ---- Tasten, wenn ein ZEILENBEREICH markiert ist (28.09.2026).
+    //
+    // Der Handler haengt am Blockknoten, das Ereignis kommt aber aus dem
+    // Textfeld hochgeblubbert: Ein .wb-el traegt kein tabindex, ist also gar
+    // nicht fokussierbar — ein knoten.focus() liefe ins Leere und der Fokus
+    // bliebe im Text. Darum wird hier NICHT nach dem Fokus gefragt, sondern
+    // nur danach, ob ein Bereich markiert ist. Dieser Handler steht vor dem
+    // Zeilen-Handler und faengt die Tasten ab, die dem Bereich gehoeren
+    // (stopPropagation), damit nicht beide auf dieselbe Taste reagieren.
+    knoten.addEventListener("keydown", (ev) => {
+      if (!zeilenwahl || zeilenwahl.id !== knoten.dataset.id) return;
+      const el = elVonKnoten(knoten);
+      if (!el) { zeilenwahlLeeren(); return; }
+      const n = el.inhalt.zeilen.length;
+
+      // Bereich mit Umschalt+Pfeil erweitern oder verkleinern — gerechnet
+      // wird immer vom Anker aus, wie beim Klicken.
+      if ((ev.key === "ArrowUp" || ev.key === "ArrowDown") && ev.shiftKey) {
+        ev.preventDefault(); ev.stopImmediatePropagation();
+        const spitze = zeilenwahl.von === zeilenwahl.anker ? zeilenwahl.bis : zeilenwahl.von;
+        zeilenwahlSetzen(el, zeilenwahl.anker, spitze + (ev.key === "ArrowDown" ? 1 : -1));
+        return;
+      }
+      // Ohne Umschalt: die Markierung faellt weg, der Caret geht an den Rand
+      // des bisherigen Bereichs. So kommt man ohne Maus wieder ins Schreiben.
+      if (ev.key === "ArrowUp" || ev.key === "ArrowDown") {
+        ev.preventDefault(); ev.stopImmediatePropagation();
+        const ziel = ev.key === "ArrowDown" ? zeilenwahl.bis : zeilenwahl.von;
+        zeilenwahlLeeren();
+        const sp = $$(".wb-zeile-text", knoten)[klemm(ziel, 0, n - 1)];
+        if (sp) caretSetzen(sp, ev.key === "ArrowDown" ? sp.textContent.length : 0);
+        return;
+      }
+      // Alles markieren — erst die Zeilen des Blocks, das ist hier das Naechste.
+      if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "a") {
+        ev.preventDefault(); ev.stopImmediatePropagation();
+        zeilenwahlSetzen(el, 0, n - 1);
+        return;
+      }
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopImmediatePropagation(); zeilenwahlLeeren(); return; }
+      if (ev.key === "Delete" || ev.key === "Backspace") {
+        ev.preventDefault(); ev.stopImmediatePropagation();
+        zeilenwahlLoeschen(el, knoten);
+        return;
+      }
+      // Kopieren: die markierten Zeilen als Text, eine je Reihe.
+      if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "c") {
+        const text = el.inhalt.zeilen.slice(zeilenwahl.von, zeilenwahl.bis + 1)
+          .map((z) => (z.ebene === 1 ? "  " : "") + String(z.t || "")).join("\n");
+        try { navigator.clipboard.writeText(text); } catch { /* ohne Rechte: egal */ }
+        return;
+      }
+      // Jede andere Taste, die etwas schreibt, hebt die Markierung auf —
+      // stillschweigend hineinzuschreiben waere die unangenehmste Ueberraschung.
+      if (ev.key.length === 1 && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+        ev.preventDefault(); ev.stopImmediatePropagation();
+        zeilenwahlLeeren();
+      }
+    });
+
     knoten.addEventListener("keydown", (ev) => {
       const span = ev.target.closest(".wb-zeile-text");
       if (!span) return;
@@ -3007,6 +3303,23 @@
       if (!el) return;
       const zeile = span.closest(".wb-zeile");
       const idx = zeilenIndex(zeile);
+
+      // Umschalt+Pfeil an der Zeilengrenze: ab hier sind ZEILEN gemeint.
+      // Innerhalb einer (auch umbrochenen) Zeile bleibt es das normale
+      // Markieren von Text — das darf man nicht wegnehmen.
+      if ((ev.key === "ArrowUp" || ev.key === "ArrowDown") && ev.shiftKey
+          && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+        const runter = ev.key === "ArrowDown";
+        const grenze = anZeilengrenze(span, runter);
+        const sel = window.getSelection();
+        const nurCaret = !sel || sel.isCollapsed;
+        if (grenze && nurCaret && $$(".wb-zeile-text", knoten)[idx + (runter ? 1 : -1)]) {
+          ev.preventDefault();
+          zeilenwahlSetzen(el, idx, idx + (runter ? 1 : -1));
+          markierungAufheben();
+          return;
+        }
+      }
 
       // Alt+A: auf DIESE Zeile antworten, ohne die Hand von der Tastatur zu
       // nehmen. ev.code statt ev.key, weil Alt+A auf manchen Belegungen ein
@@ -3054,6 +3367,14 @@
         const neueZeile = { t: text.slice(pos), erledigt: false, gestrichen: false };
         // Unter einem Unterpunkt geht es mit Unterpunkten weiter.
         if (el.inhalt.zeilen[idx].ebene === 1) neueZeile.ebene = 1;
+        // Umschalt+Enter macht aus der neuen Zeile einen STICHPUNKT unter der
+        // aktuellen Aufgabe, statt eine neue Aufgabe zu beginnen (Wunsch von
+        // Lukas, 28.09.2026: "dann sollen quasi bullet points kommen und kein
+        // komplett neuer Punkt"). Enter allein bleibt, was es war.
+        // Die neue Zeile landet auf idx + 1, steht also immer UNTER einer
+        // Zeile — ein Stichpunkt ist hier darum an jeder Stelle zulaessig,
+        // auch direkt unter der ersten Aufgabe.
+        if (ev.shiftKey) neueZeile.ebene = 1;
         stricheAblegen(neueZeile, stricheSchneiden(geteilt, pos, text.length));
         el.inhalt.zeilen.splice(idx + 1, 0, neueZeile);
         blockRendern(el);
@@ -3589,7 +3910,7 @@
   function griffAnbinden(griff, knoten) {
     griff.addEventListener("pointerdown", (ev) => {
       if (ev.button !== 0) return;
-      ev.preventDefault(); ev.stopPropagation();
+      ev.preventDefault(); ev.stopImmediatePropagation();
       const el = elVonKnoten(knoten);
       if (!el) return;
       blockZiehen(el, ev);
@@ -3605,7 +3926,7 @@
   function anfasserAnbinden(anfasser, knoten) {
     anfasser.addEventListener("pointerdown", (ev) => {
       if (ev.button !== 0 && ev.pointerType === "mouse") return;
-      ev.preventDefault(); ev.stopPropagation();
+      ev.preventDefault(); ev.stopImmediatePropagation();
       const el = elVonKnoten(knoten);
       if (!el || !darfBearbeiten(el)) return;
       const start = ereignisZuWelt(ev);
@@ -3823,7 +4144,7 @@
       const zeile = griff.closest(".wb-zeile");
       if (!knoten || !zeile) return;
       // Der Zug gehoert der Zeile, nicht dem Block darunter.
-      ev.preventDefault(); ev.stopPropagation();
+      ev.preventDefault(); ev.stopImmediatePropagation();
       const el = elemente.get(knoten.dataset.id);
       if (!el || !darfBearbeiten(el)) return;
       const idx = zeilenIndex(zeile);
@@ -4049,7 +4370,7 @@
   }
   function abgabeTaste(ev) {
     if (!abgabe || ev.key !== "Escape") return;
-    ev.preventDefault(); ev.stopPropagation();
+    ev.preventDefault(); ev.stopImmediatePropagation();
     abgabeBeenden(null);
   }
 
@@ -5317,7 +5638,11 @@
     if (pinch && aktivePointer.size < 2) { pinch = null; gesteBeenden(); }
     if (pan && ev.pointerId === pan.pointerId) panBeenden();
     if (aufziehen) neuAufziehenBeenden(ev, ev.type === "pointercancel");
-    if (marquee) marqueeBeenden(ev);
+    // Ein abgebrochener Zug (Systemgeste, Fenster verliert den Zeiger) darf
+    // NICHTS auswaehlen: die Koordinaten des Cancel-Ereignisses sind keine
+    // Auswahl, die jemand bestaetigt haette. Beim Aufziehen und beim Zeichnen
+    // ist das laengst so — beim Rahmen fehlte es (28.09.2026).
+    if (marquee) { if (ev.type === "pointercancel") marqueeAbbrechen(); else marqueeBeenden(ev); }
   };
   flaeche.addEventListener("pointerup", pointerLoslassen);
   flaeche.addEventListener("pointercancel", pointerLoslassen);
@@ -5366,6 +5691,24 @@
     if (!auswahl.size) return;
     auswahl.clear();
     auswahlAnzeigen();
+  }
+
+  // Zeigt die Zeilenmarkierung auf einen Block, den es nicht mehr gibt (oder
+  // der gerade vom Server neu kam)? Dann faellt sie weg. Ohne das haengt der
+  // Zustand an einer id ins Leere und die naechste Entf-Taste liefe auf
+  // undefined.
+  function zeilenwahlPruefen() {
+    if (!zeilenwahl) return;
+    const el = elemente.get(zeilenwahl.id);
+    if (!el || !elementKnoten.get(zeilenwahl.id)) { zeilenwahl = null; return; }
+    const n = el.inhalt.zeilen.length;
+    if (zeilenwahl.von >= n) { zeilenwahlLeeren(); return; }
+    // Der Block ist kuerzer geworden (fremde Hand): Bereich mitziehen.
+    if (zeilenwahl.bis >= n) {
+      zeilenwahl.bis = n - 1;
+      zeilenwahl.anker = klemm(zeilenwahl.anker, 0, n - 1);
+      zeilenwahlAnzeigen();
+    }
   }
 
   // Was liegt unter dem Zeiger? Erst DOM-Bloecke (oben), dann Striche.
@@ -7184,6 +7527,21 @@
     if (links + (c.offsetWidth || 0) > zeile.clientWidth) c.classList.add("wb-chip-knapp");
     c.style.left = Math.round(links) + "px";
     c.style.top = Math.round((ende.top + ende.height / 2 - zr.top) / skala) + "px";
+    // Steht der Chip MITTEN im Satz? Das passiert bei einer umbrochenen Zeile:
+    // ihr letztes Zeichen liegt irgendwo in der letzten Bildschirmzeile, und
+    // der Chip haengt sich rechts daneben — mit Text darueber und darunter.
+    // Gemeldet von Lukas am 28.09.2026: Umschalt+Klick in eine lange Zeile
+    // markierte nichts, weil der Chip den Klick abfing (gemessen: Chip auf
+    // x 506..601, y 588..606, also inmitten des Textkastens 390..687).
+    // In dem Fall ist er NUR NOCH ANZEIGE: der Klick geht an den Text
+    // darunter, angetippt wird er ueber die Werkzeugleiste der Zeile.
+    const mehrzeilig = kaesten.length > 1 && (() => {
+      // mehr als eine Bildschirmzeile? (unterschiedliche Oberkanten)
+      let oben = null;
+      for (const k of kaesten) { if (!k) continue; if (oben === null) oben = k.top; else if (Math.abs(k.top - oben) > 1) return true; }
+      return false;
+    })();
+    c.classList.toggle("wb-chip-im-satz", !!mehrzeilig);
   }
 
   // ------------------------------------------------- (a) Die Markier-Blase
@@ -7231,7 +7589,7 @@
     // verschwaende, bevor der Klick sie erreicht. Genau wie beim Abhak-Kreis
     // (siehe blockInteraktionAnbinden). Die Regel gilt fuer die ganze Leiste,
     // damit sie auch fuer spaetere Knoepfe automatisch stimmt.
-    b.addEventListener("pointerdown", (ev) => { ev.preventDefault(); ev.stopPropagation(); });
+    b.addEventListener("pointerdown", (ev) => { ev.preventDefault(); ev.stopImmediatePropagation(); });
     b.addEventListener("click", (ev) => {
       const knopf = ev.target.closest(".wb-blase-knopf");
       if (!knopf) return;
@@ -7529,6 +7887,13 @@
 
   window.addEventListener("keydown", (ev) => {
     if (imTextfeld(ev.target)) return; // Zeilen gehoeren dem Browser
+    // Steht ein Dialog offen, gehoert die Tastatur IHM. imTextfeld reicht
+    // dafuer nicht: ein <button> im Dialog ist kein Textfeld, und so wurde
+    // aus einem "e" auf dem Abbrechen-Knopf hinter dem Dialog der Schwamm,
+    // aus "0" die Alle-Ansicht (28.09.2026). Escape schliesst der Dialog
+    // selbst — es darf nicht zusaetzlich hier wirken.
+    if (ev.target.closest && ev.target.closest("dialog")) return;
+    if (document.querySelector("dialog[open]")) return;
     const strg = ev.ctrlKey || ev.metaKey;
     if (strg && ev.key.toLowerCase() === "z" && !ev.shiftKey) { ev.preventDefault(); undoAusfuehren(); return; }
     if (strg && (ev.key.toLowerCase() === "y" || (ev.key.toLowerCase() === "z" && ev.shiftKey))) { ev.preventDefault(); redoAusfuehren(); return; }
@@ -7551,7 +7916,20 @@
       case "1": $(".wb-zoom-stand").click(); break;
       case "0": ansichtWechseln("alle"); break;
       case "?": hilfeUmschalten(); break;
-      case "escape": auswahlLeeren(); $(".wb-hilfe").hidden = true; break;
+      // Escape heisst "lass das jetzt" — und zwar zuerst fuer das, was gerade
+      // laeuft. Bis zum 28.09.2026 leerte es nur die Auswahl: ein halb
+      // aufgezogener Rahmen blieb stehen und legte beim Loslassen trotzdem
+      // einen Block an, der Markier-Rahmen waehlte trotzdem aus.
+      case "escape": {
+        let abgebrochen = false;
+        if (aufziehen) { aufziehen = null; neuRahmen.hidden = true; abgebrochen = true; }
+        if (marquee) { marqueeAbbrechen(); abgebrochen = true; }
+        if (zeichnung) { zeichnungAbschliessen(true); abgebrochen = true; }
+        if (schwammZug) { schwammZug = null; schwammVerwerfen(); abgebrochen = true; }
+        // Lief nichts, gilt Escape wie bisher der Auswahl und der Hilfe.
+        if (!abgebrochen) { auswahlLeeren(); $(".wb-hilfe").hidden = true; }
+        break;
+      }
     }
   });
 
