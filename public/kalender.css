@@ -192,3 +192,89 @@ button.kal-mehr:hover{background:transparent;box-shadow:none;transform:none;text
 
 /* Hinweise oben auf der Seite (os-hinweis statt Balken) */
 .kal-hinweis{margin-bottom:14px}
+
+/* =====================================================================
+   HANDY (30.09.2026) — gemessen auf 390 px, iPhone, angemeldet.
+   Gefunden: 45 Tippziele unter 44 px. Die groesste Gruppe waren die
+   34 Tageszahlen im Monatsraster (30x24 statt 44), dazu "Heute" (70x34),
+   die zwei Pfeile (34x34) und die drei Umschalter Tag/Woche/Monat
+   (52..72 x 29). Ausserdem brach "1. Sep." in der Zelle auf DREI Zeilen
+   um ("1." / "Se" / "p.") und schob die Termine aus dem Bild.
+
+   Die .gk-*-Regeln stehen in crm.css und gehoeren einem anderen Agenten;
+   ergaenzt wird hier ausschliesslich in @media-Bloecken fuer schmale
+   Fenster und mit hoeherer Spezifitaet. Der Desktop bleibt unberuehrt.
+   ===================================================================== */
+@media (max-width:760px){
+
+  /* ---------- Leiste ueber dem Raster ----------
+     "Heute", die zwei Pfeile und die Ansichtswahl sind die Knoepfe, die
+     man auf dem Telefon wirklich druckt — sie bekommen das Daumenmass. */
+  .gk-leiste .gk-heute{height:44px;padding:0 18px;font-size:14px}
+  .gk-leiste .gk-pfeil{width:44px;height:44px}
+  .gk-leiste .gk-pfeil svg{width:20px;height:20px}
+  /* Der Umschalter sass in einer 3px-Schale; mit 44 px innen wuerde die
+     Schale 50 hoch. Das Polster faellt darum auf 2, der Knopf misst
+     44 und die Schale 48 — so hoch wie "Heute" plus Rand. */
+  .gk-leiste .gk-umschalter{padding:2px}
+  .gk-leiste .gk-umschalter a{
+    display:inline-flex;align-items:center;justify-content:center;
+    min-height:44px;padding:0 16px;font-size:13.5px}
+  /* Die Leiste umbricht ohnehin (flex-wrap); damit die Ansichtswahl in
+     der zweiten Reihe die ganze Breite bekommt statt halb angeschnitten
+     neben dem Titel zu stehen, darf die Luecke sie davorschieben. */
+  .gk-leiste .gk-titel{margin-left:4px}
+
+  /* ---------- Monatsraster ----------
+     Auf 390 px ist eine Zelle rund 50 px breit. Ein Kreis von 44 px
+     passt da hinein, ein Kreis von 44 px mit "1. Sep." darin nicht —
+     darum zwei verschiedene Masse:
+       · die reine Zahl bleibt ein runder Knopf, 44x44,
+       · der Monatserste darf sich als Kapsel in die Breite legen und
+         bricht NICHT mehr um (das war der dreizeilige Fehler).
+     Die Zeile darueber bekommt dafuer mehr Hoehe: 74 px Zellenhoehe aus
+     crm.css minus 44 fuer den Kopf liesse fuer Termine 30 px — zu wenig
+     fuer zwei Chips. 104 px geben dem Kopf (44) und zwei Chips (je 28
+     plus Fuge) Platz, ohne dass ein leerer Monat sechs Bildschirme lang
+     wird — das Raster soll in EINEN Blick passen. */
+  .gk-m-gitter{grid-auto-rows:minmax(104px,1fr)}
+  .gk-m-zelle{padding:2px 2px 5px}
+  .gk-m-zellkopf{padding-top:0}
+  .gk-m-zelle .gk-m-zahl{
+    min-width:44px;height:44px;padding:0 6px;font-size:14px;
+    /* Der Monatsname am Ersten stand untereinander, weil die Kapsel
+       schmaler war als sein Wort. Nichts bricht hier mehr um; passt es
+       nicht, wird gekuerzt statt zerrissen. */
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+
+  /* ---------- Termin-Chips im Raster ----------
+     Sie sind Knoepfe und waren 17 px hoch. 44 px je Chip waeren bei zwei
+     Terminen schon die halbe Zelle — Google macht es auch nicht. Der
+     Kompromiss: 28 px optisch (lesbar, klar trennbar) und eine
+     unsichtbare Zone, die die Reihe auf 44 aufzieht. Die Zone liegt
+     ueber der Zelle, nicht ueber dem Nachbarchip: sie waechst nach oben
+     und unten nur um je 8 px, und die Chips stehen 1 px auseinander —
+     zwei Zonen ueberlappen sich damit um 14 px. Das ist gewollt: beide
+     Chips fuehren zum selben Tag, wer danebentippt landet nicht im
+     Leeren. Die Zone kommt auf ::after, damit der eigene Inhalt bleibt. */
+  .gk-m-liste .gk-m-balken,
+  .gk-m-liste .gk-m-zeile{position:relative;min-height:28px;font-size:12px;padding:4px 7px}
+  .gk-m-liste .gk-m-balken::after,
+  .gk-m-liste .gk-m-zeile::after{
+    content:"";position:absolute;left:0;right:0;top:-8px;bottom:-8px}
+  /* "+ N weitere" oeffnet das Tag-Popover — der wichtigste Knopf in einer
+     vollen Zelle und mit 10,5 px der kleinste. */
+  .gk-m-liste button.gk-mehr{min-height:36px;font-size:12px;padding:0 7px}
+
+  /* ---------- Tages- und Wochenraster ----------
+     Die Zahl ueber der Spalte ist ein Link auf den Tag. 28 px waren als
+     Ziel zu knapp; 44 passen in eine 44-px-Spalte gerade noch. */
+  .gk-z-kopf .gk-z-zahl{min-width:40px;height:40px;font-size:16px}
+}
+
+/* Unter 420 px (iPhone SE bis 15 in Hochkant) wird die Zelle so schmal,
+   dass ein 44er-Kreis sie beruehrt. Er darf dann bis an die Zellkante
+   gehen — der Trennstrich bleibt sichtbar, weil er an der Zelle haengt. */
+@media (max-width:420px){
+  .gk-m-zelle .gk-m-zahl{min-width:42px;padding:0 3px;font-size:13.5px}
+}

@@ -2059,10 +2059,75 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
      (13 % — eine Zeile misst dort keine 6 px) waere mit dem Daumen nicht zu
      treffen. Abgegeben wird am Schreibtisch. */
   .wb-zeile-griff{display:none}
+  /* DIE LISTEN-TAFELN ("Kunden", "Leads") SIND AM TELEFON ZUM ANSEHEN,
+     NICHT ZUM AUSFUELLEN (30.09.2026 gemessen).
+     Ihre Zeilen sind in Welteinheiten bemessen (56 Einheiten hoch). Bei der
+     Zoomstufe, die 390 px erzwingen (rund 13 %), werden daraus 7 Bildschirm-
+     Pixel: 35 Loesch-Knoepfe à 6x6 px und 33 Firmen-Links à 7 px Hoehe —
+     zusammen 68 der 87 zu kleinen Tippziele der Seite. Ein Daumen trifft
+     dort nichts Gewolltes, wohl aber aus Versehen ein "Zeile loeschen".
+     Fuer die Textbloecke gibt es das Vollbild-Blatt; fuer die Listen gibt es
+     das (noch) nicht. Bis dahin ist die ehrliche Antwort: KEINE Treffer
+     annehmen. Die Wand bekommt den Tipp und faehrt hin — genau wie in der
+     Uebersicht, wo dieselbe Regel schon steht.
+     Das Scrollen in der Liste bleibt: overflow-y lebt an .wb-liste-zeilen,
+     nicht an den Bedienteilen. */
+  .wb-liste-inhalt button,
+  .wb-liste-inhalt a,
+  .wb-liste-inhalt input,
+  .wb-liste-inhalt select{pointer-events:none}
+  /* Der Loesch-Knopf und der Aendern-Knopf hingen ohnehin am :hover
+     (opacity:0 bis die Maus kommt) — auf einem Telefon gibt es kein
+     Hover, sie waren also UNSICHTBAR und trotzdem antippbar: 35 mal
+     6x6 px "Zeile loeschen", die niemand sucht und jeder treffen kann.
+     Auf dem Telefon gehoeren sie darum ganz weg, nicht nur auf halb. */
+  .wb-liste-loeschen,
+  .wb-liste-firmawechsel{display:none}
+  /* "Zeile hinzufuegen" bleibt sichtbar (sie erklaert die Tafel), ist
+     aber mit 20x10 px kein Ziel — sie tritt zurueck in die Rolle einer
+     Beschriftung. Angelegt wird am Schreibtisch. */
+  .wb-liste-add{opacity:.55}
   body:has(#wb-wurzel) main{padding:10px 10px 10px 0}
   .wb-raum{border-radius:16px}
-  .wb-kopf{top:10px;gap:6px}
-  .wb-seg{padding:8px 11px;font-size:12.5px}
+  /* Die Kopfzeile sass mittig und war so breit wie ihr Inhalt: bei 390 px
+     ragten "Okan", "Kunden", "Leads" und "Alle" bis zu 207 px nach rechts
+     hinaus — und .wb-raum SCHNEIDET AB (overflow:clip), also sah man sie
+     nicht einmal halb. Sie waren schlicht weg (30.09.2026 gemessen).
+     Zwei Dinge fehlten: die Leiste war linksbuendig statt mittig noetig,
+     und dem Scroll-Kasten fehlte min-width:0 — ohne das weigert sich ein
+     Flex-Kind, unter seine Inhaltsbreite zu schrumpfen, und overflow-x:auto
+     kommt nie zum Zug. */
+  .wb-kopf{top:10px;gap:6px;left:10px;right:10px;transform:none;max-width:none}
+  .wb-segmente{min-width:0;flex:0 1 auto}
+  .wb-zoomgruppe{flex:none}
+  /* 44 px Daumenmass statt 31 px — die Tafelwahl ist der meistgetippte
+     Knopf der Seite. */
+  .wb-seg{padding:0 13px;min-height:44px;font-size:12.5px;display:inline-flex;align-items:center}
+  /* Der Hinweis, DASS es rechts weitergeht. Ein Scrollbalken ist am
+     Telefon unsichtbar; ohne Zeichen haelt man die Leiste fuer vollstaendig.
+     Die weiche Kante haengt an scroll-state(scrollable right) und ist
+     deshalb NUR da, solange wirklich noch etwas kommt — am Ende der Leiste
+     steht das letzte Wort wieder scharf. Browser ohne diese Abfrage
+     bekommen gar keine Maske: ein dauerhaft verwaschenes Wort waere
+     schlimmer als kein Hinweis. Gezeichnet wird er von einem mitlaufenden
+     ::after IM Scroll-Kasten (position:sticky) — ein Container kann sich
+     nicht selbst befragen, sein Kind aber schon.
+     Dazu Schnappen, damit ein Wisch auf einer Tafel stehenbleibt statt
+     zwischen zweien. */
+  .wb-segmente{scroll-snap-type:x proximity}
+  .wb-seg{scroll-snap-align:center}
+  @supports (container-type:scroll-state){
+    .wb-segmente{container-type:scroll-state}
+    .wb-segmente::after{
+      content:"";position:sticky;right:0;flex:none;align-self:stretch;
+      width:26px;margin-left:-26px;pointer-events:none;opacity:0;
+      transition:opacity var(--tempo);
+      background:linear-gradient(90deg,transparent,var(--wb-chrom-flaeche) 78%);
+    }
+    @container scroll-state(scrollable: right){
+      .wb-segmente::after{opacity:1}
+    }
+  }
   /* Zoomen macht die Hand (kneifen) — aber "Alles zeigen" bleibt: ohne
      den Knopf faende man aus einer verirrten Ansicht kaum zurueck.
      Mit .wb-zoomgruppe davor, sonst gewinnt ".wb-zoomgruppe button". */
@@ -2113,11 +2178,15 @@ body:has(#wb-wurzel) .wb-wurzel{height:auto}
      ergeben 40x46 auf dem Schirm) — nach OBEN, wo nur die leere Wand
      liegt, nicht nach unten in die Tafelflaeche hinein. Der Abstand
      zwischen den Knoepfen waechst auf genau das doppelte Mass der
-     seitlichen Zugabe, damit die beiden Zonen sich hoechstens beruehren. */
+     seitlichen Zugabe, damit die beiden Zonen sich hoechstens beruehren.
+     Nachgemessen 30.09.2026: der Ordnen-Knopf kam optisch nur auf 22x20,
+     der Wisch-Knopf auf 72x20 — die Rechnung ging von einer hoeheren
+     Zoomstufe aus, als 390 px sie zulassen. Die Zugabe waechst darum von
+     14/38 auf 20/52 (und der Abstand mit ihr auf 40). */
   .wb-ordnenknopf{padding:12px 14px}
   .wb-ordnenknopf span{display:none}
-  .wb-tafelknoepfe{gap:28px}
-  .wb-wischenknopf::after,.wb-ordnenknopf::after{left:-14px;right:-14px;top:-38px;bottom:-4px}
+  .wb-tafelknoepfe{gap:40px}
+  .wb-wischenknopf::after,.wb-ordnenknopf::after{left:-20px;right:-20px;top:-52px;bottom:-4px}
   /* Im Vollbild-Blatt hat der Kasten die Breite des Blatts; die feste
      560er-Breite gilt dort nicht. Und die Gruppen brechen dort um: fuenf
      Kategorie-Schalter nebeneinander sind bei 390 px eine Handbreit zu

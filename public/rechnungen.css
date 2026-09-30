@@ -167,3 +167,196 @@ a.rg-knopf svg,.rg-seite button svg{width:16px;height:16px}
 .rg-kette a:hover{background:var(--surface-2);text-decoration:none}
 .rg-storno{white-space:pre-wrap}
 .rg-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--text-muted);word-break:break-all}
+
+/* =====================================================================
+   HANDY (30.09.2026) — gemessen auf 390 px, iPhone, angemeldet.
+
+   ZUR 980-PX-FRAGE: Die lag NICHT in dieser Datei.
+   Das Messskript rief /rechnungen auf — diesen Weg gibt es nicht. Die
+   Seite heisst /buchhaltung/rechnungen (lib/rechnungen-routes.js:158).
+   Express antwortet auf /rechnungen mit seiner eigenen 404-Seite
+   ("Cannot GET /rechnungen"), und die wird nicht von schale.js gebaut,
+   hat also KEIN <meta name=viewport>. Ohne dieses Meta faellt jeder
+   mobile Browser auf seinen Notbehelf von 980 px zurueck — daher die
+   Zahl. Auf dem echten Weg misst die Seite 390 px. In dieser Datei gibt
+   es weder eine feste Breite noch ein min-width noch ein zu breites
+   Raster; .rg-seite hat nur ein max-width:1240px, das nach unten
+   nachgibt.
+
+   Was hier wirklich fehlte, auf /buchhaltung/rechnungen gemessen:
+     · die Vorlagenwahl ("Webseite · KI-Anwendung · Performance-
+       Marketing · Frei") ragte 130 px nach rechts hinaus,
+     · alle Knoepfe und Umschalter lagen bei 20 bis 42 px Hoehe,
+     · die Tabelle der Liste war auf 390 px nicht lesbar.
+   Alles steht ausschliesslich in @media-Bloecken. Desktop unveraendert.
+   ===================================================================== */
+@media (max-width:760px){
+
+  /* ---------- Knoepfe und Umschalter auf Daumenmass ----------
+     42 px war knapp daneben, 20 px (der "klein"-Knopf unter den
+     Positionen) weit. 44 ist das Mass, das Apple fuer den Daumen nennt. */
+  .rg-seite a.rg-knopf{min-height:44px;padding:0 18px}
+  .rg-seite .os-kopf-aktionen button,
+  .rg-seite .os-blatt-fuss button,
+  .rg-seite .rg-form-fuss button{min-height:44px}
+  /* Der Umschalter (Alle · Angebote · Rechnungen) und die Vorlagenwahl
+     benutzen beide .os-segment. Dessen Kinder sind 30 px hoch. */
+  .rg-seite .os-segment{padding:2px}
+  .rg-seite .os-segment>a,
+  .rg-seite .os-segment>button{min-height:44px;padding:0 15px}
+  /* "Zeile hinzufuegen" und "entfernen" im Formular. */
+  /* "Suchen" unter der Filterzeile und "Zeile hinzufuegen" im Formular
+     tragen .klein — das sind auf dem Desktop 20-px-Textknoepfe. */
+  .rg-seite button.klein,.rg-seite a.klein{min-height:44px;padding:0 16px}
+
+  /* ---------- Die Vorlagenwahl ragte hinaus ----------
+     .os-segment scrollt zwar (overflow-x:auto, os-ui.css), aber als
+     inline-flex in einem Block-Eltern nimmt es die Inhaltsbreite und
+     traegt sie nach rechts aus dem Bild. Vier Vorlagen mit
+     "Performance-Marketing" darunter sind bei 390 px rund 520 px breit.
+     display:flex bindet es an die Breite des Elternteils, dann greift
+     das overflow-x und man wischt die Vorlagen durch. Damit man sieht,
+     DASS es weitergeht, verraet ein weicher Rand die naechste Vorlage —
+     nur solange wirklich noch eine kommt (scroll-state). */
+  .rg-seite .os-segment{display:flex;min-width:0;max-width:100%;scroll-snap-type:x proximity}
+  .rg-seite .os-segment>a,
+  .rg-seite .os-segment>button{scroll-snap-align:center}
+  @supports (container-type:scroll-state){
+    .rg-seite .os-segment{container-type:scroll-state}
+    .rg-seite .os-segment::after{
+      content:"";position:sticky;right:0;flex:none;align-self:stretch;
+      width:24px;margin-left:-24px;pointer-events:none;opacity:0;
+      transition:opacity var(--tempo);
+      background:linear-gradient(90deg,transparent,var(--os-flaeche-3,var(--surface-2)) 78%)}
+    @container scroll-state(scrollable: right){
+      .rg-seite .os-segment::after{opacity:1}
+    }
+  }
+
+  /* ---------- Filterzeile ----------
+     Die drei Felder standen mit min-width:150/200 nebeneinander und
+     schoben sich gegenseitig. Untereinander und voll breit ist auf
+     390 px ehrlicher — und jedes Feld wird von selbst ein gutes Ziel. */
+  .rg-filter{gap:8px}
+  .rg-filter form{margin-left:0;width:100%;gap:8px}
+  /* Die beiden Auswahlfelder je eine volle Zeile, Suchfeld und Knopf
+     teilen sich die dritte — der Knopf gehoert neben das Feld, zu dem er
+     gehoert, nicht allein auf eine vierte Zeile. */
+  .rg-filter select{width:100%;min-width:0;flex:1 1 100%;min-height:44px;font-size:16px}
+  .rg-filter input[type=search]{min-width:0;flex:1 1 auto;width:auto;min-height:44px;font-size:16px}
+  /* 16px Schriftgroesse in Feldern: darunter zoomt iOS Safari beim
+     Antippen ungefragt in die Seite hinein. */
+  .rg-filter form button{min-height:44px;flex:0 0 auto}
+
+  /* ---------- Kopfzeile ----------
+     "Formular" und "Im Chat erstellen" nebeneinander passen auf 390 px
+     nur, wenn sie sich die Breite teilen. */
+  .rg-seite .os-kopf-aktionen{width:100%}
+  .rg-seite .os-kopf-aktionen>a.rg-knopf{flex:1 1 0;justify-content:center;min-width:0}
+
+  /* ---------- Kacheln ----------
+     repeat(auto-fit,minmax(200px,1fr)) ergibt auf 390 px eine Spalte:
+     vier Kacheln mit je 26-px-Zahl fuellen den halben Bildschirm, bevor
+     die Liste beginnt. Zwei nebeneinander halbieren das. */
+  .rg-seite .os-kacheln{grid-template-columns:1fr 1fr;gap:10px}
+  .rg-seite .os-kachel{padding:12px 13px}
+  .rg-seite .os-kachel-zahl{font-size:20px;margin-top:4px}
+  .rg-seite .os-kachel-fuss{font-size:11px}
+
+  /* ---------- Die Liste: Tabelle wird Karte ----------
+     Sechs Spalten (Nummer · Firma · Titel · Datum · Betrag · Status) auf
+     390 px ergeben 65 px je Spalte — unlesbar, und ein waagerecht
+     scrollendes Blatt verbirgt genau die Spalte mit dem Geld. Jede Zeile
+     wird darum zu einer Karte: Nummer und Status oben, Firma darunter,
+     Betrag rechts. Der Kopf faellt weg, weil jede Karte sich selbst
+     erklaert. Die ganze Karte ist ein Ziel (der Zeilen-Link fuellt sie). */
+  .rg-seite .os-tabelle-huelle{overflow:visible;background:transparent;border:0;box-shadow:none}
+  .rg-seite table.os-tabelle,
+  .rg-seite .os-tabelle tbody,
+  .rg-seite .os-tabelle tr{display:block;width:100%}
+  .rg-seite .os-tabelle thead{display:none}
+  .rg-seite .os-tabelle tbody tr{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+    box-shadow:var(--s1);margin-bottom:10px;padding:2px 0}
+  .rg-seite .os-tabelle tbody tr:hover{background:var(--surface)}
+  .rg-seite .os-tabelle td{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:7px 14px;border-bottom:0;min-height:0;font-size:13.5px}
+  .rg-seite .os-tabelle tbody tr:last-child td{border-bottom:0}
+  /* Ohne Kopfzeile stuenden "30.09.2026" und "14.10.2026" als zwei nackte
+     Daten untereinander — niemand weiss, welches das Rechnungsdatum und
+     welches die Frist ist. Die zwei Datums-Zellen und die Art bekommen
+     darum ihre Ueberschrift als Vorsatz. Der Rest erklaert sich selbst:
+     Nummer, Firma, Betrag und Status sind an ihrer Form erkennbar.
+     nth-child statt Klassen, weil die Zellen im Markup keine tragen —
+     wird die Spaltenfolge in lib/rechnungen-routes.js geaendert, muss
+     diese Zuordnung mitwandern (Reihenfolge dort: Nummer · Art · Firma ·
+     Datum · Faellig · Betrag · Status). */
+  .rg-seite .os-tabelle td:nth-child(2)::before{content:"Art"}
+  .rg-seite .os-tabelle td:nth-child(4)::before{content:"Datum"}
+  .rg-seite .os-tabelle td:nth-child(5)::before{content:"Fällig"}
+  .rg-seite .os-tabelle td:nth-child(2)::before,
+  .rg-seite .os-tabelle td:nth-child(4)::before,
+  .rg-seite .os-tabelle td:nth-child(5)::before{
+    flex:none;font-size:12px;font-weight:500;color:var(--text-secondary)}
+  /* Diese drei Zellen tragen ihren Wert dann rechts, wie der Betrag. */
+  .rg-seite .os-tabelle td:nth-child(4),
+  .rg-seite .os-tabelle td:nth-child(5){justify-content:space-between;text-align:right}
+  /* Rechtsbuendige Zahlen bleiben rechtsbuendig — in der Karte steht der
+     Betrag dann als einziges auf der rechten Seite und faellt auf. */
+  .rg-seite .os-tabelle .rechts,
+  .rg-seite .os-tabelle td.rg-betrag{justify-content:flex-end;font-weight:650;font-size:15px}
+  /* Der Zeilen-Link ist ein <a>, das die Zelle fuellt — als Karte soll
+     er das ganze Feld sein, damit man ihn nicht suchen muss. */
+  .rg-seite .rg-zeile-link{display:flex;align-items:center;justify-content:space-between;
+    gap:12px;width:100%;min-height:30px}
+
+  /* ---------- Formular ----------
+     .rg-form-raster faellt schon bei 900 px auf eine Spalte. Was fehlte:
+     Felder unter 16 px Schrift (iOS zoomt), und die Positionszeilen
+     hatten zwar ein Handy-Raster (760 px), aber Felder von 30 px Hoehe. */
+  .rg-seite .os-zeile{padding:9px 14px;min-height:44px}
+  .rg-seite input,.rg-seite select,.rg-seite textarea{font-size:16px}
+  .rg-positionen input,.rg-positionen select,.rg-positionen textarea{
+    font-size:16px;min-height:44px;padding:9px 11px}
+  /* Die Beschreibung ist der laengste Text im Formular. Bei 52 px (Desktop)
+     sah man auf 390 px zwei von vier Zeilen und die dritte halb —
+     "abgestimmt auf Ihre Zielgruppe und Ihre" brach mitten im Kasten ab.
+     96 px zeigen vier Zeilen ganz; laenger wird von Hand aufgezogen
+     (resize:vertical steht schon in der Grundregel). */
+  .rg-positionen textarea{min-height:96px;line-height:1.45}
+  /* Das X zum Entfernen war ein 20-px-Ziel mitten zwischen Feldern. */
+  .rg-positionen td.rg-pos-weg button{min-width:44px;min-height:44px;padding:0}
+  .rg-positionen tr{gap:8px;padding:12px 0}
+  .rg-positionen .rg-pos-gesamt{font-size:15px;font-weight:650}
+  /* Fusszeile: "Abbrechen" (links) und "Als Entwurf anlegen" (rechts)
+     stehen nebeneinander in EINER Reihe und teilen sich die Breite. Vorher
+     rutschte der zweite in die naechste Zeile und stand allein ueber die
+     ganze Breite — zwei Reihen fuer zwei Knoepfe. flex-wrap:nowrap haelt
+     sie zusammen, die 2:3-Teilung gibt der Hauptsache mehr Gewicht. */
+  .rg-form-fuss{gap:8px;flex-wrap:nowrap;align-items:stretch}
+  .rg-form-fuss .rg-links{flex:2 1 0;min-width:0}
+  .rg-form-fuss .rg-links>*{flex:1 1 auto;min-width:0}
+  .rg-form-fuss>button{flex:3 1 0;min-width:0}
+  .rg-form-fuss button,.rg-form-fuss .rg-links a.rg-knopf{
+    width:100%;justify-content:center;min-height:46px;padding:0 10px}
+
+  /* ---------- Vorgangsseite ----------
+     Die PDF-Vorschau hatte min-height:560px und 78vh — auf einem Telefon
+     ist das die ganze Sicht, bevor Zahlstand und Knoepfe kommen. Eine
+     Vorschau in Briefformat ist auf 360 px Breite ohnehin nicht lesbar;
+     sie wird zur Ansichtskarte, das Lesen uebernimmt "PDF herunterladen". */
+  .rg-vorschau iframe{height:52vh;min-height:300px}
+  .rg-aktionen{gap:8px}
+  .rg-aktionen button,.rg-aktionen a.rg-knopf{min-height:44px;padding:0 15px;font-size:13.5px}
+  .rg-aktionen form{flex:1 1 auto;display:flex}
+  .rg-aktionen form button{width:100%;justify-content:center}
+  /* Die Kette der Vorgaenge (Angebot -> Rechnung -> Abschlag) ist eine
+     Liste von Links; 10 px Polster ergaben 38 px Zeilen. */
+  .rg-kette a{min-height:48px;padding:12px 14px}
+  /* Die zweigeteilte Zeile (zwei Werte nebeneinander mit Trennstrich)
+     ist auf 390 px zweimal 160 px — untereinander lesen sich beide. */
+  .rg-seite .os-zeile--paar{grid-template-columns:1fr;gap:0}
+  .rg-seite .os-zeile--paar > .os-zeile-teil + .os-zeile-teil{
+    border-left:0;padding-left:0;border-top:1px solid var(--border);padding-top:9px;margin-top:9px}
+}
