@@ -109,3 +109,52 @@
   .akte2-hinweis-form select,.akte2-hinweis-form input{max-width:100%;flex:1 1 160px}
   .akte2-zeile-knopf{align-items:flex-start;flex-direction:column}
 }
+
+/* =====================================================================
+   HANDY (30.09.2026) — die Kundenakte auf 390 px.
+   Gemessen: Die Akte selbst war schon brauchbar (1.783 px lang, kein
+   waagerechtes Scrollen). Offen waren nur zwei Tippziele unter 44 px und
+   das Segment, dessen vier Kategorien nebeneinander nicht auf 390 px passen.
+   Grenze 640 px wie in crm.css und os-ui.css. Desktop unveraendert.
+   ===================================================================== */
+@media (max-width:640px){
+  /* "Zurück zu Lead" und die Geschwister im Kopf waren 100 x 16 px — ein
+     Link im Fliesstext, der hier aber die Rolle eines Knopfes hat. */
+  .akte2-kopf .os-kopf-aktionen a,
+  .akte2-kopf .os-kopf-aktionen .knopf,
+  .akte2-kopf .os-kopf-aktionen button{min-height:44px}
+  /* Die Kopf-Knoepfe stehen zu zweit in einer Reihe statt einzeln untereinander
+     — vier volle Zeilen Knoepfe waeren ein Viertel des ersten Bildschirms. */
+  .akte2-kopf .os-kopf-aktionen>*{flex:1 1 calc(50% - 5px)}
+  .akte2-kopf .os-kopf-aktionen .knopf,
+  .akte2-kopf .os-kopf-aktionen button{justify-content:center;width:100%}
+
+  /* Das klebende Segment: Vier Kategorien passen nebeneinander nicht auf
+     390 px. Es darf gewischt werden, statt umzubrechen — beim Kleben waere
+     ein zweizeiliges Segment ein Drittel des Bildschirms.
+     Die Kategorie, in der man steht, wird beim Laden nicht mitgescrollt;
+     das ist in Ordnung, weil die erste ("Ueberblick") der Normalfall ist. */
+  .akte2-segment{overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .akte2-segment::-webkit-scrollbar{width:0;height:0}
+  .akte2-segment [role=tab]{flex:0 0 auto;min-height:44px;white-space:nowrap}
+
+  /* Die kleinen Verweise im Kopf einer Gruppe ("Zum Whiteboard",
+     "Alles ansehen") waren 100 x 16 px. Sie sehen weiter aus wie ein Wort im
+     Text — die Trefferflaeche waechst nach oben und unten ueber den
+     Innenabstand, nicht die Schrift. Bewusst hier und nicht in os-ui.css:
+     Die Datei gehoert einem anderen Agenten, und die Regel gilt nur fuer
+     die Akte. */
+  .akte2 .os-gruppe-werkzeug a,
+  .akte2 .os-gruppe-werkzeug button{
+    display:inline-flex;align-items:center;min-height:44px;padding:0 6px;margin:0 -6px}
+
+  /* Die Zeilen der Akte: Beschriftung und Wert stehen ohnehin untereinander,
+     aber der Wert ist oft ein Eingabefeld. 44 px, wie ueberall sonst. */
+  .akte2 .os-zeile input,.akte2 .os-zeile select,.akte2 .os-zeile textarea{min-height:44px}
+  /* Der Haken an einer Aufgabe ist die haeufigste Handlung in der Akte. */
+  .akte2-todo-haken .todo-haken{width:28px;height:28px}
+  /* Die Fristen rechts an der Aufgabe duerfen unter den Text rutschen statt
+     ihn auf 120 px zu quetschen. */
+  .akte2-todo{flex-wrap:wrap}
+  .akte2-todo .os-zeile-neben{flex:1 1 100%;margin-left:40px}
+}

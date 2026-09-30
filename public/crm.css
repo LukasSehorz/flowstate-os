@@ -3210,168 +3210,151 @@ body.zieht-aus{user-select:none;-webkit-user-select:none}
 
      Rein ueber CSS, ohne eine Zeile im Markup: die Tabelle wird zu Bloecken,
      jede <tr> zu einer Karte, jede <td> zu einer Zeile darin. Die Kopfzeile
-     verschwindet — ihre Beschriftungen stehen stattdessen VOR den Werten.
-     Weil im Markup keine data-label-Attribute stehen (die Datei gehoert einem
-     anderen Agenten), kommen die Beschriftungen aus nth-child. Das ist an die
-     Spaltenreihenfolge gebunden; genau deshalb steht sie hier nochmal im
-     Klartext, damit eine spaetere Aenderung am Markup hier auffaellt.
+     verschwindet — ihre Beschriftungen stehen stattdessen UEBER den Werten.
+     Weil im Markup keine data-label-Attribute stehen (lib/crm-routes.js gehoert
+     einem anderen Agenten), kommen die Beschriftungen aus nth-child. Das ist an
+     die Spaltenreihenfolge gebunden; deshalb steht sie unten im Klartext, damit
+     eine spaetere Aenderung am Markup hier auffaellt.
+
+     Warum inline-block und nicht Flex oder Grid auf der Zeile: Chrome repariert
+     eine Tabellenstruktur automatisch mit anonymen Tabellenboxen und behaelt
+     dabei Reste des Tabellen-Layouts. Gemessen: Die erste Zelle bekam Hoehe
+     44 px, obwohl ihr Inhalt 146 px hoch war — Firmenname, Ort und das
+     Branchenfeld wurden ueber die naechste Zelle gemalt. Mit inline-block und
+     Prozentbreiten stimmt die Hoehe. Aelteres Handwerk, aber es haelt.
+
+     Warum body:not(.jarvis) vor jedem Selektor: public/mobil.css (anderer
+     Agent, laedt NACH crm.css) macht aus jeder Tabelle eine waagerecht
+     scrollbare Tabelle und setzt dafuer u. a. height:44px auf jede Zelle —
+     mit genau dieser Spezifitaet. Fuer die zwei langen CRM-Listen ist Wischen
+     nach rechts aber die schlechtere Antwort als eine Karte: Man telefoniert
+     sie ab, man vergleicht sie nicht. Diese Regeln gelten NUR fuer
+     .anruf-tabelle; alle anderen Tabellen bleiben beim Ansatz aus mobil.css.
 
      Wirkung: Statt 45 px je Spalte hat jeder Wert die volle Breite. Nichts
-     bricht mehr buchstabenweise um, die Zeilenhoehe faellt von ueber 250 px
-     auf das, was der Inhalt wirklich braucht. */
-  .tabelle-huelle{
-    /* Ohne Rahmen und Hintergrund — die Karten tragen das jetzt selbst,
-       sonst steht ein Kasten im Kasten. */
-    background:none;border:0;box-shadow:none;border-radius:0;overflow:visible}
-  .anruf-tabelle,.anruf-tabelle tbody{display:block;width:100%;table-layout:auto}
+     bricht mehr buchstabenweise um ("H-ä-c-k-l"), keine Telefonnummer steht
+     mehr mit einer Ziffer je Zeile untereinander. */
+
+  /* Die Huelle traegt nichts mehr — das tun jetzt die Karten selbst, sonst
+     staende ein Kasten im Kasten. overflow:visible hebt das waagerechte
+     Scrollen aus mobil.css auf; hier gibt es nichts mehr zu scrollen. */
+  body:not(.jarvis) .tabelle-huelle:has(.anruf-tabelle){
+    background:none;border:0;box-shadow:none;border-radius:0;
+    overflow:visible;padding:0}
+  body:not(.jarvis) .anruf-tabelle,
+  body:not(.jarvis) .anruf-tabelle tbody{display:block;width:100%;table-layout:auto}
   /* Die Kopfzeile hat in einer Kartenliste keine Funktion mehr: Ihre Woerter
      stehen ab jetzt an jedem Wert selbst. */
-  .anruf-tabelle thead{display:none}
-  .anruf-tabelle tbody tr{
-    display:block;margin-bottom:10px;padding:12px 14px;
+  body:not(.jarvis) .anruf-tabelle thead{display:none}
+  /* Eine Zeile = eine Karte. flow-root, damit sie ihre Zellen umschliesst. */
+  body:not(.jarvis) .anruf-tabelle tbody tr{
+    display:flow-root;margin-bottom:10px;padding:12px 14px;
     background:var(--surface);border:1px solid var(--border);
     border-radius:var(--r-lg);box-shadow:var(--s1)}
-  .anruf-tabelle tbody tr:last-child{margin-bottom:0}
-  /* Die feste Prozent-Breite der Desktop-Spalten muss weg, sonst behaelt jede
-     Zelle ihre 9 bis 21 Prozent — genau das Problem, das wir loesen. */
-  .anruf-tabelle th,.anruf-tabelle td,
-  .kunden-tabelle th,.kunden-tabelle td{width:auto!important}
-  /* Beschriftung links, Wert rechts — wie eine Datenzeile, nicht wie
-     Fliesstext. Die erste Zelle (Firmenname) bricht diese Regel gleich
-     darunter wieder: Sie ist die Ueberschrift der Karte. */
-  .anruf-tabelle td{
-    display:flex;align-items:baseline;gap:10px;
-    width:auto;border:0;border-top:1px solid var(--border);padding:5px 0}
-  .anruf-tabelle td:empty{display:none}
-  /* Das Aussehen der Beschriftung. WAS dort steht, sagen erst die
-     nth-child-Regeln weiter unten — ohne content bleibt ::before aus.
-     So erzeugt eine Spalte, die hier nicht benannt ist, auch keinen
+  body:not(.jarvis) .anruf-tabelle tbody tr:last-child{margin-bottom:0}
+  /* Eine Zelle = eine Zeile in der Karte. height:auto hebt die 44 px aus
+     mobil.css auf — eine Karte ist keine Tabellenzeile, ihre Hoehe richtet
+     sich nach dem Inhalt. Die 44 px holen sich unten die Bedienelemente. */
+  body:not(.jarvis) .anruf-tabelle td{
+    display:inline-block;vertical-align:top;width:100%;
+    /* !important, weil mobil.css mit derselben Spezifitaet height:44px setzt
+       und NACH crm.css geladen wird. Ohne das bleibt jede Zelle 44 px hoch,
+       waehrend ihr Inhalt 146 px braucht — der Firmenname wurde dann ueber
+       die naechste Zelle gemalt. Gemessen am 30.09. genau so. */
+    height:auto!important;
+    border:0;border-top:1px solid var(--border);
+    padding:5px 0!important;white-space:normal}
+  body:not(.jarvis) .anruf-tabelle td:empty{display:none}
+  /* Die festen Prozentbreiten der Desktop-Spalten muessen weg, sonst behaelt
+     jede Zelle ihre 9 bis 21 Prozent — genau das Problem, das hier geloest
+     wird. Das !important schlaegt die nth-child-Breiten aus crm.css (Zeile
+     ~614 und ~657), die dieselbe Spezifitaet haben und spaeter kaemen. */
+  body:not(.jarvis) .anruf-tabelle th,
+  body:not(.jarvis) .anruf-tabelle td,
+  body:not(.jarvis) .kunden-tabelle th,
+  body:not(.jarvis) .kunden-tabelle td{width:100%!important}
+
+  /* Die Beschriftung steht UEBER dem Wert. Daneben ginge auch, kostet aber bei
+     halber Kartenbreite so viel Platz, dass der Wert umbricht — und ein
+     umgebrochener Firmenname ist genau das Problem, das hier geloest wird.
+     WAS dort steht, sagen erst die nth-child-Regeln weiter unten: Ohne content
+     bleibt ::before aus, eine nicht benannte Spalte bekommt also auch keinen
      leeren Platzhalter. */
-  .anruf-tabelle td::before{
-    flex:0 0 96px;font-size:11px;font-weight:600;color:var(--text-muted);
-    text-transform:uppercase;letter-spacing:.03em;line-height:1.4}
-  /* Der Firmenname ist der Kartentitel: volle Breite, keine Beschriftung,
-     keine Trennlinie darueber, groesser als der Rest. */
-  .anruf-tabelle td:first-child{
-    display:block;padding-top:0;border-top:0}
-  .anruf-tabelle td:first-child::before{content:none}
-  .anruf-tabelle td:first-child .zeile-titel{font-size:15.5px;line-height:1.3}
-  .anruf-tabelle td:first-child .zeile-sub{font-size:12.5px;margin-top:3px}
-  /* Der Rest der Zelle darf den Platz nehmen, den die Beschriftung uebriglaesst. */
-  .anruf-tabelle td>*:not(::before){min-width:0}
+  body:not(.jarvis) .anruf-tabelle td::before{
+    display:block;font-size:11px;font-weight:600;color:var(--text-muted);
+    text-transform:uppercase;letter-spacing:.03em;line-height:1.4;margin-bottom:1px}
+
+  /* Der Firmenname ist die Ueberschrift der Karte: keine Beschriftung, keine
+     Trennlinie darueber, groesser als der Rest. */
+  body:not(.jarvis) .anruf-tabelle td:first-child{padding-top:0;border-top:0}
+  body:not(.jarvis) .anruf-tabelle td:first-child::before{content:none}
+  body:not(.jarvis) .anruf-tabelle td:first-child .zeile-titel{font-size:15.5px;line-height:1.3}
+  body:not(.jarvis) .anruf-tabelle td:first-child .zeile-sub{font-size:12.5px;margin-top:3px}
 
   /* Die Spaltennamen. Reihenfolge laut lib/crm-routes.js:
-     Leads   (Zeile ~2755): Firma · Geschaeftsfuehrer · Telefon · Website ·
-                            Ergebnis · Detail · Absenden
-     Kunden  (Zeile ~2027): Firma · Stufe/Status · Score/Kunde seit ·
-                            Telefon · Website · Verantwortlich
-     Getrennt gesetzt, weil beide Tabellen dieselbe Klasse .anruf-tabelle
-     tragen und sich nur durch .kunden-tabelle unterscheiden. */
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(2)::before{content:"Geschäftsführer"}
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(3)::before{content:"Telefon"}
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(4)::before{content:"Website"}
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(5)::before{content:"Ergebnis"}
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(6)::before{content:"Detail"}
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(7)::before{content:"Absenden"}
+       Leads  (~2755): Firma · Geschaeftsfuehrer · Telefon · Website ·
+                       Ergebnis · Detail · Absenden
+       Kunden (~2027): Firma · Stufe/Status · Score/Kunde seit ·
+                       Telefon · Website · Verantwortlich
+     Getrennt gesetzt, weil beide Tabellen .anruf-tabelle tragen und sich nur
+     durch .kunden-tabelle unterscheiden. */
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(2)::before{content:"Geschäftsführer"}
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(3)::before{content:"Telefon"}
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(4)::before{content:"Website"}
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(5)::before{content:"Ergebnis"}
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(7)::before{content:"Absenden"}
   /* Die zweite und dritte Spalte heissen bei den Kunden je nach Liste anders
      ("Stufe/Score" bei Leads, "Status/Kunde seit" bei Kunden). Da das CSS die
      Liste nicht kennt, steht dort der gemeinsame Nenner. */
-  .kunden-tabelle td:nth-child(2)::before{content:"Status"}
-  .kunden-tabelle td:nth-child(3)::before{content:"Seit"}
-  .kunden-tabelle td:nth-child(4)::before{content:"Telefon"}
-  .kunden-tabelle td:nth-child(5)::before{content:"Website"}
-  .kunden-tabelle td:nth-child(6)::before{content:"Verantwortlich"}
+  body:not(.jarvis) .kunden-tabelle td:nth-child(2)::before{content:"Status"}
+  body:not(.jarvis) .kunden-tabelle td:nth-child(3)::before{content:"Seit"}
+  body:not(.jarvis) .kunden-tabelle td:nth-child(4)::before{content:"Telefon"}
+  body:not(.jarvis) .kunden-tabelle td:nth-child(5)::before{content:"Website"}
+  body:not(.jarvis) .kunden-tabelle td:nth-child(6)::before{content:"Verantwortlich"}
 
-  /* Bedienelemente in der Karte: volle Restbreite und 44 px hoch.
-     Das ist der zweite Teil der Aufgabe — eine Karte nuetzt nichts, wenn der
-     Knopf darin 24 px hoch ist. */
-  .anruf-tabelle .anruf-ergebnis,
-  .anruf-tabelle .anruf-grund,
-  .anruf-tabelle .anruf-notiz,
-  .anruf-tabelle .anruf-grund-frei,
-  .anruf-tabelle .lead-branche,
-  .anruf-tabelle .verantwortlich-wahl{
-    flex:1 1 auto;width:100%;min-width:0;min-height:44px;font-size:14px;
-    padding:10px 12px;padding-right:30px;border-radius:10px;
-    field-sizing:fixed;box-sizing:border-box}
-  .anruf-tabelle .anruf-akte{flex:1 1 auto;min-height:44px;font-size:13.5px}
-  /* Die Branche steht unter dem Firmennamen, nicht daneben.
-     field-sizing:content muss hier weg: Das Feld misst sich sonst am laengsten
-     Branchennamen statt an der Karte, wird breiter als die Zelle und wird ueber
-     die naechste Zeile gemalt — im Screenshot lagen Firmenname, Branche und
-     Geschaeftsfuehrer uebereinander. Auf dem Handy soll es ohnehin die volle
-     Breite haben, dann ist die Inhaltsmessung auch ohne Nutzen. */
-  .anruf-tabelle td:first-child .lead-branche{
-    display:block;margin-top:8px;width:100%;max-width:100%;
-    field-sizing:fixed;box-sizing:border-box}
-  /* Telefonnummern: gross genug zum Treffen, und sie duerfen nicht umbrechen —
-     eine zerschnittene Nummer liest niemand vor. Die 44 px holt sich der Link
-     ueber den Innenabstand, nicht ueber eine Mindesthoehe der ganzen Zeile:
-     bei 229 Leads sind 10 px je Zeile zweieinhalbtausend Pixel Seitenlaenge. */
-  .anruf-tabelle td a[href^="tel:"]{
-    display:inline-flex;align-items:center;height:44px;padding:0 4px;margin:-2px -4px;
-    font-size:15px;font-weight:600;white-space:nowrap}
-  .anruf-tabelle .tel-zweite{margin-top:0}
-  .anruf-tabelle .tel-art{display:block;min-width:0;margin-bottom:-4px}
-  /* Website / Maps: als Knopf-Flaeche statt als blosses Wort. */
-  .anruf-tabelle td a[target="_blank"]{
-    display:inline-flex;align-items:center;height:44px;min-width:44px;
-    padding:0 8px;margin:-2px -8px;font-size:14px}
-  /* Der Absende-Haken ist der letzte Schritt eines Anrufs — auf dem Handy die
-     Flaeche, die man am sichersten treffen muss. */
-  .anruf-tabelle td.rechts{justify-content:flex-start}
-  .anruf-senden{width:28px;height:28px;margin:8px 0}
-  /* Die Marken (Stufe, Score, Status) duerfen etwas groesser werden. */
-  .anruf-tabelle .badge{font-size:12.5px;padding:5px 11px}
-
-  /* ---------- Die Karte kuerzer machen: zwei Werte je Zeile ----------
-     Sieben Zeilen untereinander lesen sich zwar gut, machen die Liste aber
+  /* ---------- Zwei kurze Werte je Zeile ----------
+     Sieben Zeilen streng untereinander lesen sich gut, machen die Liste aber
      LAENGER als die kaputte Tabelle vorher (gemessen: 60.641 -> 123.773 px).
-     Kurze Lesewerte gehoeren nebeneinander — sie brauchen die Breite nicht.
-     Umgesetzt mit einem Raster auf der Kartenzeile: die Zelle wird von einem
-     Block zu einer halben Spalte, Beschriftung darueber statt daneben.
+     Kurze Lesewerte gehoeren nebeneinander, sie brauchen die Breite nicht:
 
-       Leads:  Geschaeftsfuehrer | Telefon        (Spalte 2 + 3)
-               Website           (Spalte 4, allein — daneben stuende sonst
-                                  das Ergebnis-Auswahlfeld halb so breit)
-       Kunden: Status | Seit                      (Spalte 2 + 3)
-               Telefon | Website                  (Spalte 4 + 5)
+       Leads:  Geschaeftsfuehrer | Telefon   und   Website (halb, allein)
+       Kunden: Status | Seit                und   Telefon | Website
 
-     Die Felder, in die man etwas eintraegt (Ergebnis, Detail, Absenden,
-     Verantwortlich), bleiben ganze Zeilen: Sie sind die Handlung, nicht
-     die Auskunft. */
-  /* Flex statt Grid: Eine Tabellenzeile behaelt in Chrome auch mit
-     display:grid Reste des Tabellen-Layouts — die Zeilenhoehe fiel auf 44 px
-     zusammen, waehrend der Firmenname 146 px brauchte, und der Text lief
-     ueber die naechsten Zellen. Mit flex-wrap und Prozentbreiten stimmt die
-     Hoehe, und der Umbruch macht dasselbe wie zwei Rasterspalten. */
-  .anruf-tabelle tbody tr{
-    display:flex;flex-wrap:wrap;column-gap:12px;align-items:flex-start}
-  /* Was ganze Breite braucht: Titel und alles, worin man etwas tut. */
-  .anruf-tabelle td:first-child,
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(n+4),
-  .kunden-tabelle td:nth-child(6){flex:1 1 100%;width:100%}
-  /* Die Haelften. calc, weil zwischen ihnen 12 px Spalte stehen. */
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(2),
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(3),
-  .kunden-tabelle td:nth-child(2),.kunden-tabelle td:nth-child(3),
-  .kunden-tabelle td:nth-child(4),.kunden-tabelle td:nth-child(5){
-    flex:0 1 calc(50% - 6px);width:calc(50% - 6px);min-width:0}
-  /* Die Paare stehen gestapelt: Beschriftung oben, Wert darunter — bei halber
-     Kartenbreite bliebe neben 96 px Beschriftung kein Platz fuer den Wert. */
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(2),
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(3),
-  .kunden-tabelle td:nth-child(2),.kunden-tabelle td:nth-child(3),
-  .kunden-tabelle td:nth-child(4),.kunden-tabelle td:nth-child(5){
-    flex-direction:column;align-items:flex-start;gap:1px}
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(2)::before,
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(3)::before,
-  .kunden-tabelle td:nth-child(2)::before,.kunden-tabelle td:nth-child(3)::before,
-  .kunden-tabelle td:nth-child(4)::before,.kunden-tabelle td:nth-child(5)::before{flex:none}
-  /* Bei den Kunden steht Website in der zweiten Spalte — der Link darf dann
-     nicht ueber den Rand seiner Haelfte hinausragen. */
-  .kunden-tabelle td:nth-child(5){min-width:0}
-  .kunden-tabelle td:nth-child(5) a{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+     49 % und nicht 50 %: Zwischen zwei inline-block steht das Leerzeichen aus
+     dem Quelltext, bei 50 % passte das zweite nicht mehr in die Zeile.
+     Die Felder, in die man etwas eintraegt (Ergebnis, Verantwortlich), bleiben
+     ganze Zeilen — sie sind die Handlung, nicht die Auskunft. */
+  body:not(.jarvis) .kunden-tabelle td:nth-child(2),
+  body:not(.jarvis) .kunden-tabelle td:nth-child(3),
+  body:not(.jarvis) .kunden-tabelle td:nth-child(4),
+  body:not(.jarvis) .kunden-tabelle td:nth-child(5){width:50%!important;min-width:0}
+  /* Beim Lead sind es DREI kurze Auskuenfte, die in EINE Zeile passen:
+     Geschaeftsfuehrer (der laengste Text), Telefon, Website. Das spart je
+     Karte eine ganze Zeile, bei 229 Leads rund 16.000 Pixel.
+
+     Zwischen inline-block-Zellen steht das Leerzeichen aus dem Quelltext —
+     bei drei Zellen zweimal, zusammen rund 2 %. Deshalb font-size:0 auf der
+     ZEILE (das Leerzeichen hat dann keine Breite mehr) und die Schriftgroesse
+     zurueck auf jeder Zelle. Andernfalls rutscht die Website in die naechste
+     Zeile, gemessen bei 41/35/22 %. */
+  body:not(.jarvis) .anruf-tabelle tbody tr{font-size:0}
+  body:not(.jarvis) .anruf-tabelle td{font-size:13.5px}
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(2){width:38%!important;min-width:0}
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(3){
+    width:39%!important;min-width:0;
+    /* Der Innenabstand rechts ist die Luecke zur Website daneben — ohne ihn
+       stiess eine lange Nummer ("+49 8703 90544-0") direkt ans Wort. */
+    padding-right:10px!important;overflow:hidden}
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(4){width:23%!important;min-width:0}
+  /* Eine zwoelfstellige Nummer ("015224309653") ist breiter als 39 % von
+     390 px. Sie darf dann eine Spur kleiner werden, aber nie umbrechen —
+     lieber knapp als zerschnitten. */
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(3) a{font-size:14px}
+  /* In 22 % passt "Website ↗" nur ohne Innenabstand und ohne Umbruch. */
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(4) a{
+    margin:0;padding:0;white-space:nowrap;font-size:13px}
+  body:not(.jarvis) .kunden-tabelle td:nth-child(5) a{
+    max-width:100%;overflow:hidden;text-overflow:ellipsis}
 
   /* ---------- Der Fuss der Lead-Karte: Detail und Absenden in EINER Zeile ----
      "Detail" ist bei einem noch nicht angerufenen Lead leer — sichtbar ist nur
@@ -3379,22 +3362,78 @@ body.zieht-aus{user-select:none;-webkit-user-select:none}
      sind bei 229 Leads rund 20.000 Pixel Seitenlaenge fuer nichts. Sie stehen
      jetzt nebeneinander, und die Beschriftung "Detail" faellt weg: Was dort
      erscheint (Absagegrund, Notiz, Gespraechsnotiz), beschriftet sich selbst.
+     Sobald ein Ergebnis gewaehlt ist, blendet das Skript in lib/crm-routes.js
+     das passende Feld ein — es bekommt dann die 74 % dieser Zelle. */
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(6){
+    width:60%!important;border-top:0;padding:0!important}
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(6)::before{content:none}
+  /* Beschriftung und Haken nebeneinander statt untereinander — sonst steht
+     "ABSENDEN" ueber einem Kasten und die Karte waechst um eine Zeile. */
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(7){
+    width:39%!important;border-top:0;padding:0!important;
+    display:flex;align-items:center;justify-content:flex-end;gap:10px}
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(7)::before{
+    margin:0}
 
-     Sobald ein Ergebnis gewaehlt wird, blendet das Skript in lib/crm-routes.js
-     das passende Feld ein — flex-wrap laesst es dann auf eine eigene Zeile
-     rutschen, weil es die volle Breite braucht. */
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(6){
-    flex:1 1 auto;width:auto;border-top:0;padding-top:0;min-width:0}
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(6)::before{content:none}
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(7){
-    flex:0 0 auto;width:auto;border-top:0;padding-top:0;
-    margin-left:auto;align-items:center}
-  /* Die beiden Fusszellen sitzen in einer gemeinsamen Zeile — die Trennlinie
-     zieht die Ergebnis-Zelle darueber. */
-  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(5){padding-bottom:9px}
-  /* Der Platzhalter "—" neben dem Ergebnis sagt nichts, was der leere Platz
-     nicht auch sagt. Die Versuchszahl ("3. Versuch") bleibt — die ist Inhalt. */
-  .anruf-tabelle .anruf-leer{font-size:12px;color:var(--text-muted)}
+  /* ---------- Bedienelemente in der Karte ----------
+     Volle Restbreite und 44 px hoch. Das ist der zweite Teil der Aufgabe: Eine
+     Karte nuetzt nichts, wenn der Knopf darin 24 px hoch ist.
+     field-sizing:fixed muss sein — die Auswahlfelder messen sich sonst am
+     laengsten Branchennamen statt an der Karte (crm.css Zeile ~460 und ~647). */
+  body:not(.jarvis) .anruf-tabelle .anruf-ergebnis,
+  body:not(.jarvis) .anruf-tabelle .anruf-grund,
+  body:not(.jarvis) .anruf-tabelle .anruf-notiz,
+  body:not(.jarvis) .anruf-tabelle .anruf-grund-frei,
+  body:not(.jarvis) .anruf-tabelle .lead-branche,
+  body:not(.jarvis) .anruf-tabelle .verantwortlich-wahl{
+    display:block;width:100%;max-width:100%;min-width:0;min-height:44px;
+    font-size:16px;padding:10px 30px 10px 12px;border-radius:10px;
+    field-sizing:fixed;box-sizing:border-box}
+  body:not(.jarvis) .anruf-tabelle .anruf-akte{width:100%;min-height:44px;
+    justify-content:center;font-size:13.5px}
+  /* Titel und Ort brauchen keine 1,55 Zeilenhoehe — bei 229 Karten sind das
+     mehrere tausend Pixel. Eng gesetzt bleibt beides gut lesbar. */
+  body:not(.jarvis) .anruf-tabelle td:first-child .zeile-sub{line-height:1.35}
+  body:not(.jarvis) .anruf-tabelle .anruf-grund-frei,
+  body:not(.jarvis) .anruf-tabelle .anruf-notiz{margin-top:6px}
+  /* Die Branche steht unter dem Firmennamen, nicht daneben — und sie ist beim
+     Abtelefonieren kein Bedienelement, sondern eine Auskunft: In den meisten
+     Zeilen steht sie schon in der Nebenzeile ("Bad Toelz · Glaserei").
+     Das Feld bleibt, wird aber flacher als die 44 px der uebrigen Felder:
+     44 px mal 229 Leads sind allein dafuer ueber 10.000 Pixel Seitenlaenge.
+     Wer es antippt, trifft es trotzdem — 38 px ist keine 16-px-Zeile. */
+  body:not(.jarvis) .anruf-tabelle td:first-child .lead-branche{
+    margin-top:6px;min-height:38px;padding-top:7px;padding-bottom:7px;font-size:14px}
+  /* Der Ort steht schon in der Nebenzeile; der Firmenname darf enger stehen. */
+  body:not(.jarvis) .anruf-tabelle td:first-child .zeile-titel{margin-bottom:0}
+  /* Telefonnummern: gross genug zum Treffen, und sie duerfen nicht umbrechen —
+     eine zerschnittene Nummer liest niemand vor. Die 44 px holt sich der Link
+     ueber Hoehe und Innenabstand, nicht ueber die ganze Zeile: bei 229 Leads
+     waeren 10 px je Zeile zweieinhalbtausend Pixel Seitenlaenge. */
+  body:not(.jarvis) .anruf-tabelle td a[href^="tel:"]{
+    display:inline-flex;align-items:center;height:44px;padding:0 4px;margin:0 -4px;
+    font-size:15px;font-weight:600;white-space:nowrap}
+  body:not(.jarvis) .anruf-tabelle .tel-zweite{margin-top:0}
+  body:not(.jarvis) .anruf-tabelle .tel-art{display:block;min-width:0;margin-bottom:-6px}
+  /* Website / Maps: eine Flaeche, kein blosses Wort. */
+  body:not(.jarvis) .anruf-tabelle td a[target="_blank"]{
+    display:inline-flex;align-items:center;height:44px;min-width:44px;
+    padding:0 6px;margin:0 -6px;font-size:14px}
+  /* Der Absende-Haken ist der letzte Schritt eines Anrufs — die Flaeche, die
+     man am sichersten treffen muss. */
+  body:not(.jarvis) .anruf-tabelle td.rechts{text-align:right}
+  body:not(.jarvis) .anruf-senden{width:28px;height:28px;margin:8px 0}
+  /* Die Marken (Stufe, Score, Status) duerfen etwas groesser werden. */
+  body:not(.jarvis) .anruf-tabelle .badge{font-size:12.5px;padding:5px 11px}
+  /* Der Platzhalter neben dem Ergebnis. Die Versuchszahl ("3. Versuch") bleibt
+     stehen — die ist Inhalt, kein Fuellzeichen. */
+  body:not(.jarvis) .anruf-tabelle .anruf-leer{font-size:12px;color:var(--text-muted)}
+  /* Die drei Auskunfts-Zellen teilen sich EINE Trennlinie — jede eigene
+     erzeugte sonst Strichstuecke ueber halben Karten. */
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(3),
+  body:not(.jarvis) .anruf-tabelle:not(.kunden-tabelle) td:nth-child(4),
+  body:not(.jarvis) .kunden-tabelle td:nth-child(3),
+  body:not(.jarvis) .kunden-tabelle td:nth-child(5){border-top-color:transparent}
 
   /* ---------- 3. Tippziele: alles mindestens 44 x 44 px ----------
      Apples Mindestmass fuer den Daumen. Auf dem Desktop bleiben die Elemente
@@ -3405,7 +3444,12 @@ body.zieht-aus{user-select:none;-webkit-user-select:none}
     min-height:44px;display:inline-flex;align-items:center;padding-top:0;padding-bottom:0}
   .reiter a,.sparten-reiter a{padding-left:16px;padding-right:16px}
   .personen a,.wer-schalter a{padding-left:14px;padding-right:14px;font-size:13.5px}
-  .segmente a,.zeitraum a{justify-content:center;flex:1}
+  /* "Webdesign" brach auf dem Handy in "Webde / sign" um — der Schalter ist
+     dreiteilig und drei Woerter passen nur, wenn keines umbricht. Er darf
+     dafuer seitlich wischbar sein. */
+  .segmente a,.zeitraum a{justify-content:center;flex:0 0 auto;white-space:nowrap}
+  .segmente,.zeitraum{max-width:100%;overflow-x:auto;scrollbar-width:none}
+  .segmente::-webkit-scrollbar,.zeitraum::-webkit-scrollbar{width:0;height:0}
   /* Die Zeilen bleiben wischbar statt zu quetschen: lieber seitlich scrollen
      als sechs 44-px-Pillen auf drei Zeilen zu stapeln. */
   .sparten-reiter,.personen,.wer-schalter,.ct-kanaele,.um-sichten{
@@ -3463,8 +3507,6 @@ body.zieht-aus{user-select:none;-webkit-user-select:none}
    Auf einem iPhone SE oder mini bleibt von 33 % Beschriftungsspalte nichts
    Brauchbares uebrig. Dort steht die Beschriftung ueber dem Wert. */
 @media (max-width:380px){
-  .anruf-tabelle td{flex-direction:column;align-items:stretch;gap:3px}
-  .anruf-tabelle td::before{flex:none}
   .spalte{flex:0 0 92%;max-width:92%}
   .kanban::after{flex:0 0 8%}
 }
