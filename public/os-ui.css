@@ -122,6 +122,14 @@ body.crm-dashboard-design{
 .os-unternav{display:flex;gap:4px;align-items:center;padding:10px 26px 0;overflow-x:auto;
   scrollbar-width:none;-webkit-overflow-scrolling:touch;min-width:0}
 .os-unternav::-webkit-scrollbar{display:none}
+/* Ein Flex-Kind darf per Vorgabe nicht kleiner werden als sein Inhalt
+   (min-width:auto). Steckt in .os-unternav ein weiterer Flex-Kasten — die
+   Buchhaltung haengt dort ihr nav.reiter ein —, waechst der ueber die Leiste
+   hinaus, statt darin zu rollen: Das overflow-x:auto oben laeuft ins Leere,
+   und die letzten Reiter sind auf dem Telefon einfach weg (gemessen
+   30.09.2026: Leiste 312px, Inhalt 606px, abgeschnitten statt rollbar).
+   Dasselbe gilt fuer die Werkzeugleiste, in der Segmente haengen. */
+.os-unternav>*,.os-werkzeugleiste-aktionen{min-width:0}
 main .os-unternav{padding:0;margin:0 0 18px}
 .os-kopf .os-unternav{padding:0;margin:14px 0 0}
 .os-unternav a{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:0 12px;height:32px;

@@ -2879,6 +2879,30 @@ app.get("/api/hud/zentrale", async (req, res) => {
 // Seitenskript erwartete JSON und meldete "Unexpected token '<'" — technisch
 // richtig und fuer den Menschen davor vollkommen wertlos. Wer per fetch fragt,
 // bekommt jetzt eine Antwort in der Sprache, in der er gefragt hat.
+// SEITE GIBT ES NICHT (30.09.2026). Bis heute beantwortete Express das
+// selbst — mit einer nackten Seite ohne <head>. Auf dem Handy ist das
+// besonders unangenehm: Ohne viewport-Angabe faellt Chrome auf 980 Pixel
+// Breite zurueck, die Schrift wird winzig, und man kommt nur ueber den
+// Zurueck-Knopf wieder heraus.
+//
+// Aufgefallen bei der Handy-Messung: Zwei Adressen in der Messliste waren
+// falsch (/rechnungen statt /buchhaltung/rechnungen, /aufgaben statt /todos).
+// Beide Seiten galten vier Messungen lang als "sauber" — eine Seite, die es
+// nicht gibt, hat eben keine Layoutfehler.
+app.use((req, res, next) => {
+  if (res.headersSent) return next();
+  if (req.path.startsWith("/api/") || (req.get("accept") || "").includes("json")
+      || req.get("x-requested-with")) {
+    return res.status(404).json({ ok: false, fehler: "Diese Adresse gibt es nicht." });
+  }
+  res.status(404).send(layout("Nicht gefunden", "zentrale", `
+    <div class="seiten-kopf"><div><h1>Diese Seite gibt es nicht</h1></div></div>
+    <div class="karte leer">
+      <h3>${esc(req.path)}</h3>
+      <p>Vielleicht hat sich die Adresse geändert. Über die Leiste kommst du überall hin.</p>
+      <a class="knopf dunkel" href="/">Zur Zentrale</a></div>`, req));
+});
+
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
   const zuGross = err.type === "entity.too.large" || err.status === 413;

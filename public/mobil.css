@@ -288,3 +288,362 @@
   body:has(.voix) .voix-orb[data-zustand="lauschen"] .voix-cue,
   body:has(.voix) .voix-orb[data-zustand="denken"] .voix-cue { opacity: 1; }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   6. DIE GEMEINSAME HÜLLE AUF DEM HANDY (30.09.2026)
+   ═══════════════════════════════════════════════════════════════════
+
+   Anlass (Lukas, 30.09.2026): „Bei mir funktioniert die App aktuell nicht
+   auf dem Handy." Gemessen mit scripts/shot-handy.js bei 390 px, angemeldet:
+
+     · Die Rail steht als 64-px-Säule fest am linken Rand (crm.css:1420) und
+       nimmt damit ein Sechstel der Bildschirmbreite weg, auf der ganzen Höhe.
+       Beim Berühren fährt sie auf 266 px aus (crm.css:233) und deckt zwei
+       Drittel der Seite zu — auf einem Fingergerät gibt es kein „Hover
+       beenden", die Leiste bleibt also offen stehen.
+     · Tippziele unter 44 px: /crm/leads 476, /buchhaltung/belege 193,
+       /crm/kunden 79, /whiteboard 87, /kalender 45, /crm 22. Apple nennt
+       44 pt als kleinste Fläche, die ein Daumen sicher trifft.
+     · Tabellen ragen 430 bis 610 px über den Rand. Die Hülle hat zwar
+       overflow-x:auto, aber nichts zeigt an, DASS rechts noch etwas kommt —
+       man sieht eine abgeschnittene Tabelle und hält sie für kaputt.
+     · Eingabefelder stehen auf 13,5 px (os-ui.css). iOS Safari zoomt bei
+       jedem Feld unter 16 px automatisch hinein; die Seite verspringt, und
+       beim Verlassen des Feldes zoomt sie nicht wieder heraus.
+
+   Der Schnitt liegt bei 640 px — dieselbe Grenze, die os-ui.css schon für
+   die Kopfleiste benutzt. Darüber ändert sich kein einziger Pixel: alles
+   hier steht in @media-Blöcken für schmale Fenster.
+
+   `body:not(.jarvis)` überall, weil Zentrale und Sprachbühne eigene
+   Bühnen mit eigenem Stil sind (jarvis*.css).
+   =================================================================== */
+
+@media (max-width:640px){
+
+  /* ── 6.1 Die Rail wandert nach unten ────────────────────────────────
+     Warum nicht einfach schmaler: Eine senkrechte Leiste kostet auf jedem
+     Bildschirm Breite, und Breite ist auf 390 px das Knappste. Unten
+     liegt sie ausserdem in Daumenreichweite — dort, wo iOS seine eigene
+     Navigation hat.
+
+     Die Reihenfolge der Kinder bleibt, wie schale.js sie rendert (Marke,
+     Nav, Nutzer, Abmelden). `order` sortiert sie nur: Marke und Nutzer-
+     block tragen auf dem Telefon nichts bei (der Name steht in der
+     Kopfleiste, das Logo führt auf dieselbe Startseite wie das erste
+     Symbol) und fallen weg. Übrig bleibt die Navigation selbst, waagerecht
+     und scrollbar, plus der Abmelden-Knopf am Ende. */
+  body:not(.jarvis) .rail{
+    top:auto; left:0; right:0; bottom:0; width:auto;
+    flex-direction:row; align-items:center; gap:0;
+    padding:6px 8px calc(6px + env(safe-area-inset-bottom));
+    border-radius:0; border:0; border-top:1px solid #24231D;
+    /* Von unten nach oben heller, damit die Leiste vom Bildschirmrand
+       weg Gewicht bekommt statt zum Rand hin — sonst wirkt sie, als
+       schwebe sie über dem Inhalt. */
+    background:linear-gradient(0deg,#201F1C 0%,#2C2B28 58%,#3B3A37 100%);
+    box-shadow:0 -8px 24px -12px rgba(18,17,14,.55);
+    /* Kein Ausfahren auf 266 px mehr: auf einem Fingergerät bliebe sie
+       offen stehen. Der Titel steht als `title`-Attribut ohnehin am Link. */
+    transition:none;
+  }
+  body:not(.jarvis) .rail:hover{width:auto;box-shadow:0 -8px 24px -12px rgba(18,17,14,.55)}
+
+  /* Marke und Nutzerblock weg — beides steht schon in der Kopfleiste. */
+  body:not(.jarvis) .rail-marke,
+  body:not(.jarvis) .rail-nutzer{display:none}
+
+  /* Die Navigation ist jetzt die Leiste: waagerecht, scrollbar, ohne
+     sichtbaren Balken (den ersetzt der Verlauf rechts, 6.2). */
+  body:not(.jarvis) .rail-nav{
+    flex:1 1 auto; min-width:0; flex-direction:row; align-items:center; gap:2px;
+    overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch;
+    scroll-snap-type:x proximity;
+    /* Zwölf Bereiche passen nicht in 390 px — die Reihe scrollt. Damit das
+       letzte sichtbare Symbol nicht ABGESCHNITTEN wirkt, sondern
+       WEITERGEHEND, blendet sie an beiden Enden weich aus.
+
+       `mask-image` und nicht ein Verlauf darüber: die Leiste ist selbst
+       ein Verlauf, ein zweiter darüber hätte eine sichtbare Kante. Und
+       nicht die `local`-Mechanik der Tabellenhülle (6.2) — Masken kennen
+       kein `mask-attachment`, die Ausblendung steht hier also immer, auch
+       am Anfang und am Ende der Reihe. Das ist der ehrlichere Kompromiss:
+       ein dauerhaft weicher Rand liest sich als „hier geht es weiter",
+       eine harte Kante liest sich als Fehler.
+
+       Ältere Browser ohne Maske zeigen einfach die harte Kante — kein
+       Schaden, nur weniger schön. */
+    -webkit-mask-image:linear-gradient(to right,rgba(0,0,0,0) 0,#000 18px,#000 calc(100% - 18px),rgba(0,0,0,0) 100%);
+    mask-image:linear-gradient(to right,rgba(0,0,0,0) 0,#000 18px,#000 calc(100% - 18px),rgba(0,0,0,0) 100%);
+  }
+  /* Die Gruppenüberschriften („Vertrieb", „Finanzen") sind Spaltentitel.
+     Nebeneinander stehen sie sinnlos zwischen den Symbolen. */
+  body:not(.jarvis) .rail-gruppe{display:none}
+  /* Die eingerückte Unterliste des offenen Bereichs läuft in derselben
+     Reihe weiter — sie ist genau das, was man im CRM am häufigsten
+     braucht (Leads, Kunden, Pipeline). `display:contents` nimmt den
+     Behälter aus dem Layout, die Links werden direkte Geschwister. */
+  body:not(.jarvis) .rail-gruppe-unter{display:contents}
+
+  /* 48×48: über Apples 44 pt, damit auch ein Danebentippen noch trifft.
+     scroll-snap hält immer ein ganzes Symbol am Rand, nie ein halbes. */
+  body:not(.jarvis) .rail a,
+  body:not(.jarvis) .rail a.rail-unter{
+    flex:0 0 auto; width:48px; height:48px; min-height:48px; padding:0;
+    justify-content:center; border-radius:14px; scroll-snap-align:start;
+  }
+  body:not(.jarvis) .rail a svg,
+  body:not(.jarvis) .rail a.rail-unter svg{width:21px;height:21px}
+  /* Der Unterpunkt ist eine Stufe leiser als sein Bereich — im Senkrechten
+     macht das die Einrückung, hier die Farbe. */
+  body:not(.jarvis) .rail a.rail-unter{color:rgba(240,238,233,.62)}
+  body:not(.jarvis) .rail a.aktiv,
+  body:not(.jarvis) .rail a.rail-unter.aktiv{color:#FCFBF9}
+  /* Die Beschriftung bleibt unsichtbar (sie ist nur beim Ausfahren
+     gedacht) — aber `display:none` statt `opacity:0`, sonst zählt der
+     Text weiter zur Breite und jedes Symbol wäre 120 px breit. */
+  body:not(.jarvis) .rail .rail-wort{display:none}
+
+  /* Abmelden steht am rechten Ende, abgesetzt durch eine Linie — es ist
+     die einzige Handlung in der Leiste, die nicht navigiert. */
+  body:not(.jarvis) .rail>a[href="/logout"]{
+    width:48px;height:48px;min-height:48px;padding:0;justify-content:center;
+    margin-left:6px;border-left:1px solid rgba(255,255,255,.12);border-radius:0 14px 14px 0;
+  }
+
+  /* Der Inhalt braucht links keinen Platz mehr — aber unten, damit die
+     letzte Zeile nicht unter der Leiste liegt. 62 px ist die Leiste
+     (48 + 2×6 Polster + 1 Rand), dazu der Home-Indicator. */
+  body:not(.jarvis) .inhalt{margin-left:0}
+  body:not(.jarvis) main{padding:14px 12px calc(76px + env(safe-area-inset-bottom))}
+  /* Die Kopfleiste stand rechts und oben mit Abstand vom Rand, links
+     lag die Rail. Ohne Rail beide Seiten gleich. */
+  body:not(.jarvis) .topbar{margin:10px 10px 0}
+
+  /* Der Menüknopf aus sprache.js (`.handy.ohne-leiste`) blendet die Rail
+     ganz aus und setzt einen eigenen Knopf oben links. Dann fällt auch
+     der untere Platz weg, sonst klaffte eine leere Fläche. */
+  body:not(.jarvis).ohne-leiste main{padding-bottom:calc(28px + env(safe-area-inset-bottom))}
+
+
+  /* ── 6.2 Tabellen: man muss SEHEN, dass rechts noch etwas kommt ─────
+     Die Hülle scrollt schon (os-ui.css: overflow-x:auto), aber auf iOS
+     gibt es keinen dauerhaften Rollbalken — der Balken blitzt beim
+     Scrollen auf und verschwindet. Eine abgeschnittene Tabelle sieht
+     dadurch aus wie eine kaputte Tabelle.
+
+     Der Verlauf hängt an `background-attachment:local` gegen `scroll`:
+     Die beiden weissen Deckflächen (`local`) wandern MIT dem Inhalt und
+     decken den Verlauf darunter (`scroll`, steht fest am Rand) zu, sobald
+     man am jeweiligen Ende angekommen ist. Reines CSS, kein Skript, kein
+     Eingriff in die Seitenmodule — und es funktioniert auch in Tabellen,
+     die ein anderer Agent später einbaut.
+
+     Reihenfolge der vier Ebenen: Deckfläche links, Deckfläche rechts,
+     Schatten links, Schatten rechts. --os-flaeche ist die Tabellenfläche
+     selbst, deshalb sieht man die Deckflächen nicht. */
+  body:not(.jarvis) :is(.os-tabelle-huelle,.tabelle-huelle){
+    background-image:
+      linear-gradient(to right,var(--os-flaeche),rgba(0,0,0,0)),
+      linear-gradient(to left,var(--os-flaeche),rgba(0,0,0,0)),
+      linear-gradient(to right,rgba(15,27,45,.16),rgba(15,27,45,0)),
+      linear-gradient(to left,rgba(15,27,45,.16),rgba(15,27,45,0));
+    background-position:left center,right center,left center,right center;
+    background-repeat:no-repeat;
+    background-size:22px 100%,22px 100%,14px 100%,14px 100%;
+    background-attachment:local,local,scroll,scroll;
+    overflow-x:auto;-webkit-overflow-scrolling:touch;
+  }
+  /* Im Dunkeln ist ein schwarzer Schatten unsichtbar — dort ein heller. */
+  :root[data-theme="dark"] body:not(.jarvis) :is(.os-tabelle-huelle,.tabelle-huelle){
+    background-image:
+      linear-gradient(to right,var(--os-flaeche),rgba(0,0,0,0)),
+      linear-gradient(to left,var(--os-flaeche),rgba(0,0,0,0)),
+      linear-gradient(to right,rgba(0,0,0,.45),rgba(0,0,0,0)),
+      linear-gradient(to left,rgba(0,0,0,.45),rgba(0,0,0,0));
+  }
+
+  /* Zeilen als Tippfläche: 44 px Mindesthöhe, und die Polsterung schmaler,
+     damit von 390 px mehr Inhalt sichtbar bleibt statt Leerraum.
+     `white-space:nowrap` in den Kopfzellen bleibt — eine Tabelle, die man
+     scrollt, soll ihre Spalten nicht umbrechen. */
+  body:not(.jarvis) :is(.os-tabelle,.tabelle) :is(th,td){padding-left:12px;padding-right:12px}
+  body:not(.jarvis) :is(.os-tabelle,.tabelle) td{height:44px;padding-top:8px;padding-bottom:8px}
+  body:not(.jarvis) :is(.os-tabelle,.tabelle) th{height:40px}
+  /* Ein Link IN einer Zelle ist der eigentliche Tipppunkt. Er bekommt die
+     ganze Zeilenhöhe, ohne das Layout der Zelle zu ändern. */
+  /* 44 px, nicht 36: die Zelle ist 44 hoch, der Link darf sie ganz
+     ausfüllen — dann trifft auch, wer knapp über oder unter die Schrift
+     tippt. `inline-flex` statt `block`, damit zwei Links in einer Zelle
+     nebeneinander bleiben. */
+  body:not(.jarvis) :is(.os-tabelle,.tabelle) td>a{display:inline-flex;align-items:center;min-height:44px}
+
+
+  /* ── 6.3 Tippziele: alles auf mindestens 44 px ──────────────────────
+     Gemessen wurden 476 zu kleine Ziele allein auf /crm/leads. Die Ursache
+     ist nicht eine Stelle, sondern das Grundmass: crm.css baut Knöpfe für
+     die Maus (34–36 px hoch), kleine Knöpfe (.klein/.tiny) noch flacher,
+     und viele Listen setzen 13-px-Links ohne Polster.
+
+     In :where(), damit jede Bereichsregel weiterhin gewinnt — diese Zeilen
+     heben nur den Boden an, sie schreiben nichts fest. Ausgenommen sind
+     Elemente, die AUS GUTEM GRUND klein sind: Pillen und Chips innerhalb
+     einer Zeile (sie sind Zustandsanzeige, nicht Bedienelement) und die
+     Symbole in der Rail, die oben schon 48 px haben. */
+  body:not(.jarvis) :where(button,.knopf,input[type=submit],input[type=button]):not(.os-blatt-schliessen){
+    min-height:44px;
+  }
+  /* Icon-Knöpfe sind quadratisch — ohne Mindestbreite bliebe ein
+     16-px-Symbol ein 16 px breites Ziel. */
+  body:not(.jarvis) :where(button,.knopf):not(.os-blatt-schliessen):empty,
+  body:not(.jarvis) :where(button,.knopf):not(.os-blatt-schliessen):has(>svg:only-child){
+    min-width:44px;
+  }
+  /* Die kleinen Fassungen bleiben optisch klein (Schriftgrösse, Polster),
+     bekommen aber dieselbe Trefferfläche. */
+  body:not(.jarvis) :where(button.klein,button.tiny,button.still,.knopf.klein,.knopf.tiny){
+    min-height:44px;min-width:44px;
+  }
+  /* Ein Link in einer Liste oder Zeile: 44 px hoch, aber nur wenn er
+     alleine steht (`display` nicht `inline`). Ein Link MITTEN im Fliesstext
+     darf die Zeilenhöhe nicht sprengen — deshalb `:where(li,td,.os-zeile)>a`
+     und nicht `a` allgemein. */
+  body:not(.jarvis) :where(li,.os-zeile,.os-gruppe-rumpf,.reiter,.os-unternav)>a{
+    min-height:44px;display:inline-flex;align-items:center;
+  }
+  /* Derselbe Boden für jeden Link, der ALLEIN in einer Zelle, einer Karte
+     oder einem Absatz steht: die gemessenen Reste waren fast alle von
+     dieser Art („Website ↗", eine Telefonnummer, „öffnen →", „Details →",
+     die Zeitraum-Reiter der Buchhaltung, „Heute" im Kalender). Sie stehen
+     in Modul-CSS, das mir nicht gehört — deshalb hebt diese Regel nur den
+     Boden, ohne dort etwas umzuschreiben.
+
+     `:not(:where(p,span,label,td,li,h1,h2,h3,h4) a)` hält Links im
+     FLIESSTEXT heraus: ein verlinktes Wort mitten im Satz auf 44 px zu
+     heben, würde den Zeilenabstand des Absatzes sprengen. Was hier greift,
+     ist der Link, der für sich steht.
+
+     Ausgenommen sind ausserdem die Bausteine, die oben schon ihr eigenes
+     Mass bekommen haben, und die Rail (48 px, 6.1). */
+  body:not(.jarvis) :where(a[href]):not(:where(p,span:not(.os-zeile-wert),label,h1,h2,h3,h4) a):not(.rail a):not(.topbar-zurueck):not(.os-kopf-zurueck){
+    min-height:44px;display:inline-flex;align-items:center;
+  }
+  /* Ein nackter Link ohne Polster wäre 44 px hoch, aber nur so breit wie
+     sein Text: die Belegnummern in /buchhaltung/belege waren 17 px breit,
+     die Tageszahlen im Kalender 24 bis 30. `min-width` löst das ohne eine
+     einzige Zeile in buchhaltung.css oder kalender.css.
+
+     Kein `justify-content:center`: Ein Link, der sein Ziel links beginnt
+     (eine Nummer in einer Spalte), soll dort auch bleiben — sonst
+     verrutschen die Spalten einer ganzen Tabelle. Die zusätzliche Breite
+     wächst nach rechts in den Zellenrand hinein, wo ohnehin nichts steht. */
+  body:not(.jarvis) :where(a[href]):not(:where(p,span,label,h1,h2,h3,h4) a):not(.rail a):not(.topbar-zurueck){
+    min-width:44px;
+  }
+  /* Ein Symbolknopf ohne Text: hier mittig, weil das Symbol sonst am
+     linken Rand seiner 44-px-Fläche klebt. */
+  body:not(.jarvis) :where(a[href]):not(.rail a):empty,
+  body:not(.jarvis) :where(a[href]):not(.rail a):has(>svg:only-child){
+    justify-content:center;
+  }
+  /* Die Reiter über dem Inhalt (Übersicht · Belege · Rechnungen) ragten
+     bei /buchhaltung/kosten 306 px über den Rand. Die Leiste scrollt schon
+     (crm.css:1423) — hier nur noch die Tippfläche und der Hinweis, dass
+     rechts etwas ist: sie darf am Rand nicht hart enden. */
+  body:not(.jarvis) .reiterleiste{padding:0 12px;scroll-padding:0 12px;-webkit-overflow-scrolling:touch}
+  body:not(.jarvis) .reiter a{min-height:44px;display:inline-flex;align-items:center}
+  body:not(.jarvis) .os-unternav{padding-left:12px;padding-right:12px}
+  body:not(.jarvis) .os-unternav a{height:44px}
+  /* Häkchen und Radios sind auf dem Telefon der häufigste Fehlgriff. */
+  body:not(.jarvis) :where(input[type=checkbox],input[type=radio]){
+    width:22px;height:22px;
+  }
+  /* Ein <label> um ein Häkchen ist die eigentliche Fläche. */
+  body:not(.jarvis) :where(label):has(>input[type=checkbox],>input[type=radio]){
+    min-height:44px;display:inline-flex;align-items:center;gap:10px;
+  }
+
+
+  /* ── 6.4 Eingabefelder: 16 px, sonst zoomt iOS hinein ───────────────
+     Safari auf dem iPhone zoomt beim Antippen automatisch in JEDES Feld
+     unter 16 px Schriftgrösse hinein — und zoomt beim Verlassen nicht
+     wieder heraus. Die Seite steht danach verschoben und zu gross da; man
+     muss von Hand herauswischen. Das ist keine Einstellung, die sich
+     abschalten liesse (`user-scalable=no` im viewport-meta wäre der alte
+     Weg, aber iOS ignoriert ihn seit 10 und er nimmt Sehbehinderten das
+     Zoomen).
+
+     Die einzige Abhilfe ist die Schriftgrösse selbst. os-ui.css setzt
+     13,5 px für alle Felder — hier steht 16 px, aber nur auf dem Telefon,
+     der Schreibtisch behält seine 13,5.
+
+     `!important` ist begründet: Einzelne Module setzen ihre Feldgrösse mit
+     Klassenregeln (z. B. .filter .such input in crm.css, .os-zeile--eingabe
+     input in os-ui.css mit 14 px). Die gewinnen sonst gegen :where() — und
+     jedes vergessene Feld ist ein Feld, das die Seite verspringen lässt.
+     Es ist die einzige Stelle in diesem Block mit !important. */
+  body:not(.jarvis) :is(input,select,textarea){font-size:16px!important}
+  /* Mit 16 px Schrift passt ein 36-px-Feld nicht mehr; Höhe mitziehen. */
+  body:not(.jarvis) :where(input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea){
+    min-height:44px;
+  }
+  /* Ausnahme: randlose Felder in einer os-Zeile. Dort IST die Zeile das
+     Feld (56 px hoch, os-ui.css) — eine zweite Mindesthöhe darin würde
+     die Zeile auf 100 px aufblasen. */
+  body:not(.jarvis) .os-zeile--eingabe :where(input,select,textarea){min-height:22px}
+  body:not(.jarvis) .os-zeile--eingabe textarea{min-height:48px}
+
+
+  /* ── 6.5 Kopfleiste ohne Verbreitern ────────────────────────────────
+     os-ui.css regelt sie schon ab 640 px (Titel umbricht, Suche darunter,
+     Datum und „Feierabend" weg). Zwei Dinge fehlten dort:
+     Erstens die Kopfwerkzeuge selbst — Glocke, Sonne und „Weiß" waren
+     23 bis 33 px hoch und damit unter der Trefferschwelle. Zweitens
+     schiebt 6.3 oben jeden Knopf auf 44 px, auch die in der Kopfleiste;
+     ohne Gegenzug wäre die Leiste plötzlich doppelt so hoch. Also hier
+     einmal ausdrücklich: 44 px Fläche, aber flach gepolstert. */
+  body:not(.jarvis) .topbar :is(.glocke,.thema-schalter,.weiss-schalter){
+    min-width:44px;min-height:44px;padding:0 10px;display:inline-flex;
+    align-items:center;justify-content:center;
+  }
+  body:not(.jarvis) .topbar-zurueck{width:44px;height:44px;margin-right:-6px}
+  /* Die Suche ist auf dem Telefon der schnellste Weg zu einem Kunden —
+     mit 16 px Schrift (6.4) braucht sie ihre Höhe. */
+  body:not(.jarvis) .topbar-suche input{height:44px}
+  /* Die Stoppuhr steckte ihre Knöpfe in eine 32-px-Pille — „Pause" war
+     damit 57×32 und blieb als einziges Ziel auf JEDER Seite unter dem
+     Mass. Die Pille wächst mit: 44 px Knopf plus 4 px Polster oben und
+     unten. Die Zeit daneben rückt dadurch nicht, sie steht mittig. */
+  body:not(.jarvis) .stoppuhr button{min-height:44px;min-width:44px;padding:0 12px}
+  body:not(.jarvis) .stoppuhr{min-height:52px;padding:4px 5px 4px 10px}
+
+
+  /* ── 6.6 Blätter und Popover ────────────────────────────────────────
+     os-ui.css lässt das Blatt schon ab 700 px von unten hochfahren. Auf
+     390 px fehlten die Tippflächen im Fuss und der Platz für den
+     Home-Indicator ist dort zwar gesetzt, aber die Knöpfe standen auf
+     36 px. Ausserdem: ein Popover, das breiter ist als der Bildschirm,
+     schiebt die ganze Seite auf. */
+  body:not(.jarvis) .os-blatt-fuss :is(button,.knopf){min-height:48px}
+  body:not(.jarvis) .os-blatt-schliessen{width:40px;height:40px;min-height:40px}
+  body:not(.jarvis) .os-popover{max-width:calc(100vw - 20px)}
+  body:not(.jarvis) .os-popover-liste :is(label,a,button){min-height:44px}
+  /* Ein <dialog> ohne os-Klasse (crm.css, Kalender, Feierabend) war für
+     den Schreibtisch gebaut: feste Breite, mittig. Auf 390 px ragt er
+     hinaus. */
+  body:not(.jarvis) dialog:not(.os-blatt){
+    width:calc(100vw - 20px);max-width:calc(100vw - 20px);
+    max-height:calc(100dvh - 40px);overflow:auto;
+  }
+}
+
+/* ── 6.7 Nichts darf die Seite waagerecht aufschieben ─────────────────
+   os-ui.css hält das schon ab 860 px für .inhalt fest. Eine Stelle fehlt:
+   ein <img> oder <pre> aus einem Seitenmodul (Belegvorschau, Code) hat
+   seine eigene Breite und schiebt trotzdem. Ausserhalb des 640er-Blocks,
+   weil es auch auf einem 700-px-Tablet gilt. */
+@media (max-width:860px){
+  body:not(.jarvis) :where(img,video,canvas,svg:not(.rail svg)){max-width:100%;height:auto}
+  body:not(.jarvis) :where(pre){max-width:100%;overflow-x:auto}
+}

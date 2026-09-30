@@ -189,3 +189,217 @@
 .buch-postfach-form label{display:inline-flex;align-items:center;gap:6px}
 .buch-postfach-form input[type=date]{font:inherit;padding:3px 6px;border:1px solid var(--rand,#d6dae0);border-radius:6px;background:var(--flaeche,#fff);color:inherit}
 @media (max-width:640px){.buch-postfach-form{margin-left:0}}
+
+/* =====================================================================
+   HANDY (30.09.2026) — die Buchhaltung mit einem Daumen bedienbar
+
+   Gemessen auf einem iPhone in 390 px (scripts/shot-handy.js, angemeldet):
+   Die Reiterleiste stand 306 px im Nichts, der Zeitraum-Umschalter 159 px,
+   die Tabellen 432 bis 611 px. Nichts davon war kaputt im Sinne von
+   "waagerechtes Scrollen der ganzen Seite" — .inhalt hat overflow-x:clip,
+   also wurde alles einfach abgeschnitten. Genau das ist das Schlimmere:
+   Der Reiter "Kosten" existierte auf dem Telefon nicht mehr, und in der
+   Tabelle "Letzte Buchungen" war die Spalte Betrag unsichtbar.
+
+   Die Regeln hier gelten NUR unter den Projekt-Haltepunkten. Die
+   Arbeitsansicht am Schreibtisch ist laut PRODUCT.md unantastbar und
+   bleibt Pixel fuer Pixel wie zuvor.
+   ===================================================================== */
+
+/* ---------- 1. Reiterleiste: scrollen — und zeigen, dass sie scrollt ----------
+   Warum mask-image statt Farbverlauf: Die Leiste liegt je nach Thema auf
+   Weiss, Graphit oder Dunkel. Ein aufgemalter Verlauf braeuchte fuer jedes
+   Thema eine eigene Farbe. Eine Maske blendet den Inhalt selbst aus und
+   funktioniert auf jedem Grund — ohne eine einzige neue Farbe.
+
+   Warum die Maske nur rechts anfaengt: Solange links nichts weggescrollt
+   ist, soll dort auch nichts verblassen. Das Skript in
+   lib/buchhaltung-unternav.js setzt data-links/data-rechts beim Scrollen. */
+@media (max-width:860px){
+  .reiterleiste.os-unternav{
+    display:block;                 /* kein Flex-Elternteil: sonst waechst .reiter statt zu scrollen */
+    margin-right:0;padding:8px 14px 2px;
+    overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+    /* Die Leiste selbst traegt die Maske, damit der ausgeblendete Rand
+       mitwandert, wenn der Daumen schiebt. */
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 34px),transparent 100%);
+    mask-image:linear-gradient(90deg,#000 calc(100% - 34px),transparent 100%);
+  }
+  .reiterleiste.os-unternav::-webkit-scrollbar{display:none}
+  /* Am rechten Ende angekommen: Maske weg, sonst verblasst der letzte Reiter
+     fuer immer und sieht aus wie ausgegraut. */
+  .reiterleiste.os-unternav[data-rechts="0"]{-webkit-mask-image:none;mask-image:none}
+  /* Links weggescrollt: dort ebenfalls verblassen, damit man den Rueckweg sieht. */
+  .reiterleiste.os-unternav[data-links="1"]{
+    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 26px,#000 calc(100% - 34px),transparent 100%);
+    mask-image:linear-gradient(90deg,transparent 0,#000 26px,#000 calc(100% - 34px),transparent 100%);
+  }
+  .reiterleiste.os-unternav[data-links="1"][data-rechts="0"]{
+    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 26px);
+    mask-image:linear-gradient(90deg,transparent 0,#000 26px);
+  }
+  /* Der Innen-Nav war das eigentliche Leck: display:flex ohne min-width, er
+     wuchs auf 606 px und schob sich aus dem Fenster statt in der Leiste zu
+     rollen. Inline-flex haelt ihn an seinem Inhalt und laesst die Leiste
+     darum herum scrollen. */
+  .reiterleiste.os-unternav>.reiter{
+    display:inline-flex;gap:6px;flex-wrap:nowrap;width:max-content;min-width:100%;
+    /* Rechts so viel Luft wie die Maske breit ist: Der letzte Reiter laesst
+       sich ganz freischieben, statt unter dem Verlauf zu enden. */
+    padding-right:34px;
+  }
+  /* 44 px Tippflaeche (Apple-Mindestmass). Die Schrift bleibt, wo sie war —
+     nur die Flaeche darum wird daumengerecht. */
+  .reiterleiste.os-unternav>.reiter a{
+    flex:0 0 auto;display:inline-flex;align-items:center;
+    min-height:44px;padding:0 14px;white-space:nowrap;border-radius:11px;
+  }
+  /* Ein angetippter Reiter soll sich beim naechsten Aufruf selbst zeigen —
+     das Skript scrollt ihn heran, hier steht nur das weiche Verhalten. */
+  .reiterleiste.os-unternav{scroll-behavior:smooth}
+}
+@media (prefers-reduced-motion:reduce){.reiterleiste.os-unternav{scroll-behavior:auto}}
+
+/* ---------- 2. Filter- und Umschaltleisten: umbrechen statt rausragen ----------
+   Gemessen: .os-werkzeugleiste-aktionen wuchs auf 471 px in einem 298 px
+   breiten Rumpf. Grund: Ein Flex-Element hat von Haus aus min-width:auto,
+   also mindestens die Breite seines Inhalts — das Umbrechen der ELTERN-Leiste
+   half nicht, weil die Aktionen-Box selbst eine einzige lange Zeile war.
+   Mit min-width:0 darf sie schrumpfen, und die Schiene darin rollt. */
+@media (max-width:700px){
+  .buch-seite .os-werkzeugleiste{align-items:flex-start;gap:10px}
+  .buch-seite .os-werkzeugleiste-aktionen{
+    min-width:0;max-width:100%;width:100%;margin-left:0;
+  }
+  /* Der Zeitraum-Umschalter (September · 3 Monate · 6 Monate · 12 Monate ·
+     Insgesamt) passt nicht in 390 px. Erster Versuch war, ihn auf gleich
+     breite Felder zu quetschen — das Ergebnis war unlesbar: "September3
+     Monate6 Monate12 Monatensgesamt", weil die Beschriftungen ueber ihre
+     Felder hinausliefen. Also darf er stattdessen rollen: Jedes Feld behaelt
+     seine Beschriftung ganz, die Schiene scrollt darunter weg. Derselbe
+     Verlauf wie bei den Reitern zeigt, dass rechts noch etwas kommt. */
+  .buch-seite .os-segment{
+    display:flex;max-width:100%;min-width:0;
+    overflow-x:auto;scrollbar-width:none;
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent 100%);
+    mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent 100%);
+  }
+  .buch-seite .os-segment::-webkit-scrollbar{display:none}
+  .buch-seite .os-segment[data-rechts="0"]{-webkit-mask-image:none;mask-image:none}
+  .buch-seite .os-segment>a,.buch-seite .os-segment>button{
+    flex:0 0 auto;min-width:44px;height:44px;padding:0 14px;font-size:13.5px;white-space:nowrap;
+  }
+  /* Der Rest der Aktionszeile (Knoepfe wie "Ausgabe erfassen") steht darunter
+     und fuellt die Breite — ein Ziel, das man ohne Zielen trifft. */
+  .buch-seite .os-werkzeugleiste-aktionen>.knopf,
+  .buch-seite .os-werkzeugleiste-aktionen>button,
+  .buch-seite .os-werkzeugleiste-aktionen>a:not(.os-segment>a){
+    min-height:44px;flex:1 1 auto;justify-content:center;
+  }
+  /* Filterzeile der Belege-Seite: Suchfeld auf die volle Zeile, Auswahlfelder
+     daneben. Vorher stand das Suchfeld mit min-width:200px neben zwei Selects
+     und drueckte die Zeile auf. */
+  .buch-filter{gap:8px}
+  .buch-filter input[type=search]{flex:1 1 100%;max-width:100%;min-width:0;height:44px}
+  .buch-filter select{flex:1 1 calc(50% - 4px);min-width:0;height:44px}
+  .buch-filter button,.buch-filter .knopf{min-height:44px}
+  .buch-postfach-form{width:100%;margin-left:0;flex-wrap:wrap}
+  .buch-postfach-form input[type=date]{min-height:44px;flex:1 1 auto;min-width:0}
+}
+
+/* ---------- 3. Tabellen: rollen lassen UND zeigen, dass da mehr ist ----------
+   Die Huelle .os-tabelle-huelle rollt schon heute richtig (gemessen: 298 px
+   sichtbar von 743 px Inhalt). Sie sah nur nicht danach aus — kein Balken,
+   kein Rand, nichts. Auf dem Telefon las Lukas drei Spalten und hielt das
+   fuer die ganze Tabelle; die Spalte "Betrag" hat er nie gesehen.
+
+   Dieselbe Maske wie bei den Reitern, plus ein duenner Rollbalken, den man
+   auf dem Telefon beim Schieben kurz sieht. */
+@media (max-width:860px){
+  .buch-seite .os-tabelle-huelle{
+    overflow-x:auto;-webkit-overflow-scrolling:touch;
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent 100%);
+    mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent 100%);
+  }
+  .buch-seite .os-tabelle-huelle[data-rechts="0"]{-webkit-mask-image:none;mask-image:none}
+  /* Der Rumpf einer Gruppe hat overflow:hidden (runde Ecken). Eine Tabelle
+     DARIN wuerde ihre Maske daran verlieren — deshalb bekommt der Rumpf hier
+     seine Ecken ueber die Huelle zurueck. */
+  .buch-seite .os-gruppe-rumpf{overflow:visible;border-radius:var(--os-r,14px)}
+  .buch-seite .os-gruppe-rumpf>.os-tabelle-huelle{border-radius:var(--os-r,14px)}
+  /* 44 px Zeilenhoehe: Eine Zeile, die man antippen kann, muss man auch
+     treffen koennen. 11 px Polsterung ergaben 38 px — knapp daneben. */
+  .buch-seite .os-tabelle td{padding:12px 14px;min-height:44px;height:44px}
+  .buch-seite .os-tabelle th{padding:12px 14px}
+  .buch-seite .os-tabelle--dicht td{padding:11px 12px;height:44px}
+  .buch-seite .os-tabelle--dicht th{padding:10px 12px}
+  /* Wichtigste Aenderung fuer die Lesbarkeit: Die erste Spalte darf nicht
+     mehr zu einem Buchstaben pro Zeile zerfallen. Gemessen stand dort
+     "trinkgut Rember ger Lebens mittel & Genuss maerkte KG" in sechs Zeilen
+     a 5 Zeichen. Ein Mindestmass zwingt die Tabelle stattdessen zum Rollen —
+     und das darf sie ja jetzt sichtbar. */
+  .buch-seite .os-tabelle td,.buch-seite .os-tabelle th{white-space:nowrap}
+  .buch-seite .os-tabelle .os-tabelle-titel{max-width:200px;overflow:hidden;text-overflow:ellipsis}
+  .buch-seite .os-tabelle .os-tabelle-unter{max-width:200px;overflow:hidden;text-overflow:ellipsis}
+  /* Die Monatstabelle setzt white-space selbst — hier bleibt sie, wie sie ist. */
+  .buch-monate .os-tabelle td.buch-taten-zelle{white-space:nowrap}
+}
+
+/* ---------- 4. Tippflaechen: alles mindestens 44x44 px ----------
+   Gemessen auf /buchhaltung/belege: 193 Ziele unter 40 px. Die meisten davon
+   sind die kleinen Knoepfe in den Tabellenzeilen (Bezahlt-Haken, Pruefen,
+   Loeschen) — sie waren 30 px hoch, weil sie am Schreibtisch neben einen
+   Zeilentext passen mussten. Auf dem Telefon ist das die falsche Rechnung. */
+@media (max-width:700px){
+  .buch-tat button,.buch-taten .knopf,.buch-taten button{min-height:44px;padding:0 14px;font-size:13.5px}
+  .buch-tat button.still{padding:0 12px}
+  .buch-tat input[type=date]{height:44px;font-size:14px}
+  .buch-taten{gap:8px}
+  /* Icon-Links in Zellen (Vorschau, Datei oeffnen): Das Icon bleibt 16 px,
+     die Flaeche darum waechst auf 44 — der Daumen trifft, das Auge sieht
+     dieselbe ruhige Zeile. */
+  .buch-tabelle-icon{min-width:44px;min-height:44px;align-items:center;justify-content:center;margin:-10px -12px}
+  /* Ablagezone und Scan-Seite: schon gross, aber die Richtungswahl und der
+     Nebenweg waren zu klein. */
+  .buch-ablage{min-height:44px}
+  /* Die Richtungswahl ist ein <label> mit dem nackten Wort "als" vor dem
+     Auswahlfeld. Auf 390 px stand da untereinander "a l s" — das Wort war
+     ein schrumpfendes Flex-Element neben einem Feld, das die Zeile fuellte.
+     Mit nowrap fuer das Wort und einem Feld, das den Rest nimmt, steht
+     wieder "als [Ausgabe …]" in einer Zeile. */
+  .buch-ablage-richtung{width:100%;flex-wrap:nowrap;white-space:nowrap}
+  .buch-ablage-richtung select{height:44px;font-size:14px;flex:1 1 auto;min-width:0;width:auto}
+  .buch-scan-taten button,.buch-scan-taten a.knopf{min-height:44px;flex:1 1 auto;justify-content:center}
+  .buch-scan-nebenweg label{min-height:44px;display:inline-flex;align-items:center;padding:0 14px}
+  /* Die Pillen in .buch-quellen sind Anzeige, kein Ziel — sie bleiben klein.
+     Ist eine Pille ein Link, bekommt sie die Flaeche. */
+  a.os-pille{min-height:44px;padding:0 12px}
+  /* Die Belegnummer in der ersten Spalte war 17 px breit — 178-mal auf einer
+     Seite. Sie ist derselbe Link wie die ganze Zeile, also muss man sie nicht
+     treffen; trotzdem darf sie kein Fallstrick sein. Die Zelle wird zum Ziel,
+     die Zahl bleibt, wo sie ist. */
+  .buch-seite .os-tabelle td.buch-nowrap>a{
+    display:inline-flex;align-items:center;justify-content:flex-start;
+    min-width:44px;min-height:44px;margin:-11px -4px;padding:0 4px;
+  }
+  /* Der Link "…/buchhaltung/scan" unter der Filterzeile ist ein Satz, kein
+     Knopf — er bekommt Zeilenhoehe statt einer Kachel, damit er nicht die
+     ruhige Hinweiszeile sprengt. */
+  .buch-quellen .buch-rechts a{display:inline-block;padding:12px 0;line-height:20px}
+  /* Radios im Pruef-Blatt: Das Kaestchen bleibt, die Zeile wird zum Ziel. */
+  .buch-radio label{min-height:44px;padding:0 2px}
+  .buch-radio{gap:8px 16px}
+
+  /* Textlinks in Gruppen-Ueberschriften ("Alle Belege", "Monatsabschluss")
+     und in Kachel-Fuessen ("Nachtragen") waren 16 px hoch — Schriftzeilen
+     ohne Flaeche. Sie bekommen Polsterung nach oben und unten, die ueber
+     negative Aussenabstaende wieder eingespart wird: Das Ziel waechst auf
+     44 px, das Layout bleibt aufs Pixel wie vorher. */
+  .buch-seite .os-gruppe-werkzeug a,
+  .buch-seite .os-gruppe-werkzeug button,
+  .buch-seite .os-gruppe-werkzeug .knopf{
+    display:inline-flex;align-items:center;min-height:44px;padding:0 6px;margin:-14px -6px;
+  }
+  .buch-kachel-fuss a{display:inline-flex;align-items:center;min-height:44px;margin:-14px 0}
+}

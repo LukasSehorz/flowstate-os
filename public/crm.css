@@ -3129,3 +3129,342 @@ body.zieht-aus{user-select:none;-webkit-user-select:none}
 .akte2-haken{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;color:var(--text-secondary);cursor:pointer}
 .akte2-haken input{width:16px;height:16px;accent-color:var(--primary);cursor:pointer}
 .akte2-haken:has(input:checked){color:var(--foreground);font-weight:550}
+
+/* =====================================================================
+   HANDY (30.09.2026) — die CRM-Seiten auf 390 px bedienbar machen.
+
+   Warum ueberhaupt: Gemessen auf einem iPhone (390 px) war /crm/leads
+   60.641 px lang — das sind ueber 70 Bildschirme fuer 229 Leads. Der Grund
+   ist nicht die Menge, sondern die Form: Sieben Tabellenspalten teilen sich
+   390 px, also rund 45 px je Spalte. Darin passt kein Wort mehr nebeneinander,
+   der Browser bricht jedes Wort BUCHSTABENWEISE um ("H-ä-c-k-l") und eine
+   Telefonnummer steht mit einer Ziffer je Zeile untereinander. Jede Zeile wird
+   so ueber 250 px hoch. Dieselbe Krankheit auf /crm/kunden (11.693 px).
+
+   Alles hier steht ausschliesslich in @media-Bloecken fuer schmale Fenster.
+   Der Desktop bleibt Zeichen fuer Zeichen unveraendert — CRM und Kunden sind
+   laut PRODUCT.md Arbeitsansichten und werden nicht angefasst.
+
+   Die Grenze ist 640 px, dieselbe, an der os-ui.css die Kopfzeile umbaut.
+   Neue Farben gibt es keine: alles laeuft ueber die vorhandenen Marken, damit
+   Hell, Dunkel, Graphit und Weiss automatisch mitlaufen.
+   ===================================================================== */
+
+@media (max-width:640px){
+
+  /* ---------- 1. Pipeline: waagerecht wischen, eine Spalte je Blick ----------
+
+     Abgewogen wurden zwei Wege:
+       (a) Stufen untereinander — jede Stufe eine eigene Liste.
+       (b) Waagerecht wischen, Spalten in Bildschirmbreite.
+
+     Entschieden fuer (b). Begruendung: Die Pipeline beantwortet EINE Frage —
+     "wo steht welcher Deal". Untereinander wuerde die Seite bei acht Stufen
+     mit allen Karten mehrere tausend Pixel lang, und der Vergleich zwischen
+     zwei Stufen ("liegt in Angebot mehr als in Erstgespraech?") waere nur noch
+     durch Scrollen und Merken moeglich. Waagerecht bleibt jede Stufe eine
+     Karteikarte, die man mit EINEM Daumenwisch erreicht.
+
+     Damit das kein Suchspiel wird, drei Dinge:
+       · scroll-snap — der Wisch landet immer sauber auf einer Spalte,
+         nie zwischen zweien.
+       · 86 % Breite statt 100 % — die naechste Spalte lugt am Rand hervor.
+         Das IST der Hinweis, dass es weitergeht; ein Pfeil waere Text, der
+         erklaert, was man auch zeigen kann.
+       · Rand rechts, damit die letzte Spalte ebenfalls ganz nach links
+         schnappen kann und nicht am Ende haengenbleibt. */
+  .kanban{
+    gap:12px;padding:2px 0 16px;
+    scroll-snap-type:x mandatory;
+    /* -webkit-overflow-scrolling: auf iOS laeuft der Wisch sonst ohne Schwung. */
+    -webkit-overflow-scrolling:touch;
+    /* Ueber den Seitenrand hinaus ziehen: Die Spalten sollen bis an die
+       Fensterkante wischen koennen, main hat aber 14 px Innenabstand. */
+    margin:0 -14px;padding-left:14px;padding-right:14px;
+    scroll-padding-left:14px}
+  .spalte{
+    flex:0 0 86%;max-width:86%;
+    scroll-snap-align:start;
+    padding:14px 13px}
+  /* Die letzte Spalte braucht rechts Platz, sonst kann sie nicht ganz nach
+     links schnappen — sie bliebe immer angeschnitten stehen. */
+  .kanban::after{content:"";flex:0 0 14%}
+  /* Die Kopfzeile darf hier zwei Zeilen brauchen: der Name ist wichtiger als
+     die feste Hoehe, die auf dem Desktop die Karten aller Spalten auf gleicher
+     Hoehe beginnen laesst. Nebeneinander sieht man hier ohnehin nur eine. */
+  .spalte-titel-zeile{min-height:0;flex-wrap:wrap}
+  .spalte-titel{font-size:15px;line-height:1.3}
+  .stufe-namen{min-height:0}
+  /* Karten: groessere Anfassflaeche, der Klapp-Pfeil wird ein echter Knopf. */
+  .deal{padding:14px 13px}
+  .deal-klapp{width:44px;height:44px;margin:-11px -10px -11px 2px;
+    justify-content:center}
+  .deal-klapp svg{width:16px;height:16px}
+  /* Der Betrag ist auf dem Handy die Zahl, nach der man sucht. */
+  .deal-betrag{font-size:20px;flex-wrap:wrap}
+  /* Ziehen per Maus gibt es hier nicht — der Finger scrollt. Der Greifhand-
+     Zeiger waere ein Versprechen, das die Seite nicht halten kann. */
+  .deal{cursor:pointer}
+
+  /* ---------- 2. Lange Listen: aus Tabellenzeilen werden Karten ----------
+
+     Rein ueber CSS, ohne eine Zeile im Markup: die Tabelle wird zu Bloecken,
+     jede <tr> zu einer Karte, jede <td> zu einer Zeile darin. Die Kopfzeile
+     verschwindet — ihre Beschriftungen stehen stattdessen VOR den Werten.
+     Weil im Markup keine data-label-Attribute stehen (die Datei gehoert einem
+     anderen Agenten), kommen die Beschriftungen aus nth-child. Das ist an die
+     Spaltenreihenfolge gebunden; genau deshalb steht sie hier nochmal im
+     Klartext, damit eine spaetere Aenderung am Markup hier auffaellt.
+
+     Wirkung: Statt 45 px je Spalte hat jeder Wert die volle Breite. Nichts
+     bricht mehr buchstabenweise um, die Zeilenhoehe faellt von ueber 250 px
+     auf das, was der Inhalt wirklich braucht. */
+  .tabelle-huelle{
+    /* Ohne Rahmen und Hintergrund — die Karten tragen das jetzt selbst,
+       sonst steht ein Kasten im Kasten. */
+    background:none;border:0;box-shadow:none;border-radius:0;overflow:visible}
+  .anruf-tabelle,.anruf-tabelle tbody{display:block;width:100%;table-layout:auto}
+  /* Die Kopfzeile hat in einer Kartenliste keine Funktion mehr: Ihre Woerter
+     stehen ab jetzt an jedem Wert selbst. */
+  .anruf-tabelle thead{display:none}
+  .anruf-tabelle tbody tr{
+    display:block;margin-bottom:10px;padding:12px 14px;
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:var(--r-lg);box-shadow:var(--s1)}
+  .anruf-tabelle tbody tr:last-child{margin-bottom:0}
+  /* Die feste Prozent-Breite der Desktop-Spalten muss weg, sonst behaelt jede
+     Zelle ihre 9 bis 21 Prozent — genau das Problem, das wir loesen. */
+  .anruf-tabelle th,.anruf-tabelle td,
+  .kunden-tabelle th,.kunden-tabelle td{width:auto!important}
+  /* Beschriftung links, Wert rechts — wie eine Datenzeile, nicht wie
+     Fliesstext. Die erste Zelle (Firmenname) bricht diese Regel gleich
+     darunter wieder: Sie ist die Ueberschrift der Karte. */
+  .anruf-tabelle td{
+    display:flex;align-items:baseline;gap:10px;
+    width:auto;border:0;border-top:1px solid var(--border);padding:5px 0}
+  .anruf-tabelle td:empty{display:none}
+  /* Das Aussehen der Beschriftung. WAS dort steht, sagen erst die
+     nth-child-Regeln weiter unten — ohne content bleibt ::before aus.
+     So erzeugt eine Spalte, die hier nicht benannt ist, auch keinen
+     leeren Platzhalter. */
+  .anruf-tabelle td::before{
+    flex:0 0 96px;font-size:11px;font-weight:600;color:var(--text-muted);
+    text-transform:uppercase;letter-spacing:.03em;line-height:1.4}
+  /* Der Firmenname ist der Kartentitel: volle Breite, keine Beschriftung,
+     keine Trennlinie darueber, groesser als der Rest. */
+  .anruf-tabelle td:first-child{
+    display:block;padding-top:0;border-top:0}
+  .anruf-tabelle td:first-child::before{content:none}
+  .anruf-tabelle td:first-child .zeile-titel{font-size:15.5px;line-height:1.3}
+  .anruf-tabelle td:first-child .zeile-sub{font-size:12.5px;margin-top:3px}
+  /* Der Rest der Zelle darf den Platz nehmen, den die Beschriftung uebriglaesst. */
+  .anruf-tabelle td>*:not(::before){min-width:0}
+
+  /* Die Spaltennamen. Reihenfolge laut lib/crm-routes.js:
+     Leads   (Zeile ~2755): Firma · Geschaeftsfuehrer · Telefon · Website ·
+                            Ergebnis · Detail · Absenden
+     Kunden  (Zeile ~2027): Firma · Stufe/Status · Score/Kunde seit ·
+                            Telefon · Website · Verantwortlich
+     Getrennt gesetzt, weil beide Tabellen dieselbe Klasse .anruf-tabelle
+     tragen und sich nur durch .kunden-tabelle unterscheiden. */
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(2)::before{content:"Geschäftsführer"}
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(3)::before{content:"Telefon"}
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(4)::before{content:"Website"}
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(5)::before{content:"Ergebnis"}
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(6)::before{content:"Detail"}
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(7)::before{content:"Absenden"}
+  /* Die zweite und dritte Spalte heissen bei den Kunden je nach Liste anders
+     ("Stufe/Score" bei Leads, "Status/Kunde seit" bei Kunden). Da das CSS die
+     Liste nicht kennt, steht dort der gemeinsame Nenner. */
+  .kunden-tabelle td:nth-child(2)::before{content:"Status"}
+  .kunden-tabelle td:nth-child(3)::before{content:"Seit"}
+  .kunden-tabelle td:nth-child(4)::before{content:"Telefon"}
+  .kunden-tabelle td:nth-child(5)::before{content:"Website"}
+  .kunden-tabelle td:nth-child(6)::before{content:"Verantwortlich"}
+
+  /* Bedienelemente in der Karte: volle Restbreite und 44 px hoch.
+     Das ist der zweite Teil der Aufgabe — eine Karte nuetzt nichts, wenn der
+     Knopf darin 24 px hoch ist. */
+  .anruf-tabelle .anruf-ergebnis,
+  .anruf-tabelle .anruf-grund,
+  .anruf-tabelle .anruf-notiz,
+  .anruf-tabelle .anruf-grund-frei,
+  .anruf-tabelle .lead-branche,
+  .anruf-tabelle .verantwortlich-wahl{
+    flex:1 1 auto;width:100%;min-width:0;min-height:44px;font-size:14px;
+    padding:10px 12px;padding-right:30px;border-radius:10px;
+    field-sizing:fixed;box-sizing:border-box}
+  .anruf-tabelle .anruf-akte{flex:1 1 auto;min-height:44px;font-size:13.5px}
+  /* Die Branche steht unter dem Firmennamen, nicht daneben.
+     field-sizing:content muss hier weg: Das Feld misst sich sonst am laengsten
+     Branchennamen statt an der Karte, wird breiter als die Zelle und wird ueber
+     die naechste Zeile gemalt — im Screenshot lagen Firmenname, Branche und
+     Geschaeftsfuehrer uebereinander. Auf dem Handy soll es ohnehin die volle
+     Breite haben, dann ist die Inhaltsmessung auch ohne Nutzen. */
+  .anruf-tabelle td:first-child .lead-branche{
+    display:block;margin-top:8px;width:100%;max-width:100%;
+    field-sizing:fixed;box-sizing:border-box}
+  /* Telefonnummern: gross genug zum Treffen, und sie duerfen nicht umbrechen —
+     eine zerschnittene Nummer liest niemand vor. Die 44 px holt sich der Link
+     ueber den Innenabstand, nicht ueber eine Mindesthoehe der ganzen Zeile:
+     bei 229 Leads sind 10 px je Zeile zweieinhalbtausend Pixel Seitenlaenge. */
+  .anruf-tabelle td a[href^="tel:"]{
+    display:inline-flex;align-items:center;height:44px;padding:0 4px;margin:-2px -4px;
+    font-size:15px;font-weight:600;white-space:nowrap}
+  .anruf-tabelle .tel-zweite{margin-top:0}
+  .anruf-tabelle .tel-art{display:block;min-width:0;margin-bottom:-4px}
+  /* Website / Maps: als Knopf-Flaeche statt als blosses Wort. */
+  .anruf-tabelle td a[target="_blank"]{
+    display:inline-flex;align-items:center;height:44px;min-width:44px;
+    padding:0 8px;margin:-2px -8px;font-size:14px}
+  /* Der Absende-Haken ist der letzte Schritt eines Anrufs — auf dem Handy die
+     Flaeche, die man am sichersten treffen muss. */
+  .anruf-tabelle td.rechts{justify-content:flex-start}
+  .anruf-senden{width:28px;height:28px;margin:8px 0}
+  /* Die Marken (Stufe, Score, Status) duerfen etwas groesser werden. */
+  .anruf-tabelle .badge{font-size:12.5px;padding:5px 11px}
+
+  /* ---------- Die Karte kuerzer machen: zwei Werte je Zeile ----------
+     Sieben Zeilen untereinander lesen sich zwar gut, machen die Liste aber
+     LAENGER als die kaputte Tabelle vorher (gemessen: 60.641 -> 123.773 px).
+     Kurze Lesewerte gehoeren nebeneinander — sie brauchen die Breite nicht.
+     Umgesetzt mit einem Raster auf der Kartenzeile: die Zelle wird von einem
+     Block zu einer halben Spalte, Beschriftung darueber statt daneben.
+
+       Leads:  Geschaeftsfuehrer | Telefon        (Spalte 2 + 3)
+               Website           (Spalte 4, allein — daneben stuende sonst
+                                  das Ergebnis-Auswahlfeld halb so breit)
+       Kunden: Status | Seit                      (Spalte 2 + 3)
+               Telefon | Website                  (Spalte 4 + 5)
+
+     Die Felder, in die man etwas eintraegt (Ergebnis, Detail, Absenden,
+     Verantwortlich), bleiben ganze Zeilen: Sie sind die Handlung, nicht
+     die Auskunft. */
+  /* Flex statt Grid: Eine Tabellenzeile behaelt in Chrome auch mit
+     display:grid Reste des Tabellen-Layouts — die Zeilenhoehe fiel auf 44 px
+     zusammen, waehrend der Firmenname 146 px brauchte, und der Text lief
+     ueber die naechsten Zellen. Mit flex-wrap und Prozentbreiten stimmt die
+     Hoehe, und der Umbruch macht dasselbe wie zwei Rasterspalten. */
+  .anruf-tabelle tbody tr{
+    display:flex;flex-wrap:wrap;column-gap:12px;align-items:flex-start}
+  /* Was ganze Breite braucht: Titel und alles, worin man etwas tut. */
+  .anruf-tabelle td:first-child,
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(n+4),
+  .kunden-tabelle td:nth-child(6){flex:1 1 100%;width:100%}
+  /* Die Haelften. calc, weil zwischen ihnen 12 px Spalte stehen. */
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(2),
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(3),
+  .kunden-tabelle td:nth-child(2),.kunden-tabelle td:nth-child(3),
+  .kunden-tabelle td:nth-child(4),.kunden-tabelle td:nth-child(5){
+    flex:0 1 calc(50% - 6px);width:calc(50% - 6px);min-width:0}
+  /* Die Paare stehen gestapelt: Beschriftung oben, Wert darunter — bei halber
+     Kartenbreite bliebe neben 96 px Beschriftung kein Platz fuer den Wert. */
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(2),
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(3),
+  .kunden-tabelle td:nth-child(2),.kunden-tabelle td:nth-child(3),
+  .kunden-tabelle td:nth-child(4),.kunden-tabelle td:nth-child(5){
+    flex-direction:column;align-items:flex-start;gap:1px}
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(2)::before,
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(3)::before,
+  .kunden-tabelle td:nth-child(2)::before,.kunden-tabelle td:nth-child(3)::before,
+  .kunden-tabelle td:nth-child(4)::before,.kunden-tabelle td:nth-child(5)::before{flex:none}
+  /* Bei den Kunden steht Website in der zweiten Spalte — der Link darf dann
+     nicht ueber den Rand seiner Haelfte hinausragen. */
+  .kunden-tabelle td:nth-child(5){min-width:0}
+  .kunden-tabelle td:nth-child(5) a{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+
+  /* ---------- Der Fuss der Lead-Karte: Detail und Absenden in EINER Zeile ----
+     "Detail" ist bei einem noch nicht angerufenen Lead leer — sichtbar ist nur
+     ein Gedankenstrich. "Absenden" ist ein Haken. Zwei eigene Zeilen dafuer
+     sind bei 229 Leads rund 20.000 Pixel Seitenlaenge fuer nichts. Sie stehen
+     jetzt nebeneinander, und die Beschriftung "Detail" faellt weg: Was dort
+     erscheint (Absagegrund, Notiz, Gespraechsnotiz), beschriftet sich selbst.
+
+     Sobald ein Ergebnis gewaehlt wird, blendet das Skript in lib/crm-routes.js
+     das passende Feld ein — flex-wrap laesst es dann auf eine eigene Zeile
+     rutschen, weil es die volle Breite braucht. */
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(6){
+    flex:1 1 auto;width:auto;border-top:0;padding-top:0;min-width:0}
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(6)::before{content:none}
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(7){
+    flex:0 0 auto;width:auto;border-top:0;padding-top:0;
+    margin-left:auto;align-items:center}
+  /* Die beiden Fusszellen sitzen in einer gemeinsamen Zeile — die Trennlinie
+     zieht die Ergebnis-Zelle darueber. */
+  .anruf-tabelle:not(.kunden-tabelle) td:nth-child(5){padding-bottom:9px}
+  /* Der Platzhalter "—" neben dem Ergebnis sagt nichts, was der leere Platz
+     nicht auch sagt. Die Versuchszahl ("3. Versuch") bleibt — die ist Inhalt. */
+  .anruf-tabelle .anruf-leer{font-size:12px;color:var(--text-muted)}
+
+  /* ---------- 3. Tippziele: alles mindestens 44 x 44 px ----------
+     Apples Mindestmass fuer den Daumen. Auf dem Desktop bleiben die Elemente
+     wie sie sind — dort zielt eine Maus auf den Pixel genau. */
+  /* Reiter, Sparten, Personen, Segmente: aus Textzeilen werden Pillen. */
+  .reiter a,.personen a,.sparten-reiter a,.segmente a,
+  .zeitraum a,.um-sichten a,.wer-schalter a,.ct-kanaele a{
+    min-height:44px;display:inline-flex;align-items:center;padding-top:0;padding-bottom:0}
+  .reiter a,.sparten-reiter a{padding-left:16px;padding-right:16px}
+  .personen a,.wer-schalter a{padding-left:14px;padding-right:14px;font-size:13.5px}
+  .segmente a,.zeitraum a{justify-content:center;flex:1}
+  /* Die Zeilen bleiben wischbar statt zu quetschen: lieber seitlich scrollen
+     als sechs 44-px-Pillen auf drei Zeilen zu stapeln. */
+  .sparten-reiter,.personen,.wer-schalter,.ct-kanaele,.um-sichten{
+    flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
+    -webkit-overflow-scrolling:touch}
+  .sparten-reiter::-webkit-scrollbar,.personen::-webkit-scrollbar,
+  .wer-schalter::-webkit-scrollbar,.ct-kanaele::-webkit-scrollbar,
+  .um-sichten::-webkit-scrollbar{width:0;height:0}
+  .sparten-reiter a,.personen a,.wer-schalter a,.ct-kanaele a,.um-sichten a{flex:0 0 auto}
+  /* Knoepfe allgemein. .klein und .still bleiben klein benannt, kriegen aber
+     dieselbe Trefferflaeche — das Aussehen aendert sich kaum, der Daumen
+     merkt den Unterschied. */
+  button,.knopf{min-height:44px}
+  button.klein,button.still{min-height:44px;padding-top:0;padding-bottom:0}
+  /* Kleine Symbolknoepfe (Loeschen, Pfeile) brauchen auch Breite. */
+  .lz-tat button,.dok-weg button,.bh-ordner-tat button{min-width:44px;justify-content:center}
+  /* Eingabefelder mitziehen — ein 34 px hohes Feld trifft man genauso schlecht
+     wie einen 34 px hohen Knopf. 16px Schrift verhindert ausserdem, dass iOS
+     beim Antippen in das Feld hineinzoomt. */
+  input,select,textarea{min-height:44px;font-size:16px}
+  input[type=checkbox],input[type=radio]{min-height:0;width:24px;height:24px}
+  .filter select,select.knapp{min-height:44px;padding-top:0;padding-bottom:0;
+    field-sizing:fixed;box-sizing:border-box}
+  /* Der Filterbalken: jedes Feld eine eigene Zeile statt vier Stummel. */
+  .filter{gap:8px}
+  .filter .such{flex:1 1 100%;min-width:0;max-width:none}
+  .filter .such svg{top:15px}
+  .filter select,.filter .knapp{flex:1 1 calc(50% - 4px);min-width:0}
+  .filter-zahl{flex:1 1 100%;margin-left:0;text-align:right}
+  /* Die Karte "leer" und der Seitenkopf brauchen keine 26 px Innenabstand. */
+  .karte{padding:16px 15px}
+  /* Der Kopfbereich der Lead-Seite: Statistik unter die Reiter, nicht daneben. */
+  .lead-kopf{gap:12px}
+  .anruf-stat-tab th,.anruf-stat-tab td{padding:6px 2px}
+  .anruf-stat-tab thead th{font-size:9.5px;letter-spacing:0}
+  .anruf-stat-tab .stat-zahl{font-size:17px}
+  /* Die Sammel-Leiste (Mehrfachauswahl) liegt fest ueber dem Inhalt — auf dem
+     Handy braucht sie den Sicherheitsabstand zur Home-Leiste. */
+  .sammel-leiste{bottom:max(10px,env(safe-area-inset-bottom));
+    left:8px;right:8px;transform:none;padding:12px}
+  .sammel-leiste label{flex:1 1 100%}
+  .sammel-leiste button{flex:1 1 auto}
+  /* Der Tipp zur Mehrfachauswahl beschreibt Maus und Tastatur — auf dem Handy
+     gibt es weder Strg noch Umschalt noch Ziehen mit gedrueckter Taste. */
+  .sammel-tipp{display:none}
+  /* Dialoge: bis an den Rand, sonst bleiben 20 px Luft und innen wird es eng. */
+  .lead-neu-dialog,.trichter-dialog{width:calc(100vw - 16px);max-width:none;padding:18px 16px}
+  .lead-neu-raster{grid-template-columns:1fr}
+  .lead-neu-wahl button{min-height:44px}
+  /* Die Kanban-Spaltenzahl und die Zaehler-Reihe duerfen umbrechen. */
+  .zaehler-reihe{gap:16px}
+}
+
+/* ---------- Sehr schmal (bis 380 px) ----------
+   Auf einem iPhone SE oder mini bleibt von 33 % Beschriftungsspalte nichts
+   Brauchbares uebrig. Dort steht die Beschriftung ueber dem Wert. */
+@media (max-width:380px){
+  .anruf-tabelle td{flex-direction:column;align-items:stretch;gap:3px}
+  .anruf-tabelle td::before{flex:none}
+  .spalte{flex:0 0 92%;max-width:92%}
+  .kanban::after{flex:0 0 8%}
+}
