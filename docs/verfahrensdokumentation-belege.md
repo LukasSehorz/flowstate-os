@@ -265,6 +265,7 @@ sich jederzeit über die Monatsordner-Funktion bereitstellen, auch rückwirkend.
 | 26.07.2026 | **Inbetriebnahme, Nullstellung des Archivs** — siehe Abschnitt 8. |
 | 07.08.2026 | Eingangsweg **Postfach** eingeführt: Rechnungen mit PDF-Anhang werden täglich aus dem Google-Postfach in den Belegeingang übernommen (Etikett „Flowstate/verbucht" im Postfach, Prüfsumme in der Ablage). Gebucht wird weiterhin nur nach Bestätigung. |
 | 18.09.2026 | **Zweites Postfach, Rückschau, Sammelbuchung** — siehe Abschnitt 9. |
+| 30.09.2026 | **Fotografierte Belege werden als PDF archiviert** (Migration 0078) — siehe Abschnitt 10. |
 
 ---
 
@@ -344,4 +345,49 @@ bleiben zur Einzelprüfung liegen. Trägt eine Rechnung ein noch nicht
 verstrichenes Zahlungsziel, wird sie als **offen** gebucht (ohne Zahltag, unter
 „Noch zu zahlen"); sonst gilt das Belegdatum als Zahltag wie bei jeder
 Ausgabe. Wer gebucht hat und wann, steht wie bisher an der Buchung.
+
+---
+
+## 10. Fotografierte Belege werden als PDF archiviert (30.09.2026)
+
+Auf Wunsch der Steuerkanzlei liegt seit dem 30.09.2026 **jeder Beleg im Archiv
+als PDF** vor. Bis dahin lagen Papierbelege als JPEG (Kamera, Handy-Scan,
+Telegram) neben den PDF-Rechnungen aus dem Postfach, und die Kanzlei musste
+selbst wandeln.
+
+**Der Vorgang.** Beim Eingang eines Bildes wird dieses **vor** der Ablage in
+ein einseitiges PDF gelegt (DIN A4, Hoch- oder Querformat je nach
+Bildausrichtung, 15 mm Rand). Das PDF wird zur Belegdatei; auf sie beziehen
+sich Laufnummer, Prüfsumme und der Monatsordner.
+
+**Die Wiedergabe bleibt unverändert.** Die Bilddaten werden **nicht neu
+kodiert**. PDF bettet JPEG-Daten im selben Format ein (DCTDecode), in dem die
+Kamera sie geliefert hat: Es wird kein Pixel verändert, nichts komprimiert,
+nichts skaliert. Das Bild wird im PDF lediglich proportionsgetreu platziert.
+Die bildliche Übereinstimmung mit dem Original ist damit gegeben.
+
+**Das Original bleibt erhalten.** Die unveränderte Kameradatei wird zusätzlich
+gespeichert (`belege.original`), zusammen mit ihrem ursprünglichen Dateinamen,
+Dateityp und einer eigenen SHA-256-Prüfsumme. Sie ist über die Prüfmaske
+abrufbar („Originalfoto"). Damit lässt sich jederzeit nachweisen, dass die im
+PDF enthaltenen Bilddaten mit der Kameradatei übereinstimmen.
+
+**Unveränderbarkeit.** Der Schutz aus Abschnitt 2.1 gilt für beide Fassungen:
+Weder die Belegdatei noch das Original können nachträglich ersetzt oder
+geleert werden; die Datenbank verweigert das (Trigger `belege_schutz`). Die
+Umwandlung findet deshalb vor dem Einfügen statt, nicht danach.
+
+**Nachvollziehbarkeit im Dokument.** Jedes so entstandene PDF trägt eine
+Fußzeile mit Belegnummer, ursprünglichem Dateinamen, Pixelmaßen und dem
+Hinweis, dass das Bild unverändert eingebettet wurde.
+
+**Doppelerkennung.** Geprüft wird gegen die Prüfsumme der Belegdatei **und**
+die des Originals. Dasselbe Foto kann daher kein zweites Mal in die
+Buchführung gelangen, auch wenn die PDF-Hülle sich unterscheidet.
+
+**Nicht gewandelt werden:** PDF-Dateien (sind bereits PDF) und HEIC-Dateien
+(iPhone-Format; wird bereits im Browser nach JPEG gewandelt). Schlägt eine
+Umwandlung fehl, wird der Beleg unverändert abgelegt — ein archivierter Beleg
+ist wichtiger als sein Dateiformat. Bestehende Belege aus der Zeit vor dem
+30.09.2026 bleiben unverändert in ihrem ursprünglichen Format erhalten.
 

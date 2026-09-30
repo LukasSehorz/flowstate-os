@@ -74,7 +74,7 @@ const TESTS = [
   // Rechnerei der Kalenderseite (Monatsraster, Googles ganztaegiges Ende).
   "test-kalender", "test-kalender-seite",
   "test-suche", "test-termin", "test-wa-lesen",
-  "test-wa-arten", "test-neuigkeiten", "test-nachschlagen", "test-dokument", "test-zustand-frische", "test-crm-sprache", "test-zufluss-telegram", "test-beleg-telegram", "test-beleg-vorlage", "test-angebot-vorlage", "test-beleg-erstellen", "test-mail-anhang", "test-mail-belege", "test-website-lesen", "test-firma-nachschlagen", "test-telefon",
+  "test-wa-arten", "test-neuigkeiten", "test-nachschlagen", "test-dokument", "test-zustand-frische", "test-crm-sprache", "test-zufluss-telegram", "test-beleg-telegram", "test-beleg-als-pdf", "test-beleg-vorlage", "test-angebot-vorlage", "test-beleg-erstellen", "test-mail-anhang", "test-mail-belege", "test-website-lesen", "test-firma-nachschlagen", "test-telefon",
   // 20.08.2026: Die Flugsuche selbst braucht Netz und Browser und laeuft
   // deshalb nicht hier mit — ihre AUFBEREITUNG schon. Genau dort ist der rohe
   // Google-Text in die Sprachantwort geraten.
