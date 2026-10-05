@@ -15,7 +15,10 @@
   --wp-px:1.2px;              /* Hoehe einer Minute im Raster */
   --wp-oben:8px;              /* Luft ueber 08:00, damit die erste Marke nicht abgeschnitten wird */
   --wp-hoehe:690;             /* 08:00 bis 19:30 in Minuten (RASTER_BIS - RASTER_VON) */
-
+  min-width:0;
+}
+/* Die Kachel auf der Zentrale (.wp-karte) nutzt dieselben Farben. */
+.wp-seite,.wp-karte{
   /* Farben je Art. Gedeckt, damit sie auf dem Graphit nicht schreien; die
      Flaeche entsteht aus der Farbe und --os-flaeche (Weiss-Modus laeuft mit). */
   --wp-plan:#5B6472;
@@ -25,7 +28,6 @@
   --wp-fulfillment:#B0601C;
   --wp-pause:#8A9099;
   --wp-wochenende:#2F62C9;
-  min-width:0;
 }
 
 .wp-art-plan{--wp-farbe:var(--wp-plan)}
@@ -229,6 +231,30 @@
   .wp-tafel{padding:14px 12px 12px}
   .wp-tafel-kopf{padding:0 4px}
 }
+
+/* ---------- Kachel auf der Zentrale (zentraleKarte in wochenplan-routes.js) ----------
+   Sitzt in .zt-raster neben Kalender und Mail-Triage und nutzt deren Zeilen
+   (.zt-liste/.zt-zeile aus crm.css); hier steht nur, was die Kachel anders macht. */
+.wp-k-jetzt{position:relative;overflow:hidden;margin:0 0 14px;padding:12px 14px 12px 17px;border-radius:var(--os-r-klein);
+  background:color-mix(in srgb,var(--wp-farbe) 12%,var(--os-flaeche))}
+.wp-k-jetzt::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--wp-farbe)}
+.wp-k-label{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text-secondary);
+  font-variant-numeric:tabular-nums}
+.wp-k-titel{font-size:18px;font-weight:650;letter-spacing:-.015em;line-height:1.25;margin:5px 0 1px;color:var(--foreground)}
+.wp-k-punkte{font-size:13px;line-height:1.4;color:var(--text-secondary)}
+.wp-k-fuss{display:flex;flex-wrap:wrap;align-items:center;gap:7px 10px;margin-top:9px;font-size:12.5px;font-weight:500;
+  color:var(--text-secondary);font-variant-numeric:tabular-nums}
+/* Balken in eigener Zeile: daneben brach "noch 1 Std. 18 Min. · bis 12:00" um. */
+.wp-k-fuss .wp-balken{flex:1 1 100%;min-width:0}
+.wp-k-zeile > span:first-child{display:flex;align-items:baseline;gap:9px;color:var(--foreground)}
+.wp-k-zeile > span:first-child > span{display:flex;flex-direction:column;min-width:0}
+.wp-k-zeile b{font-weight:600;font-size:13.5px;line-height:1.35}
+.wp-k-zeile small{font-size:12px;line-height:1.35;color:var(--text-muted)}
+.wp-k-zeile .zt-wert{font-variant-numeric:tabular-nums}
+.wp-k-punkt{flex:0 0 auto;width:8px;height:8px;border-radius:2px;background:var(--wp-farbe);transform:translateY(-1px)}
+.wp-k-vorbei{opacity:.45}
+.wp-k-aktiv b,.wp-k-aktiv .zt-wert{color:color-mix(in srgb,var(--wp-farbe) 80%,var(--foreground))}
+.wp-k-aktiv .wp-k-punkt{box-shadow:0 0 0 3px color-mix(in srgb,var(--wp-farbe) 25%,transparent)}
 
 @media (prefers-reduced-motion:reduce){
   .wp-puls{animation:none}

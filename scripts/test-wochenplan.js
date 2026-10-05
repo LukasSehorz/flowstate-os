@@ -71,5 +71,15 @@ pruefe("Berliner Zeit im Winter: 08:30", w.min === um("08:30"), JSON.stringify(w
 const imBrowser = new Function("P", `${wpJetzt.toString()}\n${wpPhase.toString()}\nreturn wpPhase(3, 645, P);`);
 pruefe("wpPhase laeuft als Text (wie im Skript der Seite)", imBrowser(PLAN).block === "dw2");
 
+// Die Kachel auf der Zentrale: laufender Block hervorgehoben, Vorbei blass,
+// Wochenende zeigt die Sa/So-Liste. Auch sie laeuft als Text im Browser.
+const { wpKarte } = require("../lib/wochenplan-routes.js");
+const k = wpKarte(wpPhase(3, um("10:42"), PLAN), PLAN);
+pruefe("Kachel: Session 2 ist hervorgehoben", /wp-k-zeile wp-art-calling wp-k-aktiv/.test(k));
+pruefe("Kachel: Besprechung ist vorbei", /wp-art-plan wp-k-vorbei/.test(k));
+pruefe("Kachel: Pausen stehen nicht in der Liste", !/Pause<\/b>/.test(k));
+const kw = new Function("P", `${wpPhase.toString()}\n${wpKarte.toString()}\nreturn wpKarte(wpPhase(6, 600, P), P);`)(PLAN);
+pruefe("Kachel am Wochenende: Sa/So-Liste und Fussball-Hinweis", /Buchhaltung/.test(kw) && /Fußballspiel/.test(kw));
+
 console.log(fehler ? `\n${fehler} Fehler.` : "\nAlles gut.");
 process.exit(fehler ? 1 : 0);

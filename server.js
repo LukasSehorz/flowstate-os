@@ -1495,7 +1495,12 @@ app.get("/", async (req, res) => {
             <button type="button" onclick="calShift(1)" title="Ein Tag vor">${ZT.rechts}</button></span>
           <a href="/kalender" class="caption">öffnen →</a></span></div>
         <div id="cal-body"><p class="caption">Lädt …</p></div></div>
-      ${datenbank && darf("todos") ? karte("To-Dos", "Was heute ansteht", "/api/todos/stats", "/todos", "öffnen") : ""}
+      ${/* Seit 05.10.2026 steht hier der Wochenplan statt der To-Dos (Lukas).
+            Die Aufgaben bleiben im CRM ("Alle To-Dos", /crm/todos) und unter
+            /todos. Ohne Datenbank und ohne eigene Freigabe: Der Plan gehoert
+            zur Zentrale. Faellt das Modul aus, fehlt nur diese Kachel. */
+         (() => { try { return require("./lib/wochenplan-routes.js").zentraleKarte(); }
+                  catch (e) { console.error("Wochenplan-Kachel:", e.message); return ""; } })()}
       ${admin ? karte("Mail-Triage", `Vier Körbe, sortiert von ${esc(AGENT)}`, "/api/mail", null) : ""}
       ${admin ? karte("Was braucht mich?", "Freigaben und Entscheidungen", "/api/inbox", null) : ""}
       ${darf("crm") ? karte("Kunden &amp; CRM", "Wie der Monat ausgeht", "/api/crm/stats", "/crm", "öffnen") : ""}
