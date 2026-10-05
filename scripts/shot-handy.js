@@ -52,6 +52,7 @@ const SEITEN = [
   ["11-whiteboard", "/whiteboard"],
   ["12-kalender", "/kalender"],
   ["13-aufgaben", "/todos"],
+  ["15-wochenplan", "/wochenplan"],
   ["14-kunden", "/crm/kunden"],
 ];
 

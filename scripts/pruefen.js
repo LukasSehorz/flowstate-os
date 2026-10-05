@@ -172,6 +172,9 @@ const TESTS = [
   "test-beleg-chat",
   "test-passwort-zuruecksetzen",
   "test-umgebung-durchgereicht",
+  // 05.10.2026: die Anzeige "Jetzt" auf dem Wochenplan — Plan ohne Luecken,
+  // jede Uhrzeit landet im richtigen Block, deutsche Zeit auch auf UTC-Servern.
+  "test-wochenplan",
 ];
 
 // NICHT hier drin, mit Grund:

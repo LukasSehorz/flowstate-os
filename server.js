@@ -124,6 +124,8 @@ app.use(
 const BEREICH_JE_PFAD = {
   "": "zentrale", umsatz: "zentrale",
   kalender: "kalender", todos: "todos", whiteboard: "whiteboard",
+  // Der Wochenplan haengt unter der Zentrale — wer sie sieht, sieht ihn.
+  wochenplan: "zentrale",
   crm: "crm",
   buchhaltung: "buchhaltung", angebote: "angebote",
   marketing: "marketing", content: "content", projekte: "projekte",
@@ -465,16 +467,20 @@ if (process.env.DREH_REGIE === "1") {
 try { require("./lib/kalender-routes.js")(app); console.log("Kalender-Modul geladen"); }
 catch (e) { console.error("Kalender-Modul konnte nicht geladen werden:", e.message); }
 
-// To-Dos haengen in der Rail hinter dem Kalender und muessen deshalb NACH ihm
-// geladen werden — "nach: kalender" kann nur greifen, wenn es den Kalender
-// schon gibt. Verloren geht sonst nichts (schale.eintragen fuehrt zusammen),
-// aber die Reihenfolge waere vertauscht. DATABASE_URL, weil die Aufgaben in
-// der CRM-Datenbank liegen.
+// Wochenplan (/wochenplan) direkt hinter dem Kalender — "nach: kalender" kann
+// nur greifen, wenn es den Kalender schon gibt. Braucht keine Datenbank: Der
+// Plan steht im Modul selbst.
+try { require("./lib/wochenplan-routes.js")(app); console.log("Wochenplan geladen"); }
+catch (e) { console.error("Wochenplan konnte nicht geladen werden:", e.message); }
+
+// To-Dos (seit 05.10.2026 ohne eigenen Menuepunkt, erreichbar ueber die
+// Kacheln der Zentrale). DATABASE_URL, weil die Aufgaben in der
+// CRM-Datenbank liegen.
 if (process.env.DATABASE_URL) {
   try { require("./lib/todo-routes.js")(app); console.log("To-Do-Modul geladen"); }
   catch (e) { console.error("To-Do-Modul konnte nicht geladen werden:", e.message); }
-  // Whiteboard direkt dahinter — "nach: zentrale-todos" kann nur greifen,
-  // wenn der To-Do-Eintrag schon in der Rail steht.
+  // Whiteboard — "nach: zentrale-wochenplan" kann nur greifen, wenn der
+  // Wochenplan schon in der Rail steht (er laedt oben, direkt nach dem Kalender).
   try { require("./lib/whiteboard-routes.js")(app); console.log("Whiteboard-Modul geladen"); }
   catch (e) { console.error("Whiteboard-Modul konnte nicht geladen werden:", e.message); }
 }

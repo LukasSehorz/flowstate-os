@@ -1,0 +1,236 @@
+/* =====================================================================
+   Wochenplan (/wochenplan, lib/wochenplan-routes.js) — 05.10.2026
+
+   Eigene Datei, alle Klassen mit Praefix "wp-" (MITARBEIT.md, Abschnitt
+   Design). Aufbau wie das Whiteboard im Buero: links Montag bis Freitag als
+   Raster mit Uhrzeiten, rechts Sa/So als schlichte Liste.
+
+   Nur zum Ansehen: kein Hover, kein Zeiger, nichts Anklickbares.
+
+   Lage im Raster: Jeder Block traegt --von (Minuten seit 08:00) und --dauer
+   (Minuten). Wie hoch eine Minute ist, steht genau einmal in --wp-px.
+   ===================================================================== */
+
+.wp-seite{
+  --wp-px:1.2px;              /* Hoehe einer Minute im Raster */
+  --wp-oben:8px;              /* Luft ueber 08:00, damit die erste Marke nicht abgeschnitten wird */
+  --wp-hoehe:690;             /* 08:00 bis 19:30 in Minuten (RASTER_BIS - RASTER_VON) */
+
+  /* Farben je Art. Gedeckt, damit sie auf dem Graphit nicht schreien; die
+     Flaeche entsteht aus der Farbe und --os-flaeche (Weiss-Modus laeuft mit). */
+  --wp-plan:#5B6472;
+  --wp-content:#2F62C9;       /* Markerblau wie auf der Tafel */
+  --wp-calling:#18805A;
+  --wp-daily:#6C4FC2;
+  --wp-fulfillment:#B0601C;
+  --wp-pause:#8A9099;
+  --wp-wochenende:#2F62C9;
+  min-width:0;
+}
+
+.wp-art-plan{--wp-farbe:var(--wp-plan)}
+.wp-art-content{--wp-farbe:var(--wp-content)}
+.wp-art-calling{--wp-farbe:var(--wp-calling)}
+.wp-art-daily{--wp-farbe:var(--wp-daily)}
+.wp-art-fulfillment{--wp-farbe:var(--wp-fulfillment)}
+.wp-art-pause{--wp-farbe:var(--wp-pause)}
+.wp-art-wochenende{--wp-farbe:var(--wp-wochenende)}
+
+/* ---------- Jetzt ---------- */
+.wp-jetzt{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,380px);gap:16px 28px;align-items:center;
+  background:var(--os-flaeche);border:1px solid var(--border);border-radius:var(--os-r);box-shadow:var(--s1);
+  padding:18px 22px 18px 24px;margin:0 0 18px;position:relative;overflow:hidden}
+.wp-jetzt::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--wp-farbe)}
+.wp-jetzt-haupt{min-width:0}
+.wp-jetzt-label{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--text-secondary);
+  font-variant-numeric:tabular-nums}
+.wp-puls{width:8px;height:8px;border-radius:50%;background:var(--danger);flex:0 0 auto;
+  box-shadow:0 0 0 0 color-mix(in srgb,var(--danger) 45%,transparent);animation:wp-puls 2.4s ease-out infinite}
+@keyframes wp-puls{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--danger) 45%,transparent)}
+  70%,100%{box-shadow:0 0 0 7px color-mix(in srgb,var(--danger) 0%,transparent)}}
+.wp-jetzt-titel{font-size:24px;font-weight:650;letter-spacing:-.02em;line-height:1.2;color:var(--foreground);margin:6px 0 2px}
+.wp-jetzt-punkte{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 18px;
+  font-size:14px;color:var(--text-secondary);line-height:1.45}
+.wp-jetzt-punkte:empty{display:none}
+.wp-jetzt-fuss{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}
+.wp-balken{flex:0 1 260px;min-width:120px;height:6px;border-radius:99px;background:var(--os-flaeche-3);overflow:hidden}
+.wp-balken[hidden]{display:none}
+.wp-balken i{display:block;height:100%;border-radius:inherit;background:var(--wp-farbe);transition:width .6s ease}
+.wp-jetzt-rest{font-size:13px;font-weight:500;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.wp-jetzt-danach{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:var(--os-r-klein);
+  background:var(--os-flaeche-2);min-width:0}
+.wp-jetzt-danach-label{font-size:12px;font-weight:500;color:var(--text-muted)}
+.wp-jetzt-danach-text{font-size:14px;font-weight:600;color:var(--foreground);line-height:1.4;font-variant-numeric:tabular-nums}
+
+/* ---------- Die zwei Tafeln ---------- */
+.wp-woche{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,300px);gap:18px;align-items:start}
+.wp-tafel{background:var(--os-flaeche);border:1px solid var(--border);border-radius:var(--os-r);box-shadow:var(--s1);
+  padding:16px 18px 18px;min-width:0}
+.wp-tafel-kopf{display:flex;align-items:baseline;gap:10px;margin:0 0 12px;flex-wrap:wrap}
+.wp-tafel-kopf h2{font-size:18px;font-weight:650;letter-spacing:-.015em;margin:0;color:var(--foreground)}
+.wp-tafel-unter{font-size:12.5px;color:var(--text-muted)}
+
+/* "Heute"-Marke: unsichtbar, bis die Spalte oder Tafel heute ist. */
+.wp-heute-marke{display:none;align-items:center;height:20px;padding:0 8px;border-radius:99px;
+  background:var(--primary);color:#fff;font-size:11px;font-weight:600;letter-spacing:.01em}
+.wp-heute > .wp-heute-marke,.wp-heute .wp-tafel-kopf .wp-heute-marke{display:inline-flex}
+.wp-wochenende .wp-heute-marke{margin-left:auto}
+
+/* ---------- Raster Mo–Fr ---------- */
+.wp-raster{display:grid;grid-template-columns:44px repeat(5,minmax(0,1fr));column-gap:6px}
+.wp-tag-kopf{display:flex;align-items:center;gap:6px;height:34px;padding:0 8px;border-radius:var(--os-r-klein);
+  margin-bottom:6px;min-width:0}
+.wp-tag-kurz{display:none;font-size:13px;font-weight:650;color:var(--foreground)}
+.wp-tag-lang{font-size:13px;font-weight:600;color:var(--foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wp-tag-kopf .wp-heute-marke{margin-left:auto}
+.wp-tag-kopf.wp-heute{background:color-mix(in srgb,var(--primary) 10%,transparent)}
+
+.wp-achse,.wp-tag{position:relative;height:calc(var(--wp-oben) + var(--wp-hoehe) * var(--wp-px) + 2px)}
+.wp-achse span{position:absolute;right:4px;top:calc(var(--wp-oben) + var(--von) * var(--wp-px));transform:translateY(-50%);
+  font-size:11px;font-weight:500;color:var(--text-muted);font-variant-numeric:tabular-nums;line-height:1}
+/* Stundenlinien als Hintergrund der Spalte, ausgerichtet an --wp-oben. */
+.wp-tag{border-radius:var(--os-r-klein);
+  background-image:repeating-linear-gradient(to bottom,var(--os-trenner) 0 1px,transparent 1px calc(60 * var(--wp-px)));
+  background-position:0 var(--wp-oben);background-repeat:no-repeat;
+  background-size:100% calc(var(--wp-hoehe) * var(--wp-px) + 1px)}
+.wp-tag.wp-heute{background-color:color-mix(in srgb,var(--primary) 6%,transparent)}
+
+.wp-block{position:absolute;left:3px;right:3px;
+  top:calc(var(--wp-oben) + var(--von) * var(--wp-px) + 1px);
+  height:calc(var(--dauer) * var(--wp-px) - 2px);
+  padding:6px 8px 6px 9px;border-radius:8px;overflow:hidden;
+  background:color-mix(in srgb,var(--wp-farbe) 12%,var(--os-flaeche));
+  border-left:3px solid var(--wp-farbe);color:var(--foreground);
+  transition:opacity .3s ease,box-shadow .3s ease}
+.wp-block > *{position:relative;z-index:1}
+.wp-block-zeile{display:flex;flex-direction:column;gap:1px;min-width:0}
+.wp-block-zeit{font-size:11px;font-weight:600;color:color-mix(in srgb,var(--wp-farbe) 75%,var(--foreground));
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.wp-block-titel{font-size:12.5px;font-weight:650;line-height:1.25;letter-spacing:-.005em}
+.wp-block-punkte{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.wp-block-punkte li{font-size:11.5px;line-height:1.3;color:var(--text-secondary)}
+
+/* Kurze Bloecke (bis 30 Min.): eng gepackt, damit Zeit und Titel ganz hineinpassen. */
+.wp-block--kurz{padding-top:2px;padding-bottom:2px;display:flex;align-items:center}
+.wp-block--kurz .wp-block-zeile{gap:0}
+.wp-block--kurz .wp-block-zeit{line-height:1.2}
+.wp-block--kurz .wp-block-titel{line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Pausen: schraffiert, leise, eine Zeile. */
+.wp-block--pause{padding:0 8px;display:flex;align-items:center;border-left-color:transparent;
+  background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--wp-farbe) 14%,transparent) 0 4px,transparent 4px 8px)}
+.wp-block--pause .wp-block-zeile{flex-direction:row;align-items:center;gap:6px}
+.wp-block--pause .wp-block-zeit,.wp-block--pause .wp-block-titel{font-size:10.5px;font-weight:500;color:var(--text-muted);line-height:1;white-space:nowrap}
+.wp-block--pause .wp-block-zeit{order:2}
+
+/* Session 4 hat kein Ende: sie laeuft unten aus. */
+.wp-block--offen{border-bottom-left-radius:0;border-bottom-right-radius:0;
+  -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 16px),transparent)}
+
+/* Heute: was vorbei ist, tritt zurueck; was laeuft, bekommt einen Rahmen. */
+.wp-block--vorbei{opacity:.45}
+.wp-block--jetzt{box-shadow:0 0 0 2px var(--wp-farbe),var(--s2);z-index:2;
+  background:color-mix(in srgb,var(--wp-farbe) 18%,var(--os-flaeche))}
+.wp-block--pause.wp-block--jetzt{box-shadow:0 0 0 2px var(--wp-farbe)}
+/* Session 4 laeuft unten aus (Maske), ein Rahmen waere dort nur halb zu sehen. */
+.wp-block--offen.wp-block--jetzt{box-shadow:none;border-left-width:5px;
+  background:color-mix(in srgb,var(--wp-farbe) 24%,var(--os-flaeche))}
+
+/* Wie spaet es ist: Der laufende Block fuellt sich von oben bis zur aktuellen
+   Minute (Flaeche hinter der Schrift), dazu ein roter Punkt am Spaltenrand und
+   die Uhrzeit an der Achse. Bewusst KEIN Strich quer durch den Block: Er lag in
+   der ersten halben Stunde jedes Blocks auf dem Titel und las sich wie
+   Durchstreichen — auch dann noch, als er unter der Schrift lag.
+   --jetzt (Minuten seit 08:00) steht an der Spalte, --von am Block. */
+.wp-block--jetzt::before{content:"";position:absolute;left:0;right:0;top:0;z-index:0;pointer-events:none;
+  height:calc((var(--jetzt, 0) - var(--von)) * var(--wp-px));
+  background:color-mix(in srgb,var(--wp-farbe) 16%,transparent)}
+.wp-punkt{position:absolute;left:-5px;z-index:3;width:9px;height:9px;border-radius:50%;background:var(--danger);
+  top:calc(var(--wp-oben) + var(--jetzt, 0) * var(--wp-px) - 4px);pointer-events:none;
+  box-shadow:0 0 0 2px var(--os-flaeche)}
+.wp-uhr{position:absolute;right:0;z-index:2;top:calc(var(--wp-oben) + var(--jetzt, 0) * var(--wp-px));transform:translateY(-50%);
+  padding:2px 5px;border-radius:5px;background:var(--danger);color:#fff;font-size:10.5px;font-weight:650;line-height:1.2;
+  font-variant-numeric:tabular-nums}
+.wp-punkt[hidden],.wp-uhr[hidden]{display:none}
+.wp-achse span.wp-verdeckt{visibility:hidden}
+
+/* ---------- Liste fuer Tablet hochkant und Handy (ersetzt das Raster unter 960 px) ---------- */
+.wp-liste{display:none;list-style:none;margin:0;padding:0}
+.wp-zeile{display:grid;grid-template-columns:52px minmax(0,1fr);gap:12px;align-items:start;
+  padding:10px 12px 10px 10px;border-radius:10px;margin:0 0 6px;
+  background:color-mix(in srgb,var(--wp-farbe) 12%,var(--os-flaeche));border-left:3px solid var(--wp-farbe);
+  transition:opacity .3s ease,box-shadow .3s ease}
+.wp-zeile-zeit{display:flex;flex-direction:column;font-size:13px;font-weight:650;line-height:1.25;
+  color:color-mix(in srgb,var(--wp-farbe) 75%,var(--foreground));font-variant-numeric:tabular-nums}
+.wp-zeile-zeit span{font-weight:500;color:var(--text-muted);font-size:12px}
+.wp-zeile-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.wp-zeile-text b{font-size:14.5px;font-weight:650;color:var(--foreground);line-height:1.3}
+.wp-zeile-text span{font-size:13px;color:var(--text-secondary);line-height:1.4}
+.wp-zeile--pause{grid-template-columns:auto minmax(0,1fr);padding-top:6px;padding-bottom:6px;
+  border-left-color:transparent;align-items:center;
+  background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--wp-farbe) 14%,transparent) 0 4px,transparent 4px 8px)}
+.wp-zeile--pause .wp-zeile-zeit{flex-direction:row;gap:4px;white-space:nowrap;font-size:12px;font-weight:500;color:var(--text-muted)}
+.wp-zeile--pause .wp-zeile-zeit span::before{content:"– "}
+.wp-zeile--pause .wp-zeile-text b{font-size:12.5px;font-weight:500;color:var(--text-muted)}
+.wp-zeile.wp-block--vorbei{opacity:.45}
+.wp-zeile.wp-block--jetzt{box-shadow:0 0 0 2px var(--wp-farbe),var(--s2);
+  background:color-mix(in srgb,var(--wp-farbe) 18%,var(--os-flaeche))}
+
+/* ---------- Sa / So ---------- */
+.wp-wochenende{display:flex;flex-direction:column}
+.wp-wochenende.wp-heute{box-shadow:0 0 0 2px var(--primary),var(--s1)}
+.wp-we-liste{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column}
+.wp-we-liste li{position:relative;padding:11px 0 11px 20px;font-size:15px;font-weight:600;color:var(--foreground);
+  border-bottom:1px solid var(--os-trenner);line-height:1.3}
+.wp-we-liste li:last-child{border-bottom:0}
+.wp-we-liste li::before{content:"";position:absolute;left:3px;top:50%;width:7px;height:7px;margin-top:-3.5px;
+  border-radius:50%;background:var(--wp-wochenende)}
+.wp-we-hinweis{margin:0;padding:12px 14px;border-radius:var(--os-r-klein);background:var(--os-flaeche-2);
+  font-size:13px;line-height:1.5;color:var(--text-secondary)}
+.wp-we-liste + .wp-we-hinweis{margin-top:16px}
+
+/* ---------- Legende ---------- */
+.wp-legende{display:flex;flex-wrap:wrap;gap:8px 18px;margin:14px 2px 0;font-size:12px;color:var(--text-secondary)}
+.wp-legende span{display:inline-flex;align-items:center;gap:6px}
+.wp-legende i{width:12px;height:12px;border-radius:3px;background:color-mix(in srgb,var(--wp-farbe) 16%,var(--os-flaeche));
+  border-left:3px solid var(--wp-farbe)}
+.wp-legende .wp-art-pause i{border-left-color:transparent;
+  background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--wp-farbe) 30%,transparent) 0 2px,transparent 2px 4px)}
+
+/* ---------- Breiten ---------- */
+/* Unter 1440 px rueckt Sa/So unter das Raster, damit die fuenf Tage Platz
+   haben. Bei 1280 lag die Grenze zu tief: zwischen 1281 und 1365 px wurden
+   die Tagesspalten schmaler als darunter (Befund Pruefung 05.10.). */
+@media (max-width:1439px){
+  .wp-woche{grid-template-columns:minmax(0,1fr)}
+  .wp-we-liste{flex-direction:row;flex-wrap:wrap;gap:8px}
+  .wp-we-liste li{border:1px solid var(--os-trenner);border-radius:99px;padding:7px 14px 7px 26px;font-size:14px}
+  .wp-we-liste li::before{left:12px}
+  .wp-we-liste + .wp-we-hinweis{margin-top:14px}
+}
+/* Schmale Spalten: nur noch das Kuerzel des Tages. */
+@media (max-width:1100px){
+  .wp-tag-lang{display:none}
+  .wp-tag-kurz{display:inline}
+  .wp-dw{display:none}
+  .wp-block{padding-left:7px;padding-right:6px}
+  .wp-block-punkte li{font-size:11px}
+  .wp-block--kurz .wp-block-titel{font-size:12px}
+}
+/* Tablet hochkant und Handy: Liste statt Raster. Unter 960 px wuerden die
+   Spalten so schmal, dass "Pause" in Silben zerfaellt. */
+@media (max-width:960px){
+  .wp-raster{display:none}
+  .wp-liste{display:block}
+}
+@media (max-width:760px){
+  .wp-jetzt{grid-template-columns:minmax(0,1fr);padding:16px 16px 16px 18px}
+  .wp-jetzt-titel{font-size:21px}
+  .wp-tafel{padding:14px 12px 12px}
+  .wp-tafel-kopf{padding:0 4px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .wp-puls{animation:none}
+  .wp-block,.wp-zeile,.wp-balken i{transition:none}
+}
