@@ -175,6 +175,10 @@ const TESTS = [
   // 05.10.2026: die Anzeige "Jetzt" auf dem Wochenplan — Plan ohne Luecken,
   // jede Uhrzeit landet im richtigen Block, deutsche Zeit auch auf UTC-Servern.
   "test-wochenplan",
+  // 06.10.2026: der Tabellen-Import der Anrufliste — die Spalte "Nr" bzw. die
+  // Zeilenfolge wandert als Position mit (Migration 0079). Faellt sie weg,
+  // steht die Liste wieder durcheinander, und man sieht es ihr nicht an.
+  "test-lead-import",
 ];
 
 // NICHT hier drin, mit Grund:
