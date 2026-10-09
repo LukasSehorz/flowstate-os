@@ -10,6 +10,8 @@
 //     die Nr. der Datei, aus seiner alten Liste raus, Sparten-Tag ergaenzt
 //   * Lead mit Ergebnis-Tag (schon angerufen) → bleibt, wo er ist
 //   * Lead eines anderen Besitzers → bleibt, wo er ist
+//   * dieselbe Firma zweimal in EINER Datei → einmal angelegt, zweite Zeile
+//     uebersprungen, kein Abbruch (09.10.: „ON CONFLICT … a second time“)
 //
 // Braucht die Datenbank, laeuft darum NICHT in scripts/pruefen.js mit:
 //   docker exec -w /app flowstate-dashboard node scripts/test-lead-umzug.js
@@ -52,11 +54,12 @@ const N = (s) => `ZZ Testfirma Umzug ${s} ${P}`;
       { name: N("offen"), telefon: "+49 89 7001" + P, nr: 12 },
       { name: N("angerufen"), telefon: "+49 89 7002" + P, nr: 13 },
       { name: N("fremd"), telefon: "+49 89 7003" + P, nr: 14 },
+      { name: N("neu zweite Zeile"), telefon: "+49 89 7004" + P, nr: 15 },
     ], { sparte: "ki", besitzer: a.id, listenName: N("Neu") });
 
     melde(neu.angelegt === 1, `ein neuer Lead angelegt (${neu.angelegt})`);
     melde(neu.verschoben === 1, `ein Doppelter umgezogen (${neu.verschoben})`);
-    melde(neu.uebersprungen.length === 2, `zwei bleiben stehen: ${neu.uebersprungen.join(", ")}`);
+    melde(neu.uebersprungen.length === 3, `drei übersprungen (2 stehen woanders, 1 doppelt in der Datei): ${neu.uebersprungen.join(", ")}`);
 
     const { rows: eintr } = await crm.system(
       `select f.name, e.liste_id, e.position, f.tags from call_listen_eintraege e
@@ -65,7 +68,8 @@ const N = (s) => `ZZ Testfirma Umzug ${s} ${P}`;
     melde(von("offen").length === 1 && Number(von("offen")[0].liste_id) === Number(neu.liste.id)
       && von("offen")[0].position === 12, "offener Lead: nur noch in der neuen Liste, an Nr. 12");
     melde(von("offen")[0] && von("offen")[0].tags.includes("ki"), "offener Lead: Sparten-Tag „ki“ ergänzt");
-    melde(von("neu")[0] && von("neu")[0].position === 5, "neuer Lead an Nr. 5");
+    melde(von("neu").length === 1 && von("neu")[0].position === 5, "neuer Lead genau einmal, an Nr. 5");
+    melde(von("neu zweite Zeile").length === 0, "zweite Zeile derselben Nummer nicht angelegt");
     melde(von("angerufen").length === 1 && Number(von("angerufen")[0].liste_id) === Number(alt.liste.id),
       "angerufener Lead bleibt in der alten Liste");
     melde(von("fremd").length === 1 && Number(von("fremd")[0].liste_id) !== Number(neu.liste.id),
