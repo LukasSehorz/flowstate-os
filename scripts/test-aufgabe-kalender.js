@@ -140,10 +140,11 @@ gleich(crm.kategorieFuerAnlass("anruf:keine-zeit"), "crm", "anruf:keine-zeit -> 
 gleich(crm.kategorieFuerAnlass(null), "kunden", "von Hand angelegt -> Kunden-Block");
 gleich(crm.kategorieFuerAnlass(""), "kunden", "leerer Anlass -> Kunden-Block");
 
-// Drei Ergebnisse legen eine Aufgabe an, drei nicht.
-gleich(Object.keys(crm.ANRUF_ANLASS).sort(), ["follow-up", "gebucht", "keine-zeit"],
-  "genau drei Ergebnisse erzeugen eine Aufgabe");
-for (const ohne of ["nicht-erreicht", "absage", "webseite-zu-gut"])
+// Zwei Ergebnisse legen eine Aufgabe an, vier nicht. "Später nochmal" ist
+// seit 22.10.2026 raus (Lukas: nur Follow-ups und Erstgespräche aufs Whiteboard).
+gleich(Object.keys(crm.ANRUF_ANLASS).sort(), ["follow-up", "gebucht"],
+  "genau zwei Ergebnisse erzeugen eine Aufgabe");
+for (const ohne of ["keine-zeit", "nicht-erreicht", "absage", "webseite-zu-gut"])
   melde(!crm.ANRUF_ANLASS[ohne], `"${ohne}" erzeugt weiterhin keine Aufgabe`);
 
 // "Später nochmal": Titel und Tag.
