@@ -380,6 +380,58 @@ function stelle({ hochladen, lesen, buchen } = {}) {
     beleg.fremdwaehrung("Beleg leicht geknickt, Datum schwer lesbar.") === null);
   pruefe("Kein Hinweis, keine Fremdwährung", beleg.fremdwaehrung("") === null);
 
+  // --- Der trinkgut-Fall vom 26.10.2026 -----------------------------------
+  //
+  // Lukas schickte einen Bon, bestaetigte mit "Ja passt" und bekam:
+  // "Das Buchen hat nicht geklappt — der ist schon gebucht. Beleg 200 liegt
+  // weiter im Eingang." Beides war falsch. Der Beleg WAR gebucht (Buchung 338,
+  // 32,35 EUR), und im Eingang lag er nie. Ursache: dieselbe Nachricht wurde
+  // zweimal verarbeitet; der zweite Durchlauf bekam zu Recht "schon-gebucht"
+  // und meldete es als Scheitern.
+  console.log("\n— Doppelte Bestaetigung (trinkgut, 26.10.2026) —");
+  s = stelle({
+    lesen: { ok: true, werte: { betrag: 32.35, datum: "2026-10-26",
+      gegenstelle: "trinkgut", kategorie: "Essen & Getränke", sicherheit: "hoch", hinweis: "" } },
+    buchen: { status: 302, headers: { get: () => "/buchhaltung/belege?fehler=schon-gebucht" } },
+  });
+  beleg.vergessen();
+  await beleg.verarbeiten({ datei: alsDatei("Foto.jpg", "image/jpeg"), ...s });
+  await beleg.antwortAuf("Ja passt", s);
+  sagt = s.gesagt.join(" | ");
+  pruefe("„schon gebucht“ wird als ERFOLG gemeldet, nicht als Fehlschlag",
+    /ist gebucht/.test(sagt) && !/hat nicht geklappt/.test(sagt), sagt);
+  pruefe("... und behauptet NICHT, der Beleg liege im Eingang",
+    !/liegt weiter im Eingang/.test(sagt), sagt);
+
+  // Die Rueckfrage danach muss hier beantwortet werden — sonst laeuft sie an
+  // Alexandra, die den Vorgang nicht kennt ("Welchen Beleg meinst du?").
+  const vorher = s.gesagt.length;
+  const gefangen = await beleg.antwortAuf("Also ist dieser Beleg gebucht?", s);
+  sagt = s.gesagt.slice(vorher).join(" | ");
+  pruefe("„Also ist dieser Beleg gebucht?“ wird hier beantwortet",
+    gefangen === true, "lief an Alexandra weiter");
+  pruefe("... mit Belegnummer und Betrag",
+    /42/.test(sagt) && /32,35/.test(sagt), sagt);
+
+  // Echter Fehlschlag bleibt ein Fehlschlag.
+  s = stelle({
+    lesen: { ok: true, werte: { betrag: 10, datum: "2026-10-26", gegenstelle: "X",
+      kategorie: "Sonstiges", sicherheit: "hoch", hinweis: "" } },
+    buchen: { status: 302, headers: { get: () => "/buchhaltung/belege?fehler=datum" } },
+  });
+  beleg.vergessen();
+  await beleg.verarbeiten({ datei: alsDatei("B.jpg", "image/jpeg"), ...s });
+  await beleg.antwortAuf("ja", s);
+  sagt = s.gesagt.join(" | ");
+  pruefe("Ein echter Fehlschlag wird weiterhin als solcher gemeldet",
+    /hat nicht geklappt/.test(sagt) && /Datum fehlt/.test(sagt), sagt);
+
+  // Eine echte Frage darf NICHT als Rueckfrage durchgehen.
+  s = stelle();
+  beleg.vergessen();
+  const durch = await beleg.antwortAuf("Wie viel haben wir diesen Monat insgesamt gebucht und wo stehen wir?", s);
+  pruefe("Eine lange echte Frage läuft weiter an Alexandra", durch === false);
+
   console.log(fehler ? `\n${fehler} Test(s) fehlgeschlagen.` : "\nAlle Faelle bestanden.");
   process.exit(fehler ? 1 : 0);
 })();
